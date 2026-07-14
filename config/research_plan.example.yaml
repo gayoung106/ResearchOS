@@ -1,0 +1,38 @@
+project:
+  title: ""
+  short_name: ""
+  field: ""
+  language: "ko"
+  author: ""
+  created_at: ""
+
+research:
+  topic: ""
+  purpose: ""
+  research_questions: []
+  hypotheses: []
+  theoretical_framework: ""
+  contribution: ""
+
+design:
+  study_type: ""
+  unit_of_analysis: ""
+  data_structure: ""
+  time_structure: ""
+  sampling_design: ""
+  causal_claim_allowed: false
+
+data:
+  raw_files: []
+  questionnaire_files: []
+  codebook_files: []
+  id_variable: null
+  time_variable: null
+  weight_variable: null
+  cluster_variable: null
+  strata_variable: null
+
+review:
+  unresolved_questions: []
+  assumptions: []
+  limitations: []

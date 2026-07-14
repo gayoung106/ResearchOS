@@ -1,0 +1,20 @@
+variables:
+  example_variable:
+    original_name: ""
+    korean_name: ""
+    label: ""
+    question_text: ""
+    role: ""
+    measurement_level: ""
+    coding: {}
+    missing_values: []
+    reverse_coded: false
+    scale_name: null
+    preprocessing: []
+    evidence:
+      questionnaire: null
+      codebook: null
+      value_labels: null
+      observed_values: null
+    review_status: "unreviewed"
+    notes: ""

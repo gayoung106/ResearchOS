@@ -1,0 +1,33 @@
+# 데이터 처리
+numpy
+pandas
+polars
+pyarrow
+openpyxl
+xlsxwriter
+
+# 통계 분석
+scipy
+statsmodels
+scikit-learn
+pingouin
+
+# 통계자료 파일 입출력
+pyreadstat
+
+# 시각화
+matplotlib
+
+# 설정 및 유틸리티
+PyYAML
+python-dotenv
+pydantic
+
+# 문서·표 출력
+python-docx
+jinja2
+tabulate
+
+# 진행률 및 로그
+tqdm
+loguru

@@ -1,0 +1,62 @@
+[project]
+name = "python-layout"
+version = "0.1.0"
+description = "Python 기반 사회과학 연구 데이터 분석 프로젝트 템플릿"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = [
+    ".venv",
+    "rawdata",
+    "result",
+    "questionnaire",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "UP",
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
+addopts = "-ra -q"
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+exclude = [
+    ".venv",
+    "rawdata",
+    "result",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

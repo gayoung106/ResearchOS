@@ -1,0 +1,83 @@
+variables:
+  dependent: []
+  independent: []
+  mediators: []
+  moderators: []
+  controls: []
+  fixed_effects: []
+  weights: []
+  clusters: []
+
+preprocessing:
+  missing_value_rules: []
+  recoding_rules: []
+  reverse_items: []
+  scale_rules: []
+  derived_variables: []
+  exclusions: []
+
+analyses:
+  descriptive:
+    enabled: true
+    options: {}
+
+  reliability:
+    enabled: false
+    scales: []
+
+  validity:
+    enabled: false
+    methods: []
+
+  regression:
+    enabled: false
+    models: []
+
+  mediation:
+    enabled: false
+    models: []
+
+  moderation:
+    enabled: false
+    models: []
+
+  multilevel:
+    enabled: false
+    models: []
+
+  panel:
+    enabled: false
+    models: []
+
+  robustness:
+    enabled: true
+    checks: []
+
+outputs:
+  tables:
+    formats:
+      - xlsx
+      - docx
+      - html
+      - md
+
+  figures:
+    formats:
+      - png
+      - svg
+
+  manuscript:
+    methods_draft: true
+    results_draft: true
+
+review:
+  required_roles:
+    - research_design_advisor
+    - data_analysis_expert
+    - regression_expert
+    - supervisor
+    - reviewer_1
+    - reviewer_2
+    - reviewer_3
+    - proofreader
+    - reference_recommender

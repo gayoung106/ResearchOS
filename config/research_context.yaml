@@ -1,0 +1,44 @@
+project_name: 테스트 연구
+research_topic: 테스트
+research_questions:
+- 질문
+hypotheses: []
+raw_data_files: []
+questionnaire_files: []
+codebook_files: []
+dependent_variables: []
+independent_variables: []
+mediator_variables: []
+moderator_variables: []
+control_variables: []
+analysis_plan: {}
+variable_map: {}
+completed_stages:
+- 01_data_loading
+- 02_variable_detection
+- 02_evidence_resolution
+- 03_preprocessing_plan
+- 05_missingness
+- 06_outliers
+- 07_descriptive_statistics
+generated_files:
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\01_import\analysis_base.parquet
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\01_import\variable_metadata.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\02_diagnostics\variable_detections.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\02_diagnostics\resolved_variable_levels.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\03_preprocessing\preprocessing_plan.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\05_missing\variable_missingness.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\05_missing\case_missingness.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\05_missing\missingness_patterns.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\05_missing\missingness_recommendations.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\06_outlier\univariate_outliers.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\07_descriptive\numeric_descriptive.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\07_descriptive\categorical_frequencies.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\07_descriptive\data_quality_warnings.xlsx
+- C:\Temp\pytest-of-KMI\pytest-22\test_default_pipeline_runs_min0\result\07_descriptive\dataset_summary.xlsx
+warnings:
+- '02_evidence_resolution: score: review_required'
+review_comments: []
+revision_history: []
+created_at: '2026-07-14T15:58:29'
+updated_at: '2026-07-14T15:58:30'
