@@ -20,6 +20,9 @@ from src.pipeline.io_steps import (
     EvidenceResolutionStep,
 )
 from src.pipeline.orchestrator import ResearchOrchestrator
+from src.pipeline.regression_builder import (
+    register_regression_pipeline,
+)
 from src.pipeline.runtime import PipelineRuntime
 
 
@@ -33,16 +36,26 @@ def build_default_pipeline(
     mahalanobis_variables: list[str] | None = None,
 ) -> tuple[ResearchOrchestrator, PipelineRuntime]:
     """
-    현재 구현된 기본 연구 파이프라인을 구성한다.
+    현재 구현된 기본 연구 파이프라인 전체를 구성한다.
 
-    실행순서:
-    1. 데이터 로딩
-    2. 변수 측정수준 자동탐지
-    3. 외부 근거 통합
-    4. 전처리 계획
-    5. 척도·신뢰도
-    6. 결측치 진단
-    7. 이상치 진단
+    실행 순서:
+    01. 데이터 로딩
+    02. 변수 측정수준 자동 탐지
+    02. 외부 근거 통합
+    03. 전처리 계획
+    04. 척도·신뢰도
+    05. 결측치 진단
+    06. 이상치 진단
+    07. 기술통계
+    08. 상관분석
+    09. 회귀분석
+    10. 회귀진단
+    11. 강건성 분석
+    12. 고급 강건성 분석
+    13. 효과크기
+    14. 회귀 보고서
+    15. 회귀 시각화
+    16. 연구 품질 감사
     """
     runtime = PipelineRuntime()
 
@@ -58,7 +71,9 @@ def build_default_pipeline(
             order=10,
         )
     )
+
     orchestrator.register(VariableDetectionStep(runtime))
+
     orchestrator.register(
         EvidenceResolutionStep(
             runtime,
@@ -66,6 +81,7 @@ def build_default_pipeline(
             order=25,
         )
     )
+
     orchestrator.register(
         PreprocessingPlanningStep(
             runtime,
@@ -73,13 +89,16 @@ def build_default_pipeline(
             variable_map,
         )
     )
+
     orchestrator.register(
         ScaleReliabilityStep(
             runtime,
             variable_map,
         )
     )
+
     orchestrator.register(MissingnessStep(runtime))
+
     orchestrator.register(
         OutlierStep(
             runtime,
@@ -106,6 +125,18 @@ def build_default_pipeline(
             method="pearson",
             p_adjust_method="holm",
         )
+    )
+
+    regression_registration = register_regression_pipeline(
+        orchestrator=orchestrator,
+        runtime=runtime,
+        analysis_plan=analysis_plan,
+        variable_map=variable_map,
+    )
+
+    runtime.set_artifact(
+        "regression_registration",
+        regression_registration,
     )
 
     return orchestrator, runtime
