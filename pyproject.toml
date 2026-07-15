@@ -54,9 +54,38 @@ exclude = [
 [tool.coverage.run]
 source = ["src"]
 omit = [
-    "tests/*",
+    # 독립 실행용·레거시 스크립트
+    "src/00_프로젝트초기화.py",
+    "src/01_파일변환.py",
+    "src/main.py",
+    "src/pipeline/run_pipeline.py",
+    "src/pipeline/runner.py",
+
+    # 현재 사용하지 않는 호환용 래퍼
+    "src/statistics/regression.py",
+    "src/statistics/robustness.py",
+
+    # 아직 구현되지 않은 스텁
+    "src/pipeline/builtin_steps.py",
+    "src/pipeline/stages.py",
+    "src/preprocess/cleaner.py",
+    "src/reporting/manuscript.py",
+    "src/reporting/tables.py",
+    "src/review/proofreading.py",
+    "src/review/references.py",
+    "src/review/research_design.py",
+    "src/review/reviewers.py",
+    "src/review/statistical.py",
+    "src/visualization/plots.py",
 ]
 
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
