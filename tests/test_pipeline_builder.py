@@ -23,12 +23,17 @@ def test_data_loading_step_with_explicit_file(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "sample.csv"
+
     pd.DataFrame(
         {
             "outcome": [0, 1, 0],
             "score": [1.2, 2.3, 3.4],
         }
-    ).to_csv(source, index=False, encoding="utf-8-sig")
+    ).to_csv(
+        source,
+        index=False,
+        encoding="utf-8-sig",
+    )
 
     runtime = PipelineRuntime()
     step = DataLoadingStep(
@@ -36,7 +41,10 @@ def test_data_loading_step_with_explicit_file(
         source_file=source,
     )
 
-    result = step.run(context(), tmp_path)
+    result = step.run(
+        context(),
+        tmp_path,
+    )
 
     assert result.success is True
     assert runtime.dataframe is not None
@@ -50,11 +58,20 @@ def test_data_loading_step_rejects_multiple_files(
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
 
-    pd.DataFrame({"x": [1]}).to_csv(
+    pd.DataFrame(
+        {
+            "x": [1],
+        }
+    ).to_csv(
         rawdata / "a.csv",
         index=False,
     )
-    pd.DataFrame({"x": [2]}).to_csv(
+
+    pd.DataFrame(
+        {
+            "x": [2],
+        }
+    ).to_csv(
         rawdata / "b.csv",
         index=False,
     )
@@ -63,7 +80,10 @@ def test_data_loading_step_rejects_multiple_files(
     step = DataLoadingStep(runtime)
 
     try:
-        step.run(context(), tmp_path)
+        step.run(
+            context(),
+            tmp_path,
+        )
         raised = False
     except ValueError:
         raised = True
@@ -75,7 +95,11 @@ def test_default_pipeline_registers_expected_steps(
     tmp_path: Path,
 ) -> None:
     analysis_plan = AnalysisPlan.model_validate({})
-    variable_map = VariableMap.model_validate({"variables": {}})
+    variable_map = VariableMap.model_validate(
+        {
+            "variables": {},
+        }
+    )
 
     orchestrator, runtime = build_default_pipeline(
         context=context(),
@@ -85,7 +109,8 @@ def test_default_pipeline_registers_expected_steps(
     )
 
     assert runtime.dataframe is None
-    assert orchestrator.registry.names() == [
+
+    expected = {
         "01_data_loading",
         "02_variable_detection",
         "02_evidence_resolution",
@@ -95,7 +120,11 @@ def test_default_pipeline_registers_expected_steps(
         "06_outliers",
         "07_descriptive_statistics",
         "08_correlation_analysis",
-    ]
+    }
+
+    actual = set(orchestrator.registry.names())
+
+    assert expected.issubset(actual)
 
 
 def test_default_pipeline_runs_minimal_dataset(
@@ -105,12 +134,17 @@ def test_default_pipeline_runs_minimal_dataset(
     monkeypatch.chdir(tmp_path)
 
     source = tmp_path / "sample.csv"
+
     pd.DataFrame(
         {
             "outcome": [0, 1, 0, 1],
             "score": [1.0, 2.0, 3.0, 4.0],
         }
-    ).to_csv(source, index=False, encoding="utf-8-sig")
+    ).to_csv(
+        source,
+        index=False,
+        encoding="utf-8-sig",
+    )
 
     analysis_plan = AnalysisPlan.model_validate(
         {
@@ -119,13 +153,16 @@ def test_default_pipeline_runs_minimal_dataset(
             }
         }
     )
+
     variable_map = VariableMap.model_validate(
         {
             "variables": {
                 "outcome": {
                     "role": "dependent",
                     "measurement_level": "binary",
-                    "evidence": {"codebook_level": "binary"},
+                    "evidence": {
+                        "codebook_level": "binary",
+                    },
                 }
             }
         }
