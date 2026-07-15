@@ -1,4 +1,4 @@
-project_name: Ordered Logit E2E
+project_name: OLS E2E
 research_topic: ''
 research_questions: []
 hypotheses: []
@@ -22,50 +22,74 @@ completed_stages:
 - 07_descriptive_statistics
 - 08_correlation_analysis
 - 09_regression_analysis
+- 10_regression_diagnostics
+- 11_robustness_analysis
+- 12_advanced_robustness
 - 13_effect_size_analysis
 - 14_regression_reporting
 - 15_regression_visualization
 - 16_research_audit
 generated_files:
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\01_import\analysis_base.parquet
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\01_import\variable_metadata.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\02_diagnostics\variable_detections.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\02_diagnostics\resolved_variable_levels.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\03_preprocessing\preprocessing_plan.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\05_missing\variable_missingness.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\05_missing\case_missingness.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\05_missing\missingness_patterns.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\05_missing\missingness_recommendations.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\06_outlier\univariate_outliers.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\07_descriptive\numeric_descriptive.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\07_descriptive\categorical_frequencies.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\07_descriptive\data_quality_warnings.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\07_descriptive\dataset_summary.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\08_correlation\correlation_results.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\08_correlation\correlation_matrix.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\08_correlation\adjusted_p_values.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\08_correlation\pairwise_sample_sizes.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\08_correlation\publication_correlation_table.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\09_models\main_model_coefficients.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\09_models\main_model_fit_statistics.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\13_effect_sizes\main_model\effect_sizes.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\13_effect_sizes\main_model\effect_size_summary.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\14_reporting\main_model\regression_publication_table.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\14_reporting\main_model\model_summary.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\14_reporting\main_model\results_narrative_ko.txt
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\14_reporting\main_model\table_notes_ko.txt
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\15_visualization\main_model\coefficient_forest.png
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\16_audit\main_model\audit_items.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\16_audit\main_model\audit_summary.xlsx
-- C:\Temp\pytest-of-KMI\pytest-92\test_pipeline_end_to_end_order0\result\16_audit\main_model\audit_report_ko.txt
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\01_import\analysis_base.parquet
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\01_import\variable_metadata.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\02_diagnostics\variable_detections.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\02_diagnostics\resolved_variable_levels.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\03_preprocessing\preprocessing_plan.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\05_missing\variable_missingness.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\05_missing\case_missingness.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\05_missing\missingness_patterns.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\05_missing\missingness_recommendations.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\06_outlier\univariate_outliers.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\07_descriptive\numeric_descriptive.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\07_descriptive\categorical_frequencies.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\07_descriptive\data_quality_warnings.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\07_descriptive\dataset_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\08_correlation\correlation_results.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\08_correlation\correlation_matrix.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\08_correlation\adjusted_p_values.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\08_correlation\pairwise_sample_sizes.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\08_correlation\publication_correlation_table.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\09_models\main_model_coefficients.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\09_models\main_model_fit_statistics.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\10_diagnostics\main_model\multicollinearity.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\10_diagnostics\main_model\diagnostic_tests.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\10_diagnostics\main_model\residuals.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\10_diagnostics\main_model\influence.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\10_diagnostics\main_model\diagnostic_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\11_robustness\main_model\coefficient_comparison.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\11_robustness\main_model\term_stability.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\11_robustness\main_model\model_comparison.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\11_robustness\main_model\robustness_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\12_advanced_robustness\main_model\bootstrap_coefficients.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\12_advanced_robustness\main_model\bootstrap_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\12_advanced_robustness\main_model\jackknife_coefficients.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\12_advanced_robustness\main_model\jackknife_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\13_effect_sizes\main_model\effect_sizes.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\13_effect_sizes\main_model\effect_size_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\14_reporting\main_model\regression_publication_table.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\14_reporting\main_model\model_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\14_reporting\main_model\results_narrative_ko.txt
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\14_reporting\main_model\table_notes_ko.txt
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\15_visualization\main_model\coefficient_forest.png
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\15_visualization\main_model\residuals_vs_fitted.png
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\15_visualization\main_model\residual_qq_plot.png
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\15_visualization\main_model\influence_plot.png
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\16_audit\main_model\audit_items.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\16_audit\main_model\audit_summary.xlsx
+- C:\Temp\pytest-of-KMI\pytest-104\test_pipeline_end_to_end_ols0\result\16_audit\main_model\audit_report_ko.txt
 warnings:
 - '02_evidence_resolution: y: review_required'
 - '02_evidence_resolution: x: review_required'
-- '09_regression_analysis: 일부 종속변수 범주의 사례 수가 10개 미만입니다.'
-- '13_effect_size_analysis: 순서형 로짓의 범주별 한계효과는 후속 버전에서 지원합니다.'
-- '15_regression_visualization: 잔차·Q-Q·영향력 도표는 현재 OLS 모형만 지원합니다.'
-- '16_research_audit: 모형 검증 - 강건성 분석: HC3, Bootstrap, Cluster 구조에 맞는 강건성 검정을 보고하세요.'
+- '08_correlation_analysis: y와 x의 상관계수 절대값이 0.999입니다.'
+- '10_regression_diagnostics: Breusch-Pagan LM: 유의하면 이분산성 가능성이 있습니다.'
+- '10_regression_diagnostics: Breusch-Pagan F: 유의하면 이분산성 가능성이 있습니다.'
+- '10_regression_diagnostics: White LM: 유의하면 일반적 형태의 이분산성이 의심됩니다.'
+- '10_regression_diagnostics: White F: 유의하면 일반적 형태의 이분산성이 의심됩니다.'
+- '10_regression_diagnostics: Ramsey RESET: 유의하면 함수형태 오류 또는 누락변수 가능성이 있습니다.'
+- '10_regression_diagnostics: 영향력 기준을 하나 이상 초과한 사례가 2개 있습니다.'
+- '10_regression_diagnostics: 외적 학생화 잔차 절대값이 3을 초과한 사례가 1개 있습니다.'
+- '16_research_audit: 모형 검증 - 회귀진단: 경고 항목이 있다면 강건성 분석과 민감도 분석으로 보완하세요.'
 review_comments: []
 revision_history: []
-created_at: '2026-07-15T15:16:41'
-updated_at: '2026-07-15T15:16:43'
+created_at: '2026-07-15T15:45:45'
+updated_at: '2026-07-15T15:45:50'
