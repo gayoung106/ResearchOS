@@ -6,6 +6,7 @@ from src.common.config_models import AnalysisPlan, VariableMap
 from tests.support.builders import (
     make_binary_variable_map,
     make_continuous_variable_map,
+    make_count_variable_map,
     make_empty_analysis_plan,
     make_empty_variable_map,
     make_ordinal_variable_map,
@@ -106,3 +107,9 @@ def binary_variable_map() -> VariableMap:
 def ordinal_variable_map() -> VariableMap:
     """순서형 로짓 테스트용 variable map을 제공한다."""
     return make_ordinal_variable_map()
+
+
+@pytest.fixture
+def count_variable_map() -> VariableMap:
+    """포아송 회귀 테스트용 variable map을 제공한다."""
+    return make_count_variable_map()

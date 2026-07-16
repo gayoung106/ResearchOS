@@ -65,16 +65,23 @@ def test_pipeline_end_to_end_logit(
     assert len(runtime.dataframe) == 30
 
     # ------------------------------------------------------------------
-    # Logit에서는 OLS 전용 단계가 없어야 한다.
+    # Binary Logit 진단은 등록하고 OLS 전용 강건성 단계는 제외한다.
     # ------------------------------------------------------------------
     registered = orchestrator.registry.names()
 
-    assert "10_regression_diagnostics" not in registered
+    assert "09_regression_analysis" in registered
+    assert "10_regression_diagnostics" in registered
     assert "11_robustness_analysis" not in registered
     assert "12_advanced_robustness" not in registered
-
-    assert "09_regression_analysis" in registered
     assert "13_effect_size_analysis" in registered
     assert "14_regression_reporting" in registered
     assert "15_regression_visualization" in registered
     assert "16_research_audit" in registered
+
+    diagnostics = runtime.get_artifact(
+        "regression_diagnostics:main_model",
+    )
+
+    assert diagnostics.model_id == "main_model"
+    assert diagnostics.sample_size == 30
+    assert diagnostics.classification_metrics.roc_auc is not None

@@ -133,3 +133,25 @@ def make_ordinal_variable_map(
             }
         }
     )
+
+
+def make_count_variable_map(
+    *,
+    dependent: str = "y",
+    independent: str = "x",
+) -> VariableMap:
+    """계수형 종속변수와 연속형 독립변수 variable map을 생성한다."""
+    return VariableMap.model_validate(
+        {
+            "variables": {
+                dependent: {
+                    "role": "dependent",
+                    "measurement_level": "count",
+                },
+                independent: {
+                    "role": "independent",
+                    "measurement_level": "continuous",
+                },
+            }
+        }
+    )

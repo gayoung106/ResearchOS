@@ -33,7 +33,9 @@ class PreprocessingPlan:
     blocked_variables: list[str]
 
 
-def build_role_map(analysis_plan: AnalysisPlan) -> dict[str, str]:
+def build_role_map(
+    analysis_plan: AnalysisPlan,
+) -> dict[str, str]:
     """분석계획의 변수 역할을 변수명 기준으로 매핑한다."""
     groups = analysis_plan.variables
     role_map: dict[str, str] = {}
@@ -54,6 +56,23 @@ def build_role_map(analysis_plan: AnalysisPlan) -> dict[str, str]:
             role_map[variable] = role
 
     return role_map
+
+
+def _categorical_parameters(
+    definition: Any,
+    *,
+    role: str,
+) -> dict[str, Any]:
+    """범주형 변수 전처리 설정을 정규화한다."""
+    coding = definition.coding or {}
+
+    return {
+        "coding": coding,
+        "role": role,
+        "reference_category": coding.get("reference_category"),
+        "drop_original": bool(coding.get("drop_original", False)),
+        "prefix": coding.get("prefix"),
+    }
 
 
 def plan_preprocessing(
@@ -136,7 +155,7 @@ def plan_preprocessing(
                     variable_name=variable_name,
                     action_type="review_binary_recoding",
                     status="planned",
-                    reason="이분형 분석을 위해 0/1 재코딩 필요 여부를 검토합니다.",
+                    reason=("이분형 분석을 위해 0/1 재코딩 필요 여부를 검토합니다."),
                     parameters={
                         "coding": definition.coding,
                         "role": role,
@@ -145,23 +164,51 @@ def plan_preprocessing(
                 )
             )
 
-        if resolved_level in {"nominal", "ordinal"}:
+        if resolved_level in {
+            "nominal",
+            "ordinal",
+        }:
             actions.append(
                 PreprocessingAction(
                     variable_name=variable_name,
                     action_type="set_reference_category",
                     status="planned",
                     reason="범주형 변수의 기준범주를 명시해야 합니다.",
-                    parameters={
-                        "coding": definition.coding,
-                        "role": role,
-                    },
+                    parameters=_categorical_parameters(
+                        definition,
+                        role=role,
+                    ),
                     requires_confirmation=True,
                 )
             )
 
+        if resolved_level == "nominal":
+            actions.append(
+                PreprocessingAction(
+                    variable_name=variable_name,
+                    action_type="dummy_encode_nominal",
+                    status="planned",
+                    reason=(
+                        "명목형 변수를 회귀분석에 사용할 수 있도록 "
+                        "기준범주를 제외한 더미변수를 생성합니다."
+                    ),
+                    parameters=_categorical_parameters(
+                        definition,
+                        role=role,
+                    ),
+                    requires_confirmation=True,
+                    priority="high",
+                )
+            )
+
         if (
-            role in {"independent", "moderator", "mediator", "control"}
+            role
+            in {
+                "independent",
+                "moderator",
+                "mediator",
+                "control",
+            }
             and resolved_level == "continuous"
         ):
             actions.append(
@@ -170,10 +217,12 @@ def plan_preprocessing(
                     action_type="review_centering",
                     status="planned",
                     reason=(
-                        "연속형 설명변수입니다. 상호작용 또는 해석 편의를 위한 "
-                        "평균중심화 여부를 검토합니다."
+                        "연속형 설명변수입니다. 상호작용 또는 해석 "
+                        "편의를 위한 평균중심화 여부를 검토합니다."
                     ),
-                    parameters={"role": role},
+                    parameters={
+                        "role": role,
+                    },
                     requires_confirmation=True,
                 )
             )
@@ -184,8 +233,10 @@ def plan_preprocessing(
                     variable_name=variable_name,
                     action_type="mean_center",
                     status="planned",
-                    reason="연속형 조절변수이므로 상호작용 해석을 위해 중심화를 권장합니다.",
-                    parameters={"method": "mean"},
+                    reason=("연속형 조절변수이므로 상호작용 해석을 위해 중심화를 권장합니다."),
+                    parameters={
+                        "method": "mean",
+                    },
                     requires_confirmation=True,
                     priority="high",
                 )
@@ -212,14 +263,20 @@ def plan_preprocessing(
                     variable_name=variable_name,
                     action_type="custom_rule",
                     status="planned",
-                    reason="variable_map에 사용자 정의 전처리 규칙이 등록되어 있습니다.",
+                    reason=("variable_map에 사용자 정의 전처리 규칙이 등록되어 있습니다."),
                     parameters=custom_rule,
                     requires_confirmation=True,
                 )
             )
 
     for rule in analysis_plan.preprocessing.recoding_rules:
-        variable_name = str(rule.get("variable", "")).strip()
+        variable_name = str(
+            rule.get(
+                "variable",
+                "",
+            )
+        ).strip()
+
         if not variable_name:
             warnings.append("변수명이 없는 recoding_rules 항목이 있습니다.")
             continue
@@ -229,7 +286,7 @@ def plan_preprocessing(
                 variable_name=variable_name,
                 action_type="configured_recoding",
                 status="planned",
-                reason="analysis_plan에 재코딩 규칙이 등록되어 있습니다.",
+                reason=("analysis_plan에 재코딩 규칙이 등록되어 있습니다."),
                 parameters=rule,
                 requires_confirmation=True,
                 priority="high",
@@ -237,13 +294,22 @@ def plan_preprocessing(
         )
 
     for rule in analysis_plan.preprocessing.derived_variables:
-        variable_name = str(rule.get("name", "")).strip() or "미지정 파생변수"
+        variable_name = (
+            str(
+                rule.get(
+                    "name",
+                    "",
+                )
+            ).strip()
+            or "미지정 파생변수"
+        )
+
         actions.append(
             PreprocessingAction(
                 variable_name=variable_name,
                 action_type="create_derived_variable",
                 status="planned",
-                reason="analysis_plan에 파생변수 생성 규칙이 등록되어 있습니다.",
+                reason=("analysis_plan에 파생변수 생성 규칙이 등록되어 있습니다."),
                 parameters=rule,
                 requires_confirmation=True,
             )
@@ -262,7 +328,10 @@ def preprocessing_plan_to_dataframe(
     """전처리 계획을 검토용 데이터프레임으로 변환한다."""
     rows: list[dict[str, Any]] = []
 
-    for sequence, action in enumerate(plan.actions, start=1):
+    for sequence, action in enumerate(
+        plan.actions,
+        start=1,
+    ):
         row = asdict(action)
         row["sequence"] = sequence
         rows.append(row)
@@ -278,7 +347,10 @@ def preprocessing_plan_to_dataframe(
         "parameters",
     ]
 
-    return pd.DataFrame(rows, columns=columns)
+    return pd.DataFrame(
+        rows,
+        columns=columns,
+    )
 
 
 def preprocessing_plan_summary(
@@ -289,7 +361,14 @@ def preprocessing_plan_summary(
     confirmation_count = 0
 
     for action in plan.actions:
-        action_counts[action.action_type] = action_counts.get(action.action_type, 0) + 1
+        action_counts[action.action_type] = (
+            action_counts.get(
+                action.action_type,
+                0,
+            )
+            + 1
+        )
+
         if action.requires_confirmation:
             confirmation_count += 1
 

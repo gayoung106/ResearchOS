@@ -42,6 +42,9 @@ def test_default_builder_registers_full_ols_pipeline(
 
     assert registration.registered is True
     assert registration.model_type == "ols"
+    assert registration.diagnostics_registered is True
+    assert registration.robustness_registered is True
+    assert registration.advanced_robustness_registered is True
     assert registration.audit_registered is True
 
 
@@ -72,5 +75,10 @@ def test_default_builder_registers_full_logit_pipeline(
 
     assert registration.registered is True
     assert registration.model_type == "binary_logit"
-    assert registration.diagnostics_registered is False
+    assert registration.diagnostics_registered is True
     assert registration.robustness_registered is False
+    assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True

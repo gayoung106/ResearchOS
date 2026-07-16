@@ -5,12 +5,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from statsmodels.tools.sm_exceptions import PerfectSeparationError
+from statsmodels.tools.sm_exceptions import (
+    PerfectSeparationError,
+)
 
 from src.statistics.regression.base import (
     ModelCoefficient,
     RegressionResult,
-    prepare_model_data,
+)
+from src.statistics.regression.design_matrix import (
+    prepare_regression_design_matrix,
 )
 
 SUPPORTED_COVARIANCE_TYPES = {
@@ -27,6 +31,7 @@ def fit_binary_logit(
     *,
     dependent_variable: str,
     independent_variables: list[str],
+    fixed_effects: list[str] | None = None,
     model_id: str = "logit_1",
     covariance_type: str = "HC3",
     add_intercept: bool = True,
@@ -36,20 +41,25 @@ def fit_binary_logit(
     if covariance_type not in SUPPORTED_COVARIANCE_TYPES:
         raise ValueError(f"지원하지 않는 공분산 추정방식입니다: {covariance_type}")
 
-    model_data = prepare_model_data(
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+
+    design = prepare_regression_design_matrix(
         dataframe,
-        dependent_variable,
-        independent_variables,
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+        model_label="이항 로짓",
     )
 
-    unique_outcomes = sorted(model_data[dependent_variable].unique().tolist())
-    if unique_outcomes != [0, 1]:
+    outcome = design.outcome
+    predictors = design.predictors
+
+    unique_outcomes = sorted(outcome.unique().tolist())
+    if unique_outcomes != [0.0, 1.0]:
         raise ValueError(
             f"이항 로짓 종속변수는 0과 1로 코딩되어야 합니다. 현재 값: {unique_outcomes}"
         )
-
-    outcome = model_data[dependent_variable]
-    predictors = model_data[independent_variables]
 
     if add_intercept:
         predictors = sm.add_constant(
@@ -57,7 +67,10 @@ def fit_binary_logit(
             has_constant="add",
         )
 
-    model = sm.Logit(outcome, predictors)
+    model = sm.Logit(
+        outcome,
+        predictors,
+    )
 
     try:
         if covariance_type == "nonrobust":
@@ -79,8 +92,18 @@ def fit_binary_logit(
 
     for term in fitted.params.index:
         estimate = float(fitted.params[term])
-        lower = float(confidence_intervals.loc[term, 0])
-        upper = float(confidence_intervals.loc[term, 1])
+        lower = float(
+            confidence_intervals.loc[
+                term,
+                0,
+            ]
+        )
+        upper = float(
+            confidence_intervals.loc[
+                term,
+                1,
+            ]
+        )
 
         coefficients.append(
             ModelCoefficient(
@@ -96,15 +119,24 @@ def fit_binary_logit(
         )
 
     warnings: list[str] = []
-    converged = bool(fitted.mle_retvals.get("converged", False))
+    converged = bool(
+        fitted.mle_retvals.get(
+            "converged",
+            False,
+        )
+    )
 
     if not converged:
         warnings.append("이항 로짓 모형이 수렴하지 않았습니다.")
 
     event_count = int(outcome.sum())
     non_event_count = int(len(outcome) - event_count)
+
     if min(event_count, non_event_count) < 10:
         warnings.append("사건 또는 비사건 사례가 10개 미만이어서 추정이 불안정할 수 있습니다.")
+
+    if len(outcome) <= len(predictors.columns) + 1:
+        warnings.append("표본 수가 추정 모수 수에 비해 매우 적습니다.")
 
     fit_statistics = {
         "log_likelihood": float(fitted.llf),
@@ -131,8 +163,10 @@ def fit_binary_logit(
         warnings=warnings,
         metadata={
             "add_intercept": add_intercept,
-            "maximum_iterations": maximum_iterations,
-            "dropped_case_count": len(dataframe) - len(model_data),
+            "maximum_iterations": (maximum_iterations),
+            **design.metadata,
+            "design_matrix_columns": [str(column) for column in predictors.columns],
+            "fixed_effect_column_count": len(design.fixed_effect_columns),
         },
         raw_result=fitted,
     )

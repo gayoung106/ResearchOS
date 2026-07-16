@@ -140,16 +140,18 @@ def test_binary_model_has_no_advanced_robustness(
         variable_map=binary_variable_map,
     )
 
+    assert registration.diagnostics_registered is True
+    assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
 
     assert_steps_registered(
         orchestrator,
         "09_regression_analysis",
+        "10_regression_diagnostics",
         "13_effect_size_analysis",
     )
     assert_steps_not_registered(
         orchestrator,
-        "10_regression_diagnostics",
         "11_robustness_analysis",
         "12_advanced_robustness",
     )
@@ -157,5 +159,10 @@ def test_binary_model_has_no_advanced_robustness(
     assert_step_order(
         orchestrator,
         before="09_regression_analysis",
+        after="10_regression_diagnostics",
+    )
+    assert_step_order(
+        orchestrator,
+        before="10_regression_diagnostics",
         after="13_effect_size_analysis",
     )

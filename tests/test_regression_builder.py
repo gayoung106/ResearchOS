@@ -2,10 +2,18 @@
 
 from pathlib import Path
 
-from src.common.config_models import AnalysisPlan, VariableMap
-from tests.support.assertions import assert_registry_matches
-from tests.support.builders import build_regression_pipeline
+from src.common.config_models import (
+    AnalysisPlan,
+    VariableMap,
+)
+from tests.support.assertions import (
+    assert_registry_matches,
+)
+from tests.support.builders import (
+    build_regression_pipeline,
+)
 from tests.support.expected_pipeline import (
+    count_pipeline,
     logit_pipeline,
     ols_pipeline,
 )
@@ -27,6 +35,10 @@ def test_disabled_regression_is_not_registered(
     assert registration.diagnostics_registered is False
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is False
+    assert registration.reporting_registered is False
+    assert registration.visualization_registered is False
+    assert registration.audit_registered is False
     assert orchestrator.registry.names() == []
 
 
@@ -79,9 +91,14 @@ def test_continuous_outcome_registers_full_ols_pipeline(
 
     assert registration.registered is True
     assert registration.model_type == "ols"
+    assert registration.measurement_level == "continuous"
     assert registration.diagnostics_registered is True
     assert registration.robustness_registered is True
     assert registration.advanced_robustness_registered is True
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
 
     assert_registry_matches(
         orchestrator,
@@ -109,6 +126,10 @@ def test_ols_without_robustness_enabled_skips_robustness(
     assert registration.diagnostics_registered is True
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
 
     assert_registry_matches(
         orchestrator,
@@ -135,16 +156,21 @@ def test_binary_outcome_registers_logit_pipeline(
 
     assert registration.registered is True
     assert registration.model_type == "binary_logit"
-    assert registration.diagnostics_registered is False
+    assert registration.measurement_level == "binary"
+    assert registration.diagnostics_registered is True
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
 
     assert_registry_matches(
         orchestrator,
         logit_pipeline(),
     )
 
-    assert any("OLS 모형만 지원" in warning for warning in registration.warnings)
+    assert any("강건성 단계는 OLS 모형만 지원" in warning for warning in registration.warnings)
 
 
 def test_unknown_measurement_level_blocks_registration(
@@ -188,6 +214,10 @@ def test_unknown_measurement_level_blocks_registration(
     assert registration.diagnostics_registered is False
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is False
+    assert registration.reporting_registered is False
+    assert registration.visualization_registered is False
+    assert registration.audit_registered is False
     assert orchestrator.registry.names() == []
     assert registration.warnings
 
@@ -198,7 +228,10 @@ def test_multiple_outcomes_are_rejected(
     analysis_plan = AnalysisPlan.model_validate(
         {
             "variables": {
-                "dependent": ["y1", "y2"],
+                "dependent": [
+                    "y1",
+                    "y2",
+                ],
                 "independent": ["x"],
             },
             "analyses": {
@@ -236,6 +269,10 @@ def test_multiple_outcomes_are_rejected(
     assert registration.diagnostics_registered is False
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is False
+    assert registration.reporting_registered is False
+    assert registration.visualization_registered is False
+    assert registration.audit_registered is False
     assert "종속변수 1개" in registration.warnings[0]
     assert orchestrator.registry.names() == []
 
@@ -247,7 +284,10 @@ def test_predictors_are_collected_in_role_order(
         {
             "variables": {
                 "dependent": ["y"],
-                "independent": ["x1", "x2"],
+                "independent": [
+                    "x1",
+                    "x2",
+                ],
                 "mediators": ["mediator"],
                 "moderators": ["moderator"],
                 "controls": ["x3"],
@@ -313,5 +353,38 @@ def test_predictors_are_collected_in_role_order(
         "mediator",
         "moderator",
         "x3",
+    ]
+    assert registration.fixed_effects == [
         "country",
     ]
+
+
+def test_count_outcome_registers_auto_count_pipeline(
+    tmp_path: Path,
+    ols_with_robustness_analysis_plan: AnalysisPlan,
+    count_variable_map: VariableMap,
+) -> None:
+    orchestrator, _, registration = build_regression_pipeline(
+        tmp_path,
+        analysis_plan=ols_with_robustness_analysis_plan,
+        variable_map=count_variable_map,
+        project_name="계수형 연구",
+    )
+
+    assert registration.registered is True
+    assert registration.model_type == "count_auto"
+    assert registration.measurement_level == "count"
+    assert registration.diagnostics_registered is True
+    assert registration.robustness_registered is False
+    assert registration.advanced_robustness_registered is False
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
+
+    assert_registry_matches(
+        orchestrator,
+        count_pipeline(),
+    )
+
+    assert any("강건성 단계는 OLS 모형만 지원" in warning for warning in registration.warnings)

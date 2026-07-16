@@ -26,6 +26,7 @@ class RegressionAnalysisStep(PipelineStep):
         dependent_variable: str,
         independent_variables: list[str],
         measurement_level: str,
+        fixed_effects: list[str] | None = None,
         model_id: str = "model_1",
         order: int = 90,
     ) -> None:
@@ -38,9 +39,13 @@ class RegressionAnalysisStep(PipelineStep):
         self.dependent_variable = dependent_variable
         self.independent_variables = independent_variables
         self.measurement_level = measurement_level
+        self.fixed_effects = fixed_effects or []
         self.model_id = model_id
 
-    def should_run(self, context: ResearchContext) -> bool:
+    def should_run(
+        self,
+        context: ResearchContext,
+    ) -> bool:
         return bool(self.dependent_variable and self.independent_variables)
 
     def run(
@@ -55,15 +60,20 @@ class RegressionAnalysisStep(PipelineStep):
             dependent_variable=self.dependent_variable,
             independent_variables=self.independent_variables,
             measurement_level=self.measurement_level,
+            fixed_effects=self.fixed_effects,
             model_id=self.model_id,
         )
+
         self.runtime.set_artifact(
             f"regression_result:{self.model_id}",
             result,
         )
 
         output_dir = working_directory / "result" / "09_models"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         coefficient_path = output_dir / f"{self.model_id}_coefficients.xlsx"
         fit_path = output_dir / f"{self.model_id}_fit_statistics.xlsx"
@@ -72,6 +82,7 @@ class RegressionAnalysisStep(PipelineStep):
             coefficient_path,
             index=False,
         )
+
         fit_statistics_to_dataframe(result).to_excel(
             fit_path,
             index=False,
@@ -89,6 +100,7 @@ class RegressionAnalysisStep(PipelineStep):
                 "model_id": result.model_id,
                 "model_type": result.model_type,
                 "sample_size": result.sample_size,
+                "fixed_effects": self.fixed_effects,
                 "error_message": (None if result.converged else "회귀모형이 수렴하지 않았습니다."),
             },
         )

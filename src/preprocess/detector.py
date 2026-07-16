@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from src.common.config_models import MeasurementLevel, VariableMap
+
 
 @dataclass(slots=True)
 class DetectionEvidence:
@@ -34,8 +36,10 @@ class VariableDetection:
 
 
 def _normalize_label(value: str | None) -> str:
+    """비교를 위해 라벨 문자열을 정규화한다."""
     if not value:
         return ""
+
     return value.strip().lower()
 
 
@@ -46,7 +50,11 @@ def _is_integer_like(series: pd.Series) -> bool:
     if non_null.empty or not pd.api.types.is_numeric_dtype(non_null):
         return False
 
-    numeric = pd.to_numeric(non_null, errors="coerce")
+    numeric = pd.to_numeric(
+        non_null,
+        errors="coerce",
+    )
+
     if numeric.isna().any():
         return False
 
@@ -95,16 +103,117 @@ def _detect_likert_candidate(
     return any(keyword in label_text or keyword in value_label_text for keyword in keywords)
 
 
+def _detect_nominal_candidate(
+    series: pd.Series,
+    *,
+    variable_label: str | None = None,
+    value_labels: dict[Any, str] | None = None,
+) -> bool:
+    """
+    숫자 코드로 표현된 명목형 변수 후보인지 탐지한다.
+
+    고유값 수가 적은 정수형 자료이면서 변수명·라벨 또는 값 라벨에서
+    명목형 범주를 나타내는 근거가 확인될 때만 명목형 후보로 판단한다.
+    """
+    non_null = series.dropna()
+    unique_count = int(non_null.nunique())
+
+    if not _is_integer_like(series):
+        return False
+
+    if unique_count < 3 or unique_count > 20:
+        return False
+
+    variable_text = _normalize_label(variable_label)
+    value_text = " ".join(_normalize_label(str(label)) for label in (value_labels or {}).values())
+
+    nominal_keywords = (
+        "성별",
+        "지역",
+        "거주지",
+        "국가",
+        "부서",
+        "직종",
+        "직업",
+        "업종",
+        "유형",
+        "종류",
+        "소속",
+        "전공",
+        "종교",
+        "정당",
+        "혼인",
+        "결혼",
+        "gender",
+        "region",
+        "country",
+        "department",
+        "occupation",
+        "industry",
+        "category",
+        "type",
+        "religion",
+        "party",
+        "marital",
+    )
+
+    if any(keyword in variable_text or keyword in value_text for keyword in nominal_keywords):
+        return True
+
+    nominal_value_keywords = (
+        "서울",
+        "부산",
+        "대구",
+        "인천",
+        "광주",
+        "대전",
+        "울산",
+        "세종",
+        "관리자",
+        "전문가",
+        "사무직",
+        "서비스직",
+        "판매직",
+        "농림",
+        "기능직",
+        "장치",
+        "단순노무",
+    )
+
+    return any(keyword in value_text for keyword in nominal_value_keywords)
+
+
+def _resolve_declared_level(
+    variable_name: str,
+    variable_map: VariableMap | None,
+) -> MeasurementLevel | None:
+    """VariableMap에 명시된 측정수준을 반환한다."""
+    if variable_map is None:
+        return None
+
+    definition = variable_map.variables.get(variable_name)
+
+    if definition is None:
+        return None
+
+    if definition.measurement_level == "unknown":
+        return None
+
+    return definition.measurement_level
+
+
 def detect_variable_level(
     variable_name: str,
     series: pd.Series,
     *,
     variable_label: str | None = None,
     value_labels: dict[Any, str] | None = None,
+    declared_level: MeasurementLevel | None = None,
 ) -> VariableDetection:
     """
     변수 하나의 측정수준 후보를 탐지한다.
 
+    VariableMap 등에 명시된 측정수준이 있으면 자동 탐지보다 우선한다.
     자동 탐지 결과는 후보이며, 설문지와 코드북 검토 전에는 확정하지 않는다.
     """
     non_null = series.dropna()
@@ -122,8 +231,20 @@ def detect_variable_level(
         notes=notes,
     )
 
+    if declared_level is not None and declared_level != "unknown":
+        notes.append("VariableMap에 명시된 측정수준을 자동 탐지 결과보다 우선 적용했습니다.")
+
+        return VariableDetection(
+            variable_name=variable_name,
+            detected_level=declared_level,
+            status="detected",
+            confidence=1.0,
+            evidence=evidence,
+        )
+
     if non_null.empty:
         notes.append("유효 응답값이 없습니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="unknown",
@@ -143,6 +264,7 @@ def detect_variable_level(
 
     if pd.api.types.is_bool_dtype(series):
         notes.append("불리언 자료형으로 확인되었습니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="binary",
@@ -154,6 +276,7 @@ def detect_variable_level(
     if not pd.api.types.is_numeric_dtype(series):
         if unique_count == 2:
             notes.append("문자형이면서 고유값이 2개이므로 이분형 후보입니다.")
+
             return VariableDetection(
                 variable_name=variable_name,
                 detected_level="binary",
@@ -164,6 +287,7 @@ def detect_variable_level(
             )
 
         notes.append("문자형 변수이므로 명목형 후보입니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="nominal",
@@ -175,6 +299,7 @@ def detect_variable_level(
 
     if unique_count == 2:
         notes.append("숫자형이면서 고유값이 2개입니다. 값 라벨 확인이 필요합니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="binary",
@@ -190,6 +315,7 @@ def detect_variable_level(
         value_labels=value_labels,
     ):
         notes.append("정수형 범주와 라벨 표현이 리커트 문항과 일치합니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="scale_item",
@@ -199,19 +325,40 @@ def detect_variable_level(
             alternatives=["ordinal"],
         )
 
+    if _detect_nominal_candidate(
+        series,
+        variable_label=variable_label,
+        value_labels=value_labels,
+    ):
+        notes.append("정수형 코드와 라벨 표현이 명목형 범주와 일치합니다.")
+
+        return VariableDetection(
+            variable_name=variable_name,
+            detected_level="nominal",
+            status="review_required",
+            confidence=0.85,
+            evidence=evidence,
+            alternatives=["ordinal"],
+        )
+
     if _is_integer_like(series) and 3 <= unique_count <= 12:
         notes.append("고유값 수가 적은 정수형 변수입니다. 순서형 또는 명목형일 수 있습니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="ordinal",
             status="review_required",
             confidence=0.65,
             evidence=evidence,
-            alternatives=["nominal", "count"],
+            alternatives=[
+                "nominal",
+                "count",
+            ],
         )
 
     if _is_integer_like(series) and non_null.min() >= 0:
         notes.append("0 이상의 정수형 변수이므로 횟수형 후보입니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="count",
@@ -223,6 +370,7 @@ def detect_variable_level(
 
     if pd.api.types.is_numeric_dtype(series):
         notes.append("고유값이 충분한 숫자형 변수입니다.")
+
         return VariableDetection(
             variable_name=variable_name,
             detected_level="continuous",
@@ -232,6 +380,7 @@ def detect_variable_level(
         )
 
     notes.append("자동 판별 근거가 부족합니다.")
+
     return VariableDetection(
         variable_name=variable_name,
         detected_level="unknown",
@@ -245,6 +394,7 @@ def detect_dataframe_variables(
     dataframe: pd.DataFrame,
     *,
     variable_metadata: pd.DataFrame | None = None,
+    variable_map: VariableMap | None = None,
 ) -> list[VariableDetection]:
     """데이터프레임 전체 변수의 측정수준 후보를 탐지한다."""
     label_map: dict[str, str] = {}
@@ -258,6 +408,7 @@ def detect_dataframe_variables(
             for _, row in variable_metadata.iterrows():
                 name = str(row["variable_name"])
                 label = row["variable_label"]
+
                 if pd.notna(label):
                     label_map[name] = str(label)
 
@@ -268,6 +419,7 @@ def detect_dataframe_variables(
             for _, row in variable_metadata.iterrows():
                 name = str(row["variable_name"])
                 labels = row["value_labels"]
+
                 if isinstance(labels, dict):
                     value_label_map[name] = labels
 
@@ -277,6 +429,10 @@ def detect_dataframe_variables(
             series=dataframe[column],
             variable_label=label_map.get(str(column)),
             value_labels=value_label_map.get(str(column)),
+            declared_level=_resolve_declared_level(
+                str(column),
+                variable_map,
+            ),
         )
         for column in dataframe.columns
     ]
@@ -291,6 +447,7 @@ def detections_to_dataframe(
     for detection in detections:
         row = asdict(detection)
         evidence = row.pop("evidence")
+
         row.update(
             {
                 "dtype": evidence["dtype"],
@@ -316,8 +473,20 @@ def detection_summary(
     level_counts: dict[str, int] = {}
 
     for detection in detections:
-        status_counts[detection.status] = status_counts.get(detection.status, 0) + 1
-        level_counts[detection.detected_level] = level_counts.get(detection.detected_level, 0) + 1
+        status_counts[detection.status] = (
+            status_counts.get(
+                detection.status,
+                0,
+            )
+            + 1
+        )
+        level_counts[detection.detected_level] = (
+            level_counts.get(
+                detection.detected_level,
+                0,
+            )
+            + 1
+        )
 
     return {
         "variable_count": len(detections),

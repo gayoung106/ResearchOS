@@ -11,7 +11,9 @@ import statsmodels.api as sm
 from src.statistics.regression.base import (
     ModelCoefficient,
     RegressionResult,
-    prepare_model_data,
+)
+from src.statistics.regression.design_matrix import (
+    prepare_regression_design_matrix,
 )
 
 SUPPORTED_COVARIANCE_TYPES = {
@@ -28,6 +30,7 @@ def fit_ols(
     *,
     dependent_variable: str,
     independent_variables: list[str],
+    fixed_effects: list[str] | None = None,
     model_id: str = "ols_1",
     covariance_type: str = "HC3",
     add_intercept: bool = True,
@@ -36,14 +39,19 @@ def fit_ols(
     if covariance_type not in SUPPORTED_COVARIANCE_TYPES:
         raise ValueError(f"지원하지 않는 공분산 추정방식입니다: {covariance_type}")
 
-    model_data = prepare_model_data(
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+
+    design = prepare_regression_design_matrix(
         dataframe,
-        dependent_variable,
-        independent_variables,
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+        model_label="OLS",
     )
 
-    outcome = model_data[dependent_variable]
-    predictors = model_data[independent_variables]
+    outcome = design.outcome
+    predictors = design.predictors
 
     if add_intercept:
         predictors = sm.add_constant(
@@ -51,12 +59,17 @@ def fit_ols(
             has_constant="add",
         )
 
-    model = sm.OLS(outcome, predictors)
+    model = sm.OLS(
+        outcome,
+        predictors,
+    )
 
     if covariance_type == "nonrobust":
         fitted = model.fit()
     else:
-        fitted = model.fit(cov_type=covariance_type)
+        fitted = model.fit(
+            cov_type=covariance_type,
+        )
 
     confidence_intervals = fitted.conf_int()
     coefficients: list[ModelCoefficient] = []
@@ -69,13 +82,24 @@ def fit_ols(
                 standard_error=float(fitted.bse[term]),
                 statistic=float(fitted.tvalues[term]),
                 p_value=float(fitted.pvalues[term]),
-                confidence_interval_lower=float(confidence_intervals.loc[term, 0]),
-                confidence_interval_upper=float(confidence_intervals.loc[term, 1]),
+                confidence_interval_lower=float(
+                    confidence_intervals.loc[
+                        term,
+                        0,
+                    ]
+                ),
+                confidence_interval_upper=float(
+                    confidence_intervals.loc[
+                        term,
+                        1,
+                    ]
+                ),
             )
         )
 
     warnings: list[str] = []
-    if len(model_data) <= len(predictors.columns) + 1:
+
+    if len(outcome) <= len(predictors.columns) + 1:
         warnings.append("표본 수가 추정 모수 수에 비해 매우 적습니다.")
 
     fit_statistics: dict[str, Any] = {
@@ -83,12 +107,12 @@ def fit_ols(
         "adjusted_r_squared": float(fitted.rsquared_adj),
         "f_statistic": (
             float(fitted.fvalue)
-            if fitted.fvalue is not None and not math.isnan(float(fitted.fvalue))
+            if (fitted.fvalue is not None and not math.isnan(float(fitted.fvalue)))
             else None
         ),
         "f_p_value": (
             float(fitted.f_pvalue)
-            if fitted.f_pvalue is not None and not math.isnan(float(fitted.f_pvalue))
+            if (fitted.f_pvalue is not None and not math.isnan(float(fitted.f_pvalue)))
             else None
         ),
         "aic": float(fitted.aic),
@@ -109,7 +133,9 @@ def fit_ols(
         warnings=warnings,
         metadata={
             "add_intercept": add_intercept,
-            "dropped_case_count": len(dataframe) - len(model_data),
+            **design.metadata,
+            "design_matrix_columns": [str(column) for column in predictors.columns],
+            "fixed_effect_column_count": len(design.fixed_effect_columns),
         },
         raw_result=fitted,
     )

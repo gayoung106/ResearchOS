@@ -274,6 +274,57 @@ def _build_ordered_logit_effects(
     )
 
 
+def _build_count_effects(
+    result: RegressionResult,
+) -> EffectSizeReport:
+    """계수형 회귀의 발생률비 효과크기를 생성한다."""
+    effects: list[EffectSizeResult] = []
+
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+
+        incidence_rate_ratio = coefficient.exponentiated_estimate
+
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="incidence_rate_ratio",
+                estimate=incidence_rate_ratio,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation=("독립변수가 1단위 증가할 때 기대 사건 수의 배수입니다."),
+            )
+        )
+
+    warnings: list[str] = []
+    dispersion_ratio = result.fit_statistics.get("dispersion_ratio")
+    if (
+        dispersion_ratio is not None
+        and np.isfinite(float(dispersion_ratio))
+        and float(dispersion_ratio) > 1.5
+    ):
+        warnings.append("과산포 가능성이 있어 발생률비 해석과 표준오차를 주의해서 검토해야 합니다.")
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "deviance_pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared_deviance"),
+            "dispersion_ratio": dispersion_ratio,
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+        },
+    )
+
+
 def build_regression_effect_size_report(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -286,6 +337,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
+
+    if result.model_type in {"poisson", "negative_binomial"}:
+        return _build_count_effects(result)
 
     raise ValueError(f"지원하지 않는 회귀모형 유형입니다: {result.model_type}")
 

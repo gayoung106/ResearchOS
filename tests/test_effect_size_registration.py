@@ -2,13 +2,18 @@
 
 from pathlib import Path
 
-from src.common.config_models import AnalysisPlan, VariableMap
+from src.common.config_models import (
+    AnalysisPlan,
+    VariableMap,
+)
 from tests.support.assertions import (
     assert_step_order,
     assert_steps_not_registered,
     assert_steps_registered,
 )
-from tests.support.builders import build_regression_pipeline
+from tests.support.builders import (
+    build_regression_pipeline,
+)
 
 
 def test_ols_registers_effect_size_after_robustness(
@@ -35,7 +40,7 @@ def test_ols_registers_effect_size_after_robustness(
     orchestrator, _, registration = build_regression_pipeline(
         tmp_path,
         analysis_plan=analysis_plan,
-        variable_map=continuous_variable_map,
+        variable_map=(continuous_variable_map),
     )
 
     assert registration.effect_size_registered is True
@@ -89,7 +94,7 @@ def test_ols_without_robustness_still_registers_effect_size(
     orchestrator, _, registration = build_regression_pipeline(
         tmp_path,
         analysis_plan=analysis_plan,
-        variable_map=continuous_variable_map,
+        variable_map=(continuous_variable_map),
     )
 
     assert registration.effect_size_registered is True
@@ -143,23 +148,23 @@ def test_binary_logit_registers_effect_size(
     orchestrator, _, registration = build_regression_pipeline(
         tmp_path,
         analysis_plan=analysis_plan,
-        variable_map=binary_variable_map,
+        variable_map=(binary_variable_map),
     )
 
     assert registration.effect_size_registered is True
-    assert registration.diagnostics_registered is False
+    assert registration.diagnostics_registered is True
     assert registration.robustness_registered is False
     assert registration.advanced_robustness_registered is False
 
     assert_steps_registered(
         orchestrator,
         "09_regression_analysis",
+        "10_regression_diagnostics",
         "13_effect_size_analysis",
         "14_regression_reporting",
     )
     assert_steps_not_registered(
         orchestrator,
-        "10_regression_diagnostics",
         "11_robustness_analysis",
         "12_advanced_robustness",
     )
@@ -167,6 +172,11 @@ def test_binary_logit_registers_effect_size(
     assert_step_order(
         orchestrator,
         before="09_regression_analysis",
+        after="10_regression_diagnostics",
+    )
+    assert_step_order(
+        orchestrator,
+        before="10_regression_diagnostics",
         after="13_effect_size_analysis",
     )
     assert_step_order(
@@ -197,21 +207,22 @@ def test_ordered_logit_registers_effect_size(
     orchestrator, _, registration = build_regression_pipeline(
         tmp_path,
         analysis_plan=analysis_plan,
-        variable_map=ordinal_variable_map,
+        variable_map=(ordinal_variable_map),
     )
 
     assert registration.model_type == "ordered_logit"
     assert registration.effect_size_registered is True
+    assert registration.diagnostics_registered is True
 
     assert_steps_registered(
         orchestrator,
         "09_regression_analysis",
+        "10_regression_diagnostics",
         "13_effect_size_analysis",
         "14_regression_reporting",
     )
     assert_steps_not_registered(
         orchestrator,
-        "10_regression_diagnostics",
         "11_robustness_analysis",
         "12_advanced_robustness",
     )
@@ -219,6 +230,11 @@ def test_ordered_logit_registers_effect_size(
     assert_step_order(
         orchestrator,
         before="09_regression_analysis",
+        after="10_regression_diagnostics",
+    )
+    assert_step_order(
+        orchestrator,
+        before="10_regression_diagnostics",
         after="13_effect_size_analysis",
     )
     assert_step_order(
@@ -235,8 +251,8 @@ def test_unregistered_regression_has_no_effect_size(
 ) -> None:
     orchestrator, _, registration = build_regression_pipeline(
         tmp_path,
-        analysis_plan=empty_analysis_plan,
-        variable_map=empty_variable_map,
+        analysis_plan=(empty_analysis_plan),
+        variable_map=(empty_variable_map),
     )
 
     assert registration.registered is False

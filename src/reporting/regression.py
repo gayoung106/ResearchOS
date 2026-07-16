@@ -104,6 +104,12 @@ def build_publication_table(
                     "average_marginal_effect",
                 )
             ),
+            "발생률비": effect_lookup.get(
+                (
+                    coefficient.term,
+                    "incidence_rate_ratio",
+                )
+            ),
         }
         rows.append(row)
 
@@ -169,6 +175,8 @@ def write_korean_results_narrative(
         "ols": "OLS 회귀분석",
         "binary_logit": "이항 로지스틱 회귀분석",
         "ordered_logit": "순서형 로지스틱 회귀분석",
+        "poisson": "포아송 회귀분석",
+        "negative_binomial": "음이항 회귀분석",
     }.get(
         regression_result.model_type,
         regression_result.model_type,
@@ -211,6 +219,18 @@ def write_korean_results_narrative(
                 if odds_ratio is not None
                 else f"B={coefficient.estimate:.3f}"
             )
+        elif regression_result.model_type in {"poisson", "negative_binomial"}:
+            incidence_rate_ratio = effect_lookup.get(
+                (
+                    coefficient.term,
+                    "incidence_rate_ratio",
+                )
+            )
+            effect_text = (
+                f"IRR={incidence_rate_ratio:.3f}"
+                if incidence_rate_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
         else:
             effect_text = f"B={coefficient.estimate:.3f}"
 
@@ -247,6 +267,24 @@ def write_korean_results_narrative(
         if lr_p is not None:
             sentences.append(f"우도비 검정의 유의확률은 {_format_p_value(float(lr_p))}였다.")
 
+    elif regression_result.model_type == "poisson":
+        dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
+
+        if pseudo is not None:
+            sentences.append(f"Deviance 기반 의사 R²는 {float(pseudo):.3f}이었다.")
+
+        if dispersion_ratio is not None:
+            sentences.append(f"Pearson 분산비는 {float(dispersion_ratio):.3f}이었다.")
+
+    elif regression_result.model_type == "negative_binomial":
+        alpha = regression_result.fit_statistics.get("alpha")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_mcfadden")
+        if pseudo is not None:
+            sentences.append(f"McFadden 의사 R²는 {float(pseudo):.3f}이었다.")
+        if alpha is not None:
+            sentences.append(f"음이항 과산포 모수 alpha는 {float(alpha):.3f}이었다.")
+
     return " ".join(sentences)
 
 
@@ -279,6 +317,8 @@ def build_regression_publication_report(
         "ordered_logit",
     }:
         notes.append("로짓 모형은 오즈비를 함께 제시한다.")
+    elif regression_result.model_type in {"poisson", "negative_binomial"}:
+        notes.append("계수형 회귀모형은 발생률비(IRR)를 함께 제시한다.")
 
     return RegressionPublicationReport(
         model_id=regression_result.model_id,
