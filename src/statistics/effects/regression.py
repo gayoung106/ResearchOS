@@ -281,7 +281,9 @@ def _build_count_effects(
     effects: list[EffectSizeResult] = []
 
     for coefficient in result.coefficients:
-        if coefficient.term.lower() in {"const", "intercept"}:
+        if coefficient.term.lower() in {"const", "intercept"} or coefficient.term.startswith(
+            "inflate_"
+        ):
             continue
 
         incidence_rate_ratio = coefficient.exponentiated_estimate
@@ -338,7 +340,12 @@ def build_regression_effect_size_report(
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
 
-    if result.model_type in {"poisson", "negative_binomial"}:
+    if result.model_type in {
+        "poisson",
+        "negative_binomial",
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
+    }:
         return _build_count_effects(result)
 
     raise ValueError(f"지원하지 않는 회귀모형 유형입니다: {result.model_type}")

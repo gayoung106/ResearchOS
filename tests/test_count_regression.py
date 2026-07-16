@@ -53,7 +53,7 @@ def test_count_auto_selection_metadata_is_recorded() -> None:
         independent_variables=["x"],
         dispersion_threshold=1.3,
     )
-    assert result.metadata["count_model_selection_method"] == "poisson_pearson_dispersion"
+    assert result.metadata["count_model_selection_method"] == "dispersion_then_zero_inflation_aic"
     assert result.metadata["dispersion_threshold"] == 1.3
     assert "negative_binomial_aic" in result.metadata
 

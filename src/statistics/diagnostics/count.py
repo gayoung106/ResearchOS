@@ -49,6 +49,8 @@ def _validate_count_result(
     if result.model_type not in {
         "poisson",
         "negative_binomial",
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
     }:
         raise ValueError(
             "계수형 회귀 진단은 Poisson 또는 Negative Binomial 결과에만 적용할 수 있습니다."
@@ -154,7 +156,10 @@ def _nb2_alpha(
     result: RegressionResult,
 ) -> float:
     """Negative Binomial 과산포 모수를 반환한다."""
-    if result.model_type != "negative_binomial":
+    if result.model_type not in {
+        "negative_binomial",
+        "zero_inflated_negative_binomial",
+    }:
         return 0.0
 
     alpha = result.fit_statistics.get("alpha")
@@ -273,13 +278,26 @@ def calculate_count_predictions(
     )
     alpha = _nb2_alpha(result)
     raw_residual = actual - predicted
-    pearson_residual = _pearson_residuals(
-        actual,
-        predicted,
-        alpha,
-    )
+    if result.model_type in {
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
+    }:
+        predicted_variance = np.asarray(
+            fitted.predict(which="var"),
+            dtype=float,
+        )
+        pearson_residual = (actual - predicted) / np.sqrt(np.maximum(predicted_variance, 1e-12))
+    else:
+        pearson_residual = _pearson_residuals(
+            actual,
+            predicted,
+            alpha,
+        )
 
-    if result.model_type == "negative_binomial":
+    if result.model_type in {
+        "negative_binomial",
+        "zero_inflated_negative_binomial",
+    }:
         deviance_residual = _negative_binomial_deviance_residuals(
             actual,
             predicted,
@@ -301,7 +319,15 @@ def calculate_count_predictions(
 
     observed_zero_proportion = float(np.mean(actual == 0))
 
-    if result.model_type == "negative_binomial":
+    if result.model_type in {
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
+    }:
+        predicted_zero_probability = np.asarray(
+            fitted.predict(which="prob-zero"),
+            dtype=float,
+        )
+    elif result.model_type == "negative_binomial":
         predicted_zero_probability = (1 + alpha * predicted) ** (-1 / alpha)
     else:
         predicted_zero_probability = np.exp(-predicted)
@@ -384,7 +410,10 @@ def build_count_diagnostics(
     if high_leverage_count > 0:
         warnings.append(f"높은 leverage로 표시된 관측치가 {high_leverage_count}개 있습니다.")
 
-    if result.model_type == "poisson":
+    if result.model_type in {
+        "poisson",
+        "zero_inflated_poisson",
+    }:
         dispersion_ratio = result.fit_statistics.get("dispersion_ratio")
         if (
             dispersion_ratio is not None
@@ -413,8 +442,13 @@ def build_count_diagnostics(
 
     if result.model_type == "poisson":
         summary["dispersion_ratio"] = result.fit_statistics.get("dispersion_ratio")
-    else:
+    elif result.model_type in {
+        "negative_binomial",
+        "zero_inflated_negative_binomial",
+    }:
         summary["alpha"] = result.fit_statistics.get("alpha")
+    else:
+        summary["inflation_model"] = result.metadata.get("inflation_model")
 
     return CountDiagnosticsReport(
         model_id=result.model_id,

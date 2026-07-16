@@ -59,6 +59,8 @@ def build_publication_table(
     for coefficient in regression_result.coefficients:
         if "/" in coefficient.term:
             term_type = "threshold"
+        elif coefficient.term.startswith("inflate_"):
+            term_type = "inflation"
         elif coefficient.term.lower() in {"const", "intercept"}:
             term_type = "intercept"
         else:
@@ -166,7 +168,9 @@ def write_korean_results_narrative(
     substantive = [
         coefficient
         for coefficient in regression_result.coefficients
-        if coefficient.term.lower() not in {"const", "intercept"} and "/" not in coefficient.term
+        if coefficient.term.lower() not in {"const", "intercept"}
+        and "/" not in coefficient.term
+        and not coefficient.term.startswith("inflate_")
     ]
 
     sentences: list[str] = []
@@ -177,6 +181,8 @@ def write_korean_results_narrative(
         "ordered_logit": "순서형 로지스틱 회귀분석",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
+        "zero_inflated_poisson": "영과잉 포아송 회귀분석",
+        "zero_inflated_negative_binomial": "영과잉 음이항 회귀분석",
     }.get(
         regression_result.model_type,
         regression_result.model_type,
@@ -277,7 +283,10 @@ def write_korean_results_narrative(
         if dispersion_ratio is not None:
             sentences.append(f"Pearson 분산비는 {float(dispersion_ratio):.3f}이었다.")
 
-    elif regression_result.model_type == "negative_binomial":
+    elif regression_result.model_type in {
+        "negative_binomial",
+        "zero_inflated_negative_binomial",
+    }:
         alpha = regression_result.fit_statistics.get("alpha")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_mcfadden")
         if pseudo is not None:
