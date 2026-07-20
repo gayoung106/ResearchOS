@@ -167,3 +167,70 @@ class AdvancedOLSRobustnessStep(PipelineStep):
                 "bootstrap_replications": (self.bootstrap_replications),
             },
         )
+
+
+class AdvancedMixedEffectsRobustnessStep(PipelineStep):
+    """Random Intercept 집단 단위 고급 강건성 분석 단계."""
+
+    def __init__(
+        self,
+        runtime: PipelineRuntime,
+        *,
+        model_id: str,
+        bootstrap_replications: int = 500,
+        run_leave_one_group_out: bool = True,
+        order: int = 120,
+    ) -> None:
+        super().__init__(name="12_advanced_robustness", order=order, required=False)
+        self.runtime = runtime
+        self.model_id = model_id
+        self.bootstrap_replications = bootstrap_replications
+        self.run_leave_one_group_out = run_leave_one_group_out
+
+    def should_run(self, context: ResearchContext) -> bool:
+        key = f"regression_result:{self.model_id}"
+        return key in self.runtime.artifacts and self.runtime.artifacts[key].model_type in {
+            "mixed_random_intercept",
+            "mixed_random_slope",
+            "mixed_three_level",
+        }
+
+    def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
+        from src.statistics.robustness.advanced_mixed_effects import (
+            build_mixed_advanced_robustness_report,
+            mixed_advanced_summary_to_dataframe,
+            mixed_resampling_to_dataframe,
+        )
+
+        dataframe = self.runtime.require_dataframe()
+        regression_result = self.runtime.get_artifact(f"regression_result:{self.model_id}")
+        group_variable = str(regression_result.metadata["group_variable"])
+        report = build_mixed_advanced_robustness_report(
+            dataframe,
+            dependent_variable=regression_result.dependent_variable,
+            independent_variables=regression_result.independent_variables,
+            group_variable=group_variable,
+            model_id=self.model_id,
+            bootstrap_replications=self.bootstrap_replications,
+            run_leave_one_group_out=self.run_leave_one_group_out,
+            reml=bool(regression_result.metadata.get("reml", False)),
+            optimizer=str(regression_result.metadata.get("optimizer", "lbfgs")),
+            max_iterations=int(regression_result.metadata.get("max_iterations", 200)),
+            random_slope_variable=regression_result.metadata.get("random_slope_variable"),
+        )
+        self.runtime.set_artifact(f"advanced_robustness_report:{self.model_id}", report)
+        output_dir = working_directory / "result" / "12_advanced_robustness" / self.model_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        coefficient_path = output_dir / "group_bootstrap_coefficients.xlsx"
+        logo_path = output_dir / "leave_one_group_out.xlsx"
+        summary_path = output_dir / "advanced_robustness_summary.xlsx"
+        mixed_resampling_to_dataframe(report).to_excel(coefficient_path, index=False)
+        report.leave_one_group_out.to_excel(logo_path, index=False)
+        mixed_advanced_summary_to_dataframe(report).to_excel(summary_path, index=False)
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(coefficient_path), str(logo_path), str(summary_path)],
+            warnings=report.warnings,
+            metadata={"model_id": self.model_id, **report.metadata},
+        )

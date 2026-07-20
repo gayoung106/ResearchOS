@@ -20,11 +20,7 @@ def test_pipeline_end_to_end_ols(
     rawdata_dir = tmp_path / "rawdata"
     rawdata_dir.mkdir()
 
-    fixture_dir = (
-        Path(__file__).resolve().parent.parent
-        / "fixtures"
-        / "data"
-    )
+    fixture_dir = Path(__file__).resolve().parent.parent / "fixtures" / "data"
 
     shutil.copy(
         fixture_dir / "ols_sample.csv",

@@ -20,11 +20,7 @@ def test_pipeline_end_to_end_logit(
     rawdata_dir = tmp_path / "rawdata"
     rawdata_dir.mkdir()
 
-    fixture_dir = (
-        Path(__file__).resolve().parent.parent
-        / "fixtures"
-        / "data"
-    )
+    fixture_dir = Path(__file__).resolve().parent.parent / "fixtures" / "data"
 
     shutil.copy(
         fixture_dir / "logit_sample.csv",

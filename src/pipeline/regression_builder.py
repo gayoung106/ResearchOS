@@ -10,6 +10,7 @@ from src.common.config_models import (
     VariableMap,
 )
 from src.pipeline.advanced_robustness_step import (
+    AdvancedMixedEffectsRobustnessStep,
     AdvancedOLSRobustnessStep,
 )
 from src.pipeline.effect_size_step import (
@@ -34,6 +35,7 @@ from src.pipeline.research_audit_step import (
     ResearchAuditStep,
 )
 from src.pipeline.robustness_step import (
+    MixedEffectsRobustnessStep,
     OLSRobustnessStep,
 )
 from src.pipeline.runtime import PipelineRuntime
@@ -50,6 +52,7 @@ class RegressionRegistration:
     dependent_variable: str | None
     independent_variables: list[str]
     fixed_effects: list[str]
+    group_variable: str | None
     diagnostics_registered: bool
     robustness_registered: bool
     advanced_robustness_registered: bool
@@ -97,6 +100,26 @@ def _model_type_for_level(
         "scale_item": "ordered_logit",
         "count": "count_auto",
     }.get(measurement_level)
+
+
+def _multilevel_options(
+    analysis_plan: AnalysisPlan,
+) -> dict[str, Any]:
+    options = analysis_plan.analyses.multilevel.options
+    return options if isinstance(options, dict) else {}
+
+
+def _resolve_multilevel_group_variable(
+    analysis_plan: AnalysisPlan,
+    options: dict[str, Any],
+) -> str | None:
+    configured = options.get("group_variable")
+
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+
+    clusters = analysis_plan.variables.clusters
+    return clusters[0] if clusters else None
 
 
 def _robustness_options(
@@ -163,6 +186,7 @@ def register_regression_pipeline(
             dependent_variable=(dependent_variable),
             independent_variables=(independent_variables or []),
             fixed_effects=(fixed_effects or []),
+            group_variable=None,
             diagnostics_registered=False,
             robustness_registered=False,
             advanced_robustness_registered=False,
@@ -220,7 +244,169 @@ def register_regression_pipeline(
         dependent_variable,
         variable_map,
     )
-    model_type = _model_type_for_level(measurement_level)
+
+    multilevel = analysis_plan.analyses.multilevel
+    multilevel_options = _multilevel_options(analysis_plan)
+    group_variable = None
+
+    if multilevel.enabled:
+        raw_random_slopes = multilevel_options.get("random_slope_variables")
+        random_slope_variables = (
+            [str(v).strip() for v in raw_random_slopes]
+            if isinstance(raw_random_slopes, (list, tuple))
+            else []
+        )
+        random_slope_variables = [v for v in random_slope_variables if v]
+        random_slope_variable = str(multilevel_options.get("random_slope_variable", "")).strip()
+        if not random_slope_variables and random_slope_variable:
+            random_slope_variables = [random_slope_variable]
+        level2_group = str(multilevel_options.get("level2_group", "")).strip()
+        level3_group = str(multilevel_options.get("level3_group", "")).strip()
+        count_distribution = (
+            str(
+                multilevel_options.get(
+                    "count_distribution", multilevel_options.get("family", "poisson")
+                )
+            )
+            .strip()
+            .lower()
+        )
+        if count_distribution in {"nb", "nb2", "negative-binomial"}:
+            count_distribution = "negative_binomial"
+        if count_distribution not in {"poisson", "negative_binomial"}:
+            return not_registered(
+                "계수형 혼합모형의 count_distribution은 poisson 또는 negative_binomial이어야 합니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if level2_group or level3_group:
+            if not level2_group or not level3_group:
+                return not_registered(
+                    "3수준 혼합효과 모형에는 level2_group과 level3_group을 모두 지정해야 합니다.",
+                    dependent_variable=dependent_variable,
+                    independent_variables=independent_variables,
+                    fixed_effects=fixed_effects,
+                    measurement_level=measurement_level,
+                )
+            model_type = (
+                "mixed_binary_logit_three_level"
+                if measurement_level == "binary"
+                else "mixed_negative_binomial_three_level"
+                if measurement_level == "count" and count_distribution == "negative_binomial"
+                else "mixed_poisson_three_level"
+                if measurement_level == "count"
+                else "mixed_three_level"
+            )
+        else:
+            model_type = (
+                "mixed_binary_logit_random_slope"
+                if measurement_level == "binary" and random_slope_variables
+                else "mixed_binary_logit_random_intercept"
+                if measurement_level == "binary"
+                else "mixed_negative_binomial_random_slope"
+                if measurement_level == "count"
+                and count_distribution == "negative_binomial"
+                and random_slope_variables
+                else "mixed_poisson_random_slope"
+                if measurement_level == "count" and random_slope_variables
+                else "mixed_negative_binomial_random_intercept"
+                if measurement_level == "count" and count_distribution == "negative_binomial"
+                else "mixed_poisson_random_intercept"
+                if measurement_level == "count"
+                else "mixed_random_slope"
+                if random_slope_variables
+                else "mixed_random_intercept"
+            )
+        covariance_structure = (
+            str(multilevel_options.get("random_effect_covariance", "correlated")).strip().lower()
+        )
+        if covariance_structure not in {"correlated", "diagonal"}:
+            return not_registered(
+                "random_effect_covariance는 correlated 또는 diagonal이어야 합니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        group_variable = (
+            level3_group
+            if model_type
+            in {"mixed_three_level", "mixed_binary_logit_three_level", "mixed_poisson_three_level", "mixed_negative_binomial_three_level"}
+            else _resolve_multilevel_group_variable(analysis_plan, multilevel_options)
+        )
+
+        if measurement_level not in {"continuous", "binary", "count"}:
+            return not_registered(
+                "혼합효과 모형은 연속형, 이항 또는 계수형 종속변수를 지원합니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+
+        if group_variable is None:
+            return not_registered(
+                "혼합효과 모형의 그룹변수가 지정되지 않았습니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+
+        required_group_variables = (
+            [level2_group, level3_group]
+            if model_type
+            in {"mixed_three_level", "mixed_binary_logit_three_level", "mixed_poisson_three_level", "mixed_negative_binomial_three_level"}
+            else [group_variable]
+        )
+        missing_group_definitions = [
+            variable
+            for variable in required_group_variables
+            if variable not in variable_map.variables
+        ]
+        if missing_group_definitions:
+            return not_registered(
+                "그룹변수의 variable_map 정의가 없습니다: " + ", ".join(missing_group_definitions),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+
+        if group_variable == dependent_variable or group_variable in independent_variables:
+            return not_registered(
+                "그룹변수는 종속변수 또는 일반 설명변수와 중복될 수 없습니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+
+        missing_random_slopes = [
+            v for v in random_slope_variables if v not in independent_variables
+        ]
+        if missing_random_slopes:
+            return not_registered(
+                "Random Slope 변수는 일반 설명변수에 포함되어야 합니다: "
+                + ", ".join(missing_random_slopes),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+
+        if fixed_effects:
+            return not_registered(
+                "현재 혼합효과 빌더는 별도 고정효과 변수 지정을 지원하지 않습니다.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+    else:
+        model_type = _model_type_for_level(measurement_level)
 
     if model_type is None:
         return not_registered(
@@ -239,6 +425,9 @@ def register_regression_pipeline(
             measurement_level=(measurement_level),
             fixed_effects=fixed_effects,
             model_id=model_id,
+            model_type=model_type,
+            group_variable=group_variable,
+            mixed_effects_options=multilevel_options,
             order=regression_order,
         )
     )
@@ -246,6 +435,138 @@ def register_regression_pipeline(
     diagnostics_registered = False
     robustness_registered = False
     advanced_robustness_registered = False
+
+    if model_type in {
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
+    }:
+        orchestrator.register(
+            RegressionEffectSizeStep(runtime, model_id=model_id, order=effect_size_order)
+        )
+        orchestrator.register(
+            RegressionReportingStep(runtime, model_id=model_id, order=reporting_order)
+        )
+        orchestrator.register(
+            RegressionVisualizationStep(runtime, model_id=model_id, order=visualization_order)
+        )
+        orchestrator.register(ResearchAuditStep(runtime, model_id=model_id, order=audit_order))
+        return RegressionRegistration(
+            registered=True,
+            model_id=model_id,
+            model_type=model_type,
+            measurement_level=measurement_level,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            group_variable=group_variable,
+            diagnostics_registered=False,
+            robustness_registered=False,
+            advanced_robustness_registered=False,
+            effect_size_registered=True,
+            reporting_registered=True,
+            visualization_registered=True,
+            audit_registered=True,
+            warnings=warnings,
+        )
+
+    if model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:
+        orchestrator.register(
+            RegressionDiagnosticsStep(
+                runtime,
+                model_id=model_id,
+                order=diagnostics_order,
+            )
+        )
+        orchestrator.register(
+            RegressionEffectSizeStep(
+                runtime,
+                model_id=model_id,
+                order=effect_size_order,
+            )
+        )
+        orchestrator.register(
+            RegressionReportingStep(
+                runtime,
+                model_id=model_id,
+                order=reporting_order,
+            )
+        )
+        orchestrator.register(
+            RegressionVisualizationStep(
+                runtime,
+                model_id=model_id,
+                order=visualization_order,
+            )
+        )
+        robustness = analysis_plan.analyses.robustness
+        if robustness.enabled:
+            options = _robustness_options(analysis_plan)
+            configured_optimizers = options.get(
+                "mixed_optimizers",
+                ["lbfgs", "bfgs", "cg", "powell"],
+            )
+            optimizers = tuple(
+                str(item).strip() for item in configured_optimizers if str(item).strip()
+            )
+            orchestrator.register(
+                MixedEffectsRobustnessStep(
+                    runtime,
+                    model_id=model_id,
+                    optimizers=optimizers,
+                    order=robustness_order,
+                )
+            )
+            robustness_registered = True
+            run_advanced = bool(options.get("advanced_enabled", True))
+            if run_advanced:
+                orchestrator.register(
+                    AdvancedMixedEffectsRobustnessStep(
+                        runtime,
+                        model_id=model_id,
+                        bootstrap_replications=int(
+                            options.get("mixed_bootstrap_replications", 500)
+                        ),
+                        run_leave_one_group_out=bool(
+                            options.get("mixed_run_leave_one_group_out", True)
+                        ),
+                        order=advanced_robustness_order,
+                    )
+                )
+                advanced_robustness_registered = True
+
+        orchestrator.register(
+            ResearchAuditStep(
+                runtime,
+                model_id=model_id,
+                order=audit_order,
+            )
+        )
+
+        return RegressionRegistration(
+            registered=True,
+            model_id=model_id,
+            model_type=model_type,
+            measurement_level=measurement_level,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            group_variable=group_variable,
+            diagnostics_registered=True,
+            robustness_registered=robustness_registered,
+            advanced_robustness_registered=advanced_robustness_registered,
+            effect_size_registered=True,
+            reporting_registered=True,
+            visualization_registered=True,
+            audit_registered=True,
+            warnings=warnings,
+        )
 
     if model_type in {
         "ols",
@@ -358,6 +679,7 @@ def register_regression_pipeline(
         dependent_variable=(dependent_variable),
         independent_variables=(independent_variables),
         fixed_effects=fixed_effects,
+        group_variable=group_variable,
         diagnostics_registered=(diagnostics_registered),
         robustness_registered=(robustness_registered),
         advanced_robustness_registered=(advanced_robustness_registered),

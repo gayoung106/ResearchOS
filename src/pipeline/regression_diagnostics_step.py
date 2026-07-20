@@ -22,6 +22,14 @@ from src.statistics.diagnostics.count import (
     count_observations_to_dataframe,
     count_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.mixed_effects import (
+    build_mixed_effects_diagnostics,
+    mixed_effects_diagnostic_summary_to_dataframe,
+    mixed_effects_group_residuals_to_dataframe,
+    mixed_effects_random_effects_to_dataframe,
+    mixed_effects_residuals_to_dataframe,
+    mixed_effects_tests_to_dataframe,
+)
 from src.statistics.diagnostics.ols import (
     build_ols_diagnostics,
     diagnostic_summary_to_dataframe,
@@ -78,6 +86,16 @@ class RegressionDiagnosticsStep(PipelineStep):
             exist_ok=True,
         )
 
+        if result.model_type in {
+            "mixed_random_intercept",
+            "mixed_random_slope",
+            "mixed_three_level",
+        }:
+            return self._run_mixed_effects(
+                result,
+                output_dir,
+            )
+
         if result.model_type == "ols":
             return self._run_ols(
                 result,
@@ -125,6 +143,51 @@ class RegressionDiagnosticsStep(PipelineStep):
         self.runtime.set_artifact(
             f"regression_diagnostics:{self.model_id}",
             report,
+        )
+
+    def _run_mixed_effects(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_mixed_effects_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "tests": output_dir / "diagnostic_tests.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "group_residuals": output_dir / "group_residuals.xlsx",
+            "random_effects": output_dir / "random_effects.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+
+        mixed_effects_tests_to_dataframe(report).to_excel(
+            paths["tests"],
+            index=False,
+        )
+        mixed_effects_residuals_to_dataframe(report).to_excel(
+            paths["residuals"],
+            index=False,
+        )
+        mixed_effects_group_residuals_to_dataframe(report).to_excel(
+            paths["group_residuals"],
+            index=False,
+        )
+        mixed_effects_random_effects_to_dataframe(report).to_excel(
+            paths["random_effects"],
+            index=False,
+        )
+        mixed_effects_diagnostic_summary_to_dataframe(report).to_excel(
+            paths["summary"],
+            index=False,
+        )
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
         )
 
     def _run_ols(

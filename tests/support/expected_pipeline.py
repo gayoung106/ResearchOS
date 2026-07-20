@@ -117,6 +117,19 @@ def count_pipeline() -> list[str]:
     )
 
 
+def mixed_effects_pipeline(*, robustness: bool = False) -> list[str]:
+    """Random Intercept 회귀 서브파이프라인."""
+    return regression_pipeline(
+        diagnostics=True,
+        robustness=robustness,
+        advanced_robustness=False,
+        effect_size=True,
+        reporting=True,
+        visualization=True,
+        research_audit=True,
+    )
+
+
 def poisson_pipeline() -> list[str]:
     """기존 Poisson 테스트 호환용 Count 파이프라인 별칭."""
     return count_pipeline()
@@ -152,3 +165,8 @@ def full_count_pipeline() -> list[str]:
 def full_poisson_pipeline() -> list[str]:
     """기존 Poisson E2E 테스트 호환용 전체 Count 파이프라인 별칭."""
     return full_count_pipeline()
+
+
+def full_mixed_effects_pipeline(*, robustness: bool = False) -> list[str]:
+    """전체 Random Intercept 회귀 파이프라인."""
+    return base_analysis_pipeline() + mixed_effects_pipeline(robustness=robustness)

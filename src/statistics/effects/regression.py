@@ -327,6 +327,125 @@ def _build_count_effects(
     )
 
 
+def _build_mixed_effects(
+    result: RegressionResult,
+) -> EffectSizeReport:
+    """Random Intercept 혼합효과 모형의 효과크기를 계산한다."""
+    fitted = result.raw_result
+
+    if fitted is None:
+        raise ValueError("원본 혼합효과 회귀 결과 객체가 없습니다.")
+
+    endog = np.asarray(fitted.model.endog, dtype=float)
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    fixed_effects = np.asarray(fitted.fe_params, dtype=float)
+
+    outcome_sd = float(np.std(endog, ddof=1))
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        raise ValueError("종속변수 표준편차가 0이므로 혼합효과 표준화 계수를 계산할 수 없습니다.")
+
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    effects: list[EffectSizeResult] = []
+
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept"}:
+            continue
+
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None:
+            continue
+
+        predictor_sd = float(np.std(exog[:, index], ddof=1))
+        standardized_beta = coefficient.estimate * predictor_sd / outcome_sd
+
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="standardized_beta",
+                estimate=float(standardized_beta),
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation=(
+                    "독립변수가 1표준편차 증가할 때 종속변수가 "
+                    f"{standardized_beta:.3f}표준편차 변화합니다. "
+                    "Random Intercept를 포함한 고정효과 기준 값입니다."
+                ),
+            )
+        )
+
+    fixed_linear_predictor = exog @ fixed_effects
+    fixed_effect_variance = float(np.var(fixed_linear_predictor, ddof=1))
+    random_intercept_variance = float(fitted.cov_re.iloc[0, 0])
+    random_slope_variance = result.fit_statistics.get("random_slope_variance")
+    random_intercept_slope_covariance = result.fit_statistics.get(
+        "random_intercept_slope_covariance"
+    )
+    random_effect_variance = random_intercept_variance
+    if result.model_type == "mixed_random_slope":
+        random_design = np.asarray(fitted.model.exog_re, dtype=float)
+        covariance_matrix = np.asarray(fitted.cov_re, dtype=float)
+        random_effect_variance = float(
+            np.mean(np.einsum("ij,jk,ik->i", random_design, covariance_matrix, random_design))
+        )
+    residual_variance = float(fitted.scale)
+    total_variance = fixed_effect_variance + random_effect_variance + residual_variance
+
+    if not np.isfinite(total_variance) or total_variance <= 0:
+        raise ValueError("혼합효과 모형의 총분산을 계산할 수 없습니다.")
+
+    marginal_r_squared = fixed_effect_variance / total_variance
+    conditional_r_squared = (fixed_effect_variance + random_effect_variance) / total_variance
+    icc_denominator = random_intercept_variance + residual_variance
+    intraclass_correlation = (
+        random_intercept_variance / icc_denominator if icc_denominator > 0 else None
+    )
+
+    warnings: list[str] = []
+    if random_intercept_variance <= np.finfo(float).eps:
+        warnings.append(
+            "Random Intercept 분산이 0에 가까워 conditional R²와 marginal R²의 차이가 작습니다."
+        )
+
+    if conditional_r_squared + 1e-12 < marginal_r_squared:
+        warnings.append(
+            "conditional R²가 marginal R²보다 작게 계산되어 분산 성분을 확인해야 합니다."
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "intraclass_correlation": (
+                float(intraclass_correlation) if intraclass_correlation is not None else None
+            ),
+            "marginal_r_squared": float(marginal_r_squared),
+            "conditional_r_squared": float(conditional_r_squared),
+            "fixed_effect_variance": fixed_effect_variance,
+            "random_intercept_variance": random_intercept_variance,
+            "random_slope_variance": random_slope_variance,
+            "random_intercept_slope_covariance": random_intercept_slope_covariance,
+            "random_intercept_slope_correlation": result.fit_statistics.get(
+                "random_intercept_slope_correlation"
+            ),
+            "random_effect_variance": random_effect_variance,
+            "residual_variance": residual_variance,
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "group_variable": result.metadata.get("group_variable"),
+            "group_count": result.fit_statistics.get("group_count"),
+            "r_squared_method": "nakagawa_schielzeth",
+        },
+    )
+
+
 def build_regression_effect_size_report(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -334,17 +453,31 @@ def build_regression_effect_size_report(
     if result.model_type == "ols":
         return _build_ols_effects(result)
 
-    if result.model_type == "binary_logit":
+    if result.model_type in {
+        "binary_logit",
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+    }:
         return _build_binary_logit_effects(result)
 
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
+
+    if result.model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:
+        return _build_mixed_effects(result)
 
     if result.model_type in {
         "poisson",
         "negative_binomial",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
     }:
         return _build_count_effects(result)
 

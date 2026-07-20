@@ -162,3 +162,61 @@ def test_unregistered_regression_has_no_audit(
         "09_regression_analysis",
         "16_research_audit",
     )
+
+
+def test_mixed_effects_registers_audit(
+    tmp_path: Path,
+) -> None:
+    plan = AnalysisPlan.model_validate(
+        {
+            "variables": {
+                "dependent": ["y"],
+                "independent": ["x"],
+                "clusters": ["group"],
+            },
+            "analyses": {
+                "regression": {"enabled": True},
+                "multilevel": {
+                    "enabled": True,
+                    "options": {"group_variable": "group"},
+                },
+                "robustness": {"enabled": False},
+            },
+        }
+    )
+    variable_map = VariableMap.model_validate(
+        {
+            "variables": {
+                "y": {
+                    "role": "dependent",
+                    "measurement_level": "continuous",
+                },
+                "x": {
+                    "role": "independent",
+                    "measurement_level": "continuous",
+                },
+                "group": {
+                    "role": "cluster",
+                    "measurement_level": "nominal",
+                },
+            }
+        }
+    )
+
+    orchestrator, _, registration = build_regression_pipeline(
+        tmp_path,
+        analysis_plan=plan,
+        variable_map=variable_map,
+    )
+
+    assert registration.audit_registered is True
+    assert_steps_registered(
+        orchestrator,
+        "15_regression_visualization",
+        "16_research_audit",
+    )
+    assert_step_order(
+        orchestrator,
+        before="15_regression_visualization",
+        after="16_research_audit",
+    )

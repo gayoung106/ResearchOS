@@ -79,6 +79,7 @@ def test_binary_logit_registers_visualization(
         "13_effect_size_analysis",
         "14_regression_reporting",
         "15_regression_visualization",
+        "16_research_audit",
     )
     assert_steps_not_registered(
         orchestrator,
@@ -160,4 +161,68 @@ def test_unregistered_regression_has_no_visualization(
         orchestrator,
         "09_regression_analysis",
         "15_regression_visualization",
+    )
+
+
+def test_mixed_effects_registers_visualization(
+    tmp_path: Path,
+) -> None:
+    plan = AnalysisPlan.model_validate(
+        {
+            "variables": {
+                "dependent": ["y"],
+                "independent": ["x"],
+                "clusters": ["group"],
+            },
+            "analyses": {
+                "regression": {"enabled": True},
+                "multilevel": {
+                    "enabled": True,
+                    "options": {"group_variable": "group"},
+                },
+            },
+        }
+    )
+    variable_map = VariableMap.model_validate(
+        {
+            "variables": {
+                "y": {
+                    "role": "dependent",
+                    "measurement_level": "continuous",
+                },
+                "x": {
+                    "role": "independent",
+                    "measurement_level": "continuous",
+                },
+                "group": {
+                    "role": "cluster",
+                    "measurement_level": "nominal",
+                },
+            }
+        }
+    )
+
+    orchestrator, _, registration = build_regression_pipeline(
+        tmp_path,
+        analysis_plan=plan,
+        variable_map=variable_map,
+    )
+
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
+    assert_steps_registered(
+        orchestrator,
+        "11_robustness_analysis",
+        "14_regression_reporting",
+        "15_regression_visualization",
+        "16_research_audit",
+    )
+    assert_steps_registered(
+        orchestrator,
+        "12_advanced_robustness",
+    )
+    assert_step_order(
+        orchestrator,
+        before="14_regression_reporting",
+        after="15_regression_visualization",
     )

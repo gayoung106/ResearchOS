@@ -252,6 +252,121 @@ def _plot_coefficient_forest(
     )
 
 
+def _plot_random_intercepts(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    """그룹별 Random Intercept 추정치를 정렬해 표시한다."""
+    _configure_matplotlib_font()
+
+    fitted = regression_result.raw_result
+    rows: list[tuple[str, float]] = []
+
+    if regression_result.model_type in {
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
+    }:
+        random_effects = regression_result.metadata.get("random_effects", {})
+        if regression_result.model_type in {
+            "mixed_binary_logit_three_level",
+            "mixed_poisson_three_level",
+            "mixed_negative_binomial_three_level",
+        }:
+            random_effects = regression_result.metadata.get("level2_random_effects", {})
+        rows = [(str(group), float(effect)) for group, effect in random_effects.items()]
+    else:
+        for group, effect in fitted.random_effects.items():
+            values = np.asarray(effect, dtype=float).reshape(-1)
+            if values.size == 0:
+                continue
+            rows.append((str(group), float(values[0])))
+
+    if not rows:
+        raise ValueError("표시할 Random Intercept 추정치가 없습니다.")
+
+    rows.sort(key=lambda item: item[1])
+    groups = [item[0] for item in rows]
+    estimates = np.asarray([item[1] for item in rows], dtype=float)
+    positions = np.arange(len(rows))
+
+    figure_height = max(4.0, 0.28 * len(rows) + 1.5)
+    figure, axis = plt.subplots(figsize=(7.0, figure_height))
+
+    axis.scatter(estimates, positions)
+    axis.axvline(0)
+    axis.set_yticks(positions)
+    axis.set_yticklabels(groups)
+    axis.set_xlabel("Random Intercept 추정치")
+    axis.set_ylabel("그룹")
+    axis.set_title("그룹별 Random Intercept 도표")
+
+    _save_figure(figure, output_path)
+
+
+def _plot_cross_level_interaction(result: RegressionResult, output_path: Path) -> None:
+    metadata = result.metadata.get("cross_level_interaction") or {}
+    slopes = metadata.get("conditional_effects") or []
+    if not slopes:
+        raise ValueError("교차수준 상호작용 시각화에 필요한 조건부 효과가 없습니다.")
+    fitted = result.raw_result
+    predictor_term = metadata["predictor_term"]
+    moderator_term = metadata["moderator_term"]
+
+    x_index = fitted.model.exog_names.index(predictor_term)
+    x_values = np.asarray(fitted.model.exog[:, x_index], dtype=float)
+    grid = np.linspace(float(np.nanmin(x_values)), float(np.nanmax(x_values)), 100)
+    intercept = float(fitted.fe_params.get("const", 0.0))
+    moderator_main = float(fitted.fe_params[moderator_term])
+    figure, axis = plt.subplots(figsize=(8, 5))
+    for slope in slopes:
+        z = float(slope["moderator_value"])
+        y = intercept + moderator_main * z + float(slope["estimate"]) * grid
+        axis.plot(grid, y, label=str(slope["label"]))
+    axis.set_xlabel(str(metadata.get("predictor", predictor_term)))
+    axis.set_ylabel(result.dependent_variable)
+    axis.set_title("교차수준 상호작용 조건부 예측선")
+    axis.legend(title=str(metadata.get("moderator", moderator_term)))
+    _save_figure(figure, output_path)
+
+
+def _plot_three_level_variance_partition(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    partition = regression_result.fit_statistics.get("variance_partition") or {}
+    level2_vpc = regression_result.fit_statistics.get("level2_vpc")
+    level3_vpc = regression_result.fit_statistics.get("level3_vpc")
+    labels = ["Level 1", "Level 2", "Level 3"]
+    if level2_vpc is not None and level3_vpc is not None:
+        level2 = float(level2_vpc)
+        level3 = float(level3_vpc)
+        values = [max(0.0, 1.0 - level2 - level3), level2, level3]
+    else:
+        values = [
+            float(partition.get("level1", 0.0)),
+            float(partition.get("level2", 0.0)),
+            float(partition.get("level3", 0.0)),
+        ]
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    bars = axis.bar(labels, values)
+    axis.set_ylim(0.0, max(1.0, max(values) * 1.15 if values else 1.0))
+    axis.set_ylabel("Variance proportion")
+    axis.set_title("Three-Level Variance Partition")
+    for bar, value in zip(bars, values, strict=False):
+        axis.text(
+            bar.get_x() + bar.get_width() / 2, value, f"{value:.3f}", ha="center", va="bottom"
+        )
+    figure.tight_layout()
+    _save_figure(figure, output_path)
+
+
 def build_regression_visualizations(
     regression_result: RegressionResult,
     *,
@@ -280,33 +395,70 @@ def build_regression_visualizations(
 
     output_files.append(str(forest_path))
 
-    if regression_result.model_type == "ols":
+    if regression_result.model_type in {
+        "ols",
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+    }:
         residual_path = output_directory / "residuals_vs_fitted.png"
         qq_path = output_directory / "residual_qq_plot.png"
-        influence_path = output_directory / "influence_plot.png"
 
         _plot_residuals_vs_fitted(
             regression_result,
             residual_path,
         )
-
         _plot_qq(
             regression_result,
             qq_path,
-        )
-
-        _plot_influence(
-            regression_result,
-            influence_path,
         )
 
         output_files.extend(
             [
                 str(residual_path),
                 str(qq_path),
-                str(influence_path),
             ]
         )
+
+    if regression_result.model_type == "ols":
+        influence_path = output_directory / "influence_plot.png"
+        _plot_influence(
+            regression_result,
+            influence_path,
+        )
+        output_files.append(str(influence_path))
+    elif regression_result.model_type in {
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
+    }:
+        random_intercepts_path = output_directory / "random_intercepts.png"
+        _plot_random_intercepts(
+            regression_result,
+            random_intercepts_path,
+        )
+        output_files.append(str(random_intercepts_path))
+        if regression_result.model_type in {
+            "mixed_three_level",
+            "mixed_poisson_three_level",
+            "mixed_negative_binomial_three_level",
+        }:
+            variance_path = output_directory / "three_level_variance_partition.png"
+            _plot_three_level_variance_partition(regression_result, variance_path)
+            output_files.append(str(variance_path))
+        if regression_result.metadata.get("cross_level_interaction"):
+            interaction_path = output_directory / "cross_level_interaction.png"
+            _plot_cross_level_interaction(regression_result, interaction_path)
+            output_files.append(str(interaction_path))
     else:
         warnings.append("잔차·Q-Q·영향력 도표는 현재 OLS 모형만 지원합니다.")
 

@@ -175,6 +175,8 @@ def write_korean_results_narrative(
 
     sentences: list[str] = []
 
+    cross_level = regression_result.metadata.get("cross_level_interaction")
+
     model_name = {
         "ols": "OLS 회귀분석",
         "binary_logit": "이항 로지스틱 회귀분석",
@@ -183,6 +185,15 @@ def write_korean_results_narrative(
         "negative_binomial": "음이항 회귀분석",
         "zero_inflated_poisson": "영과잉 포아송 회귀분석",
         "zero_inflated_negative_binomial": "영과잉 음이항 회귀분석",
+        "mixed_random_intercept": "Random Intercept 혼합효과모형",
+        "mixed_binary_logit_random_intercept": "Random Intercept 혼합 이항 로지스틱 회귀분석",
+        "mixed_binary_logit_random_slope": "Random Slope 혼합 이항 로지스틱 회귀분석",
+        "mixed_binary_logit_three_level": "3수준 혼합 이항 로지스틱 회귀분석",
+        "mixed_poisson_random_intercept": "Random Intercept 혼합 포아송 회귀분석",
+        "mixed_poisson_random_slope": "Random Slope 혼합 포아송 회귀분석",
+        "mixed_poisson_three_level": "3수준 혼합 포아송 회귀분석",
+        "mixed_negative_binomial_random_intercept": "Random Intercept 혼합 음이항 회귀분석",
+        "mixed_random_slope": "Random Slope 혼합효과모형",
     }.get(
         regression_result.model_type,
         regression_result.model_type,
@@ -197,7 +208,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type == "ols":
+        if regression_result.model_type in {"ols", "mixed_random_intercept", "mixed_random_slope"}:
             beta = effect_lookup.get(
                 (
                     coefficient.term,
@@ -212,6 +223,9 @@ def write_korean_results_narrative(
 
         elif regression_result.model_type in {
             "binary_logit",
+            "mixed_binary_logit_random_intercept",
+            "mixed_binary_logit_random_slope",
+            "mixed_binary_logit_three_level",
             "ordered_logit",
         }:
             odds_ratio = effect_lookup.get(
@@ -225,7 +239,16 @@ def write_korean_results_narrative(
                 if odds_ratio is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type in {"poisson", "negative_binomial"}:
+        elif regression_result.model_type in {
+            "poisson",
+            "negative_binomial",
+            "mixed_poisson_random_intercept",
+            "mixed_poisson_random_slope",
+            "mixed_poisson_three_level",
+            "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
+        }:
             incidence_rate_ratio = effect_lookup.get(
                 (
                     coefficient.term,
@@ -263,7 +286,119 @@ def write_korean_results_narrative(
             else:
                 sentences.append(f"모형의 설명력은 R²={r_squared:.3f}이었다.")
 
-    elif regression_result.model_type == "binary_logit":
+    elif regression_result.model_type in {
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+    }:
+        marginal = (
+            effect_report.model_effects.get("marginal_r_squared")
+            if effect_report is not None
+            else None
+        )
+        conditional = (
+            effect_report.model_effects.get("conditional_r_squared")
+            if effect_report is not None
+            else None
+        )
+        icc = (
+            effect_report.model_effects.get("intraclass_correlation")
+            if effect_report is not None
+            else regression_result.fit_statistics.get("intraclass_correlation")
+        )
+        group_count = regression_result.fit_statistics.get("group_count")
+        covariance_structure = regression_result.metadata.get(
+            "random_effect_covariance", "correlated"
+        )
+
+        if regression_result.model_type == "mixed_random_slope":
+            structure_text = "비상관(대각)" if covariance_structure == "diagonal" else "상관"
+            sentences.append(
+                f"Random Intercept와 Random Slope에는 {structure_text} 공분산 구조를 적용하였다."
+            )
+
+        if regression_result.model_type == "mixed_three_level":
+            level2_group = regression_result.metadata.get("level2_group", "Level 2")
+            level3_group = regression_result.metadata.get("level3_group", "Level 3")
+            level2_count = regression_result.fit_statistics.get("level2_group_count")
+            level3_count = regression_result.fit_statistics.get("level3_group_count")
+            if level2_count is not None and level3_count is not None:
+                sentences.append(
+                    f"분석에는 {int(level3_count)}개 {level3_group} 집단과 "
+                    f"그 안에 중첩된 {int(level2_count)}개 {level2_group} 집단이 포함되었다."
+                )
+            level2_icc = regression_result.fit_statistics.get("level2_intraclass_correlation")
+            level3_icc = regression_result.fit_statistics.get("level3_intraclass_correlation")
+            if level2_icc is not None and level3_icc is not None:
+                sentences.append(
+                    f"전체 분산 중 {level3_group} 수준 비중은 {float(level3_icc):.3f}, "
+                    f"{level2_group} 수준 비중은 {float(level2_icc):.3f}이었다."
+                )
+        elif group_count is not None:
+            sentences.append(f"분석에는 {int(group_count)}개 집단이 포함되었다.")
+
+        if icc is not None:
+            sentences.append(f"집단 내 상관계수는 ICC={float(icc):.3f}로 나타났다.")
+
+        if marginal is not None and conditional is not None:
+            sentences.append(
+                "고정효과의 설명력은 "
+                f"marginal R²={float(marginal):.3f}, "
+                "고정효과와 Random Intercept를 함께 고려한 설명력은 "
+                f"conditional R²={float(conditional):.3f}이었다."
+            )
+
+        random_variance = regression_result.fit_statistics.get("random_intercept_variance")
+        residual_variance = regression_result.fit_statistics.get("residual_variance")
+        if random_variance is not None and residual_variance is not None:
+            sentences.append(
+                "Random Intercept 분산은 "
+                f"{float(random_variance):.3f}, 잔차분산은 "
+                f"{float(residual_variance):.3f}이었다."
+            )
+
+        if cross_level:
+            interaction_term = cross_level.get("interaction_term")
+            interaction = next(
+                (c for c in regression_result.coefficients if c.term == interaction_term), None
+            )
+            if interaction is not None:
+                sentences.append(
+                    f"{cross_level.get('predictor')}와 {cross_level.get('moderator')}의 교차수준 상호작용은 "
+                    + ("유의하였다" if interaction.p_value < 0.05 else "유의하지 않았다")
+                    + f"(B={interaction.estimate:.3f}, {_format_p_value(interaction.p_value)})."
+                )
+            slopes = cross_level.get("conditional_effects") or []
+            for slope in slopes:
+                sentences.append(
+                    f"조절변수 {slope['label']} 수준에서 {cross_level.get('predictor')}의 조건부 효과는 "
+                    f"B={float(slope['estimate']):.3f}({_format_p_value(float(slope['p_value']))})였다."
+                )
+            jn = cross_level.get("johnson_neyman")
+            if jn is not None:
+                roots = jn.get("roots_within_observed_range", [])
+                if roots:
+                    sentences.append(
+                        "Johnson–Neyman 분석에서 관측범위 내 임계값은 "
+                        + ", ".join(f"{float(v):.3f}" for v in roots)
+                        + "이었다."
+                    )
+                else:
+                    sentences.append(
+                        "Johnson–Neyman 분석에서 관측범위 내 유의성 전환 임계값은 확인되지 않았다."
+                    )
+
+        sentences.append(
+            "모형은 수렴하였다."
+            if regression_result.converged
+            else "모형이 수렴하지 않아 결과 해석에 주의가 필요하다."
+        )
+
+    elif regression_result.model_type in {
+        "binary_logit",
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+    }:
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_mcfadden")
         lr_p = regression_result.fit_statistics.get("likelihood_ratio_p_value")
 
@@ -323,11 +458,35 @@ def build_regression_publication_report(
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
         "ordered_logit",
     }:
         notes.append("로짓 모형은 오즈비를 함께 제시한다.")
-    elif regression_result.model_type in {"poisson", "negative_binomial"}:
+    elif regression_result.model_type in {
+        "poisson",
+        "negative_binomial",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
+    }:
         notes.append("계수형 회귀모형은 발생률비(IRR)를 함께 제시한다.")
+    elif regression_result.model_type in {
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+    }:
+        notes.extend(
+            [
+                "혼합효과모형의 고정효과는 표준화 β와 함께 제시한다.",
+                "marginal R²는 고정효과, conditional R²는 고정효과와 Random Intercept의 설명력을 나타낸다.",
+                "ICC는 전체 잔차 변동 중 집단 간 차이가 차지하는 비율이다.",
+            ]
+        )
 
     return RegressionPublicationReport(
         model_id=regression_result.model_id,
@@ -337,8 +496,14 @@ def build_regression_publication_report(
         narrative=narrative,
         notes=notes,
         metadata={
-            "dependent_variable": (regression_result.dependent_variable),
+            "dependent_variable": regression_result.dependent_variable,
             "sample_size": regression_result.sample_size,
+            "group_variable": regression_result.metadata.get("group_variable"),
+            "group_count": regression_result.fit_statistics.get("group_count"),
+            "converged": regression_result.converged,
+            "optimizer": regression_result.metadata.get("optimizer"),
+            "reml": regression_result.metadata.get("reml"),
+            "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
         },
     )
 

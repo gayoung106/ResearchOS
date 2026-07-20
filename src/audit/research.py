@@ -45,6 +45,38 @@ def _artifact_exists(
     return key in runtime.artifacts
 
 
+def _regression_result(
+    runtime: PipelineRuntime,
+    model_id: str,
+) -> Any | None:
+    return runtime.artifacts.get(f"regression_result:{model_id}")
+
+
+def _is_mixed_effects_model(
+    runtime: PipelineRuntime,
+    model_id: str,
+) -> bool:
+    result = _regression_result(runtime, model_id)
+    return bool(
+        result is not None
+        and getattr(result, "model_type", None)
+        in {
+            "mixed_random_intercept",
+            "mixed_random_slope",
+            "mixed_three_level",
+            "mixed_binary_logit_random_intercept",
+            "mixed_binary_logit_random_slope",
+            "mixed_binary_logit_three_level",
+            "mixed_poisson_random_intercept",
+            "mixed_poisson_random_slope",
+            "mixed_poisson_three_level",
+            "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
+        }
+    )
+
+
 def _grade_from_percentage(percentage: float) -> str:
     if percentage >= 90:
         return "A"
@@ -168,14 +200,89 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type in {
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
+    }:
+        group_variable = result.metadata.get("group_variable", "미확인")
+        group_count = result.fit_statistics.get("group_count", "미확인")
+        cross_level = result.metadata.get("cross_level_interaction")
+        if result.model_type == "mixed_three_level":
+            level2_group = result.metadata.get("level2_group", "미확인")
+            level3_group = result.metadata.get("level3_group", "미확인")
+            level2_count = result.fit_statistics.get("level2_group_count", "미확인")
+            level3_count = result.fit_statistics.get("level3_group_count", "미확인")
+            structure = "3수준 중첩 Random Effects"
+            evidence = (
+                f"{structure} 모형, N={result.sample_size}, "
+                f"Level 2={level2_group}({level2_count}개), "
+                f"Level 3={level3_group}({level3_count}개), 수렴={result.converged}"
+            )
+            recommendation = (
+                "Level 1·2·3의 단위, 완전 중첩 구조, 수준별 분산과 ICC, "
+                "랜덤효과 설정 및 추정방법을 연구방법과 결과에 명시하세요."
+            )
+            return AuditItem(
+                category="모형 분석",
+                item="회귀모형 추정",
+                status=status,
+                score=score,
+                maximum_score=15,
+                evidence=evidence,
+                recommendation=recommendation,
+            )
+        structure = (
+            "3-Level"
+            if result.model_type
+            in {"mixed_three_level", "mixed_binary_logit_three_level", "mixed_poisson_three_level"}
+            else "Random Slope"
+            if result.model_type
+            in {
+                "mixed_random_slope",
+                "mixed_binary_logit_random_slope",
+                "mixed_poisson_random_slope",
+            }
+            else "Random Intercept"
+        )
+        covariance_structure = result.metadata.get("random_effect_covariance", "correlated")
+        covariance_text = "비상관(대각)" if covariance_structure == "diagonal" else "상관"
+        evidence = (
+            f"{structure} 모형, N={result.sample_size}, "
+            f"그룹변수={group_variable}, 그룹 수={group_count}, "
+            f"랜덤효과 공분산={covariance_text}, 수렴={result.converged}"
+        )
+        if cross_level:
+            evidence += (
+                f", 교차수준 상호작용={cross_level.get('predictor')}×{cross_level.get('moderator')}, "
+                f"중심화={cross_level.get('level1_centering')}/{cross_level.get('level2_centering')}"
+            )
+            recommendation = "교차수준 상호작용, 중심화 방식, Random Slope 구조와 조건부 효과를 연구방법 및 결과에 명시하세요."
+        else:
+            recommendation = (
+                "그룹 구조, 고정효과, 랜덤효과 설정과 추정방법을 연구방법에 명시하세요."
+            )
+    else:
+        evidence = f"{result.model_type} 모형, N={result.sample_size}, 수렴={result.converged}"
+        recommendation = "모형 선택근거와 표준오차 추정방식을 명시하세요."
+
     return AuditItem(
         category="모형 분석",
         item="회귀모형 추정",
         status=status,
         score=score,
         maximum_score=15,
-        evidence=(f"{result.model_type} 모형, N={result.sample_size}, 수렴={result.converged}"),
-        recommendation=("모형 선택근거와 표준오차 추정방식을 명시하세요."),
+        evidence=evidence,
+        recommendation=recommendation,
     )
 
 
@@ -199,14 +306,30 @@ def _diagnostics_item(
     report = runtime.artifacts[key]
     warning_count = len(report.warnings)
 
+    if _is_mixed_effects_model(runtime, model_id):
+        summary = getattr(report, "summary", {})
+        group_count = getattr(report, "group_count", None)
+        singular_fit = bool(summary.get("singular_fit", False))
+        converged = bool(summary.get("converged", True))
+        evidence = (
+            f"혼합효과 진단, 그룹 수={group_count}, 수렴={converged}, "
+            f"특이 적합={singular_fit}, 진단 경고 {warning_count}건"
+        )
+        recommendation = (
+            "조건부 잔차, Random Intercept 분포, 특이 적합과 수렴 상태를 함께 보고하세요."
+        )
+    else:
+        evidence = f"진단 경고 {warning_count}건"
+        recommendation = "경고 항목이 있다면 강건성 분석과 민감도 분석으로 보완하세요."
+
     return AuditItem(
         category="모형 검증",
         item="회귀진단",
         status="PASS" if warning_count == 0 else "WARNING",
         score=10 if warning_count == 0 else 7,
         maximum_score=10,
-        evidence=f"진단 경고 {warning_count}건",
-        recommendation=("경고 항목이 있다면 강건성 분석과 민감도 분석으로 보완하세요."),
+        evidence=evidence,
+        recommendation=recommendation,
     )
 
 
@@ -214,6 +337,20 @@ def _robustness_item(
     runtime: PipelineRuntime,
     model_id: str,
 ) -> AuditItem:
+    if _is_mixed_effects_model(runtime, model_id):
+        return AuditItem(
+            category="모형 검증",
+            item="강건성 분석",
+            status="NOT_APPLICABLE",
+            score=0,
+            maximum_score=0,
+            evidence=("현재 자동 강건성 분석은 Random Intercept 혼합효과모형에 적용되지 않습니다."),
+            recommendation=(
+                "필요한 경우 ML/REML 비교, 대체 공분산 구조 또는 "
+                "그룹 제외 민감도 분석을 별도로 수행하세요."
+            ),
+        )
+
     basic = _artifact_exists(
         runtime,
         f"robustness_report:{model_id}",
@@ -286,14 +423,37 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
+    if getattr(report, "model_type", None) in {
+        "mixed_random_intercept",
+        "mixed_random_slope",
+        "mixed_three_level",
+    }:
+        model_effects = getattr(report, "model_effects", {})
+        available = [
+            name
+            for name in (
+                "intraclass_correlation",
+                "marginal_r_squared",
+                "conditional_r_squared",
+            )
+            if name in model_effects
+        ]
+        evidence = (
+            f"표준화 고정효과 {len(report.effects)}건 및 모형 효과크기 {', '.join(available)} 생성"
+        )
+        recommendation = "표준화 고정효과와 함께 ICC, marginal R², conditional R²를 해석하세요."
+    else:
+        evidence = f"효과크기 {len(report.effects)}건 생성"
+        recommendation = "유의확률과 함께 효과크기의 실질적 의미를 해석하세요."
+
     return AuditItem(
         category="결과 보고",
         item="효과크기",
         status="PASS",
         score=10,
         maximum_score=10,
-        evidence=f"효과크기 {len(report.effects)}건 생성",
-        recommendation="유의확률과 함께 효과크기의 실질적 의미를 해석하세요.",
+        evidence=evidence,
+        recommendation=recommendation,
     )
 
 
@@ -387,6 +547,29 @@ def build_research_audit_report(
         }
     ]
 
+    regression_result = _regression_result(runtime, model_id)
+    metadata: dict[str, Any] = {
+        "audit_item_count": len(items),
+        "passed_item_count": sum(item.status == "PASS" for item in items),
+        "not_applicable_item_count": sum(item.status == "NOT_APPLICABLE" for item in items),
+    }
+    if regression_result is not None:
+        metadata["model_type"] = regression_result.model_type
+        if regression_result.model_type in {
+            "mixed_random_intercept",
+            "mixed_random_slope",
+            "mixed_three_level",
+        }:
+            metadata.update(
+                {
+                    "group_variable": regression_result.metadata.get("group_variable"),
+                    "group_count": regression_result.fit_statistics.get("group_count"),
+                    "intraclass_correlation": regression_result.fit_statistics.get(
+                        "intraclass_correlation"
+                    ),
+                }
+            )
+
     return ResearchAuditReport(
         model_id=model_id,
         items=items,
@@ -396,10 +579,7 @@ def build_research_audit_report(
         grade=_grade_from_percentage(percentage),
         submission_status=_submission_status(percentage),
         warnings=warnings,
-        metadata={
-            "audit_item_count": len(items),
-            "passed_item_count": sum(item.status == "PASS" for item in items),
-        },
+        metadata=metadata,
     )
 
 

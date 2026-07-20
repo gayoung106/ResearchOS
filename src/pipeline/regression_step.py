@@ -28,6 +28,9 @@ class RegressionAnalysisStep(PipelineStep):
         measurement_level: str,
         fixed_effects: list[str] | None = None,
         model_id: str = "model_1",
+        model_type: str | None = None,
+        group_variable: str | None = None,
+        mixed_effects_options: dict[str, object] | None = None,
         order: int = 90,
     ) -> None:
         super().__init__(
@@ -41,6 +44,9 @@ class RegressionAnalysisStep(PipelineStep):
         self.measurement_level = measurement_level
         self.fixed_effects = fixed_effects or []
         self.model_id = model_id
+        self.model_type = model_type
+        self.group_variable = group_variable
+        self.mixed_effects_options = mixed_effects_options or {}
 
     def should_run(
         self,
@@ -62,6 +68,9 @@ class RegressionAnalysisStep(PipelineStep):
             measurement_level=self.measurement_level,
             fixed_effects=self.fixed_effects,
             model_id=self.model_id,
+            model_type=self.model_type,
+            group_variable=self.group_variable,
+            mixed_effects_options=self.mixed_effects_options,
         )
 
         self.runtime.set_artifact(
@@ -101,6 +110,7 @@ class RegressionAnalysisStep(PipelineStep):
                 "model_type": result.model_type,
                 "sample_size": result.sample_size,
                 "fixed_effects": self.fixed_effects,
+                "group_variable": self.group_variable,
                 "error_message": (None if result.converged else "회귀모형이 수렴하지 않았습니다."),
             },
         )
