@@ -22,6 +22,14 @@ from src.statistics.diagnostics.count import (
     count_observations_to_dataframe,
     count_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.cox import (
+    build_cox_diagnostics,
+    cox_baseline_survival_to_dataframe,
+    cox_diagnostic_summary_to_dataframe,
+    cox_multicollinearity_to_dataframe,
+    cox_ph_checks_to_dataframe,
+    cox_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.gee import (
     build_gee_diagnostics,
     gee_cluster_diagnostics_to_dataframe,
@@ -106,6 +114,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "cox_proportional_hazards":
+            return self._run_cox(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "quantile_regression":
             return self._run_quantile(
@@ -195,6 +209,35 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_cox(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_cox_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "ph": output_dir / "proportional_hazards_checks.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "baseline": output_dir / "baseline_survival.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        cox_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        cox_ph_checks_to_dataframe(report).to_excel(paths["ph"], index=False)
+        cox_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        cox_baseline_survival_to_dataframe(report).to_excel(paths["baseline"], index=False)
+        cox_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_quantile(
         self,

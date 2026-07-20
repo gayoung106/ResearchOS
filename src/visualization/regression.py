@@ -189,6 +189,27 @@ def _plot_influence(
     )
 
 
+def _plot_baseline_survival(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    frame = regression_result.metadata.get("baseline_survival", [])
+    if not frame:
+        raise ValueError("No baseline survival estimates are available for visualization.")
+    import pandas as pd
+
+    data = pd.DataFrame(frame)
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    for _, group in data.groupby("stratum"):
+        axis.step(group["time"], group["baseline_survival"], where="post")
+    axis.set_xlabel("Time")
+    axis.set_ylabel("Baseline survival")
+    axis.set_ylim(0.0, 1.02)
+    axis.set_title("Cox Baseline Survival")
+    _save_figure(figure, output_path)
+
+
 def _plot_coefficient_forest(
     regression_result: RegressionResult,
     output_path: Path,
@@ -502,6 +523,10 @@ def build_regression_visualizations(
             influence_path,
         )
         output_files.append(str(influence_path))
+    elif regression_result.model_type == "cox_proportional_hazards":
+        baseline_path = output_directory / "cox_baseline_survival.png"
+        _plot_baseline_survival(regression_result, baseline_path)
+        output_files.append(str(baseline_path))
     elif regression_result.model_type in {
         "mixed_random_intercept",
         "mixed_random_slope",

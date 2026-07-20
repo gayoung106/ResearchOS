@@ -7,6 +7,7 @@ from src.statistics.regression.base import (
 )
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.count import fit_count_regression
+from src.statistics.regression.cox import fit_cox_proportional_hazards
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
@@ -63,5 +64,6 @@ __all__ = [
     "fit_zero_inflated_poisson",
     "fit_zero_inflated_negative_binomial",
     "fit_count_regression",
+    "fit_cox_proportional_hazards",
     "fit_gee",
 ]

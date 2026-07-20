@@ -640,6 +640,16 @@ def build_research_audit_report(
                     ),
                 }
             )
+        elif regression_result.model_type == "cox_proportional_hazards":
+            metadata.update(
+                {
+                    "duration_variable": regression_result.metadata.get("duration_variable"),
+                    "event_variable": regression_result.metadata.get("event_variable"),
+                    "event_count": regression_result.fit_statistics.get("event_count"),
+                    "censored_count": regression_result.fit_statistics.get("censored_count"),
+                    "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                }
+            )
         elif regression_result.model_type == "quantile_regression":
             metadata.update(
                 {

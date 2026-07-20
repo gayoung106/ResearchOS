@@ -156,6 +156,12 @@ def build_publication_table(
                     "incidence_rate_ratio",
                 )
             ),
+            "hazard_ratio": effect_lookup.get(
+                (
+                    coefficient.term,
+                    "hazard_ratio",
+                )
+            ),
         }
         rows.append(row)
 
@@ -332,6 +338,18 @@ def write_korean_results_narrative(
             else:
                 effect_text = f"B={coefficient.estimate:.3f}"
 
+        elif regression_result.model_type == "cox_proportional_hazards":
+            hazard_ratio = effect_lookup.get(
+                (
+                    coefficient.term,
+                    "hazard_ratio",
+                )
+            )
+            effect_text = (
+                f"HR={hazard_ratio:.3f}"
+                if hazard_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
         elif regression_result.model_type in {
             "binary_logit",
             "mixed_binary_logit_random_intercept",
@@ -410,6 +428,20 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "cox_proportional_hazards":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
+        event_variable = regression_result.metadata.get("event_variable")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The Cox model included {int(event_count)} events and {int(censored_count)} censored observations."
+            )
+        if event_variable is not None:
+            sentences.append(f"Event status was defined by {event_variable}.")
+        if events_per_parameter is not None:
+            sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
     elif regression_result.model_type in {
         "mixed_random_intercept",
@@ -639,6 +671,9 @@ def build_regression_publication_report(
             ]
         )
 
+    if regression_result.model_type == "cox_proportional_hazards":
+        notes.append("Cox models report hazard ratios from partial likelihood estimates.")
+
     if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
 
@@ -671,6 +706,8 @@ def build_regression_publication_report(
             "reference_category": regression_result.metadata.get("reference_category"),
             "category_labels": regression_result.metadata.get("category_labels"),
             "quantile": regression_result.fit_statistics.get("quantile"),
+            "duration_variable": regression_result.metadata.get("duration_variable"),
+            "event_variable": regression_result.metadata.get("event_variable"),
         },
     )
 

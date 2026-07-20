@@ -156,6 +156,42 @@ def _build_ols_effects(
     )
 
 
+def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="hazard_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Hazard ratio from a Cox proportional hazards model.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "event_count": result.fit_statistics.get("event_count"),
+            "censored_count": result.fit_statistics.get("censored_count"),
+            "events_per_parameter": result.fit_statistics.get("events_per_parameter"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "duration_variable": result.metadata.get("duration_variable"),
+            "event_variable": result.metadata.get("event_variable"),
+        },
+    )
+
+
 def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -626,6 +662,9 @@ def build_regression_effect_size_report(
     """회귀모형 종류에 맞는 효과크기 보고서를 생성한다."""
     if result.model_type == "ols":
         return _build_ols_effects(result)
+
+    if result.model_type == "cox_proportional_hazards":
+        return _build_cox_effects(result)
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)
