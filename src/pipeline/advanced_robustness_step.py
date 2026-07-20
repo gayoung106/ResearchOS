@@ -234,3 +234,74 @@ class AdvancedMixedEffectsRobustnessStep(PipelineStep):
             warnings=report.warnings,
             metadata={"model_id": self.model_id, **report.metadata},
         )
+
+
+
+class AdvancedGLMMRobustnessStep(PipelineStep):
+    """Group bootstrap and leave-one-group-out checks for non-Gaussian GLMMs."""
+
+    supported_model_types = {
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
+    }
+
+    def __init__(
+        self,
+        runtime: PipelineRuntime,
+        *,
+        model_id: str,
+        bootstrap_replications: int = 200,
+        run_leave_one_group_out: bool = True,
+        optimizer: str | None = None,
+        order: int = 120,
+    ) -> None:
+        super().__init__(name="12_advanced_robustness", order=order, required=False)
+        self.runtime = runtime
+        self.model_id = model_id
+        self.bootstrap_replications = bootstrap_replications
+        self.run_leave_one_group_out = run_leave_one_group_out
+        self.optimizer = optimizer
+
+    def should_run(self, context: ResearchContext) -> bool:
+        key = f"regression_result:{self.model_id}"
+        return key in self.runtime.artifacts and self.runtime.artifacts[key].model_type in self.supported_model_types
+
+    def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
+        from src.statistics.robustness.glmm import (
+            build_glmm_advanced_robustness_report,
+            glmm_advanced_summary_to_dataframe,
+            glmm_resampling_to_dataframe,
+        )
+
+        baseline = self.runtime.get_artifact(f"regression_result:{self.model_id}")
+        report = build_glmm_advanced_robustness_report(
+            self.runtime.require_dataframe(),
+            baseline_result=baseline,
+            bootstrap_replications=self.bootstrap_replications,
+            run_leave_one_group_out=self.run_leave_one_group_out,
+            optimizer=self.optimizer,
+        )
+        self.runtime.set_artifact(f"advanced_robustness_report:{self.model_id}", report)
+
+        output_dir = working_directory / "result" / "12_advanced_robustness" / self.model_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        coefficient_path = output_dir / "glmm_group_bootstrap_coefficients.xlsx"
+        logo_path = output_dir / "glmm_leave_one_group_out.xlsx"
+        summary_path = output_dir / "glmm_advanced_robustness_summary.xlsx"
+        glmm_resampling_to_dataframe(report).to_excel(coefficient_path, index=False)
+        report.leave_one_group_out.to_excel(logo_path, index=False)
+        glmm_advanced_summary_to_dataframe(report).to_excel(summary_path, index=False)
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(coefficient_path), str(logo_path), str(summary_path)],
+            warnings=report.warnings,
+            metadata={"model_id": self.model_id, **report.metadata},
+        )

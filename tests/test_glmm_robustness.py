@@ -4,6 +4,7 @@ import pandas as pd
 
 from src.audit.research import build_research_audit_report
 from src.common.config_models import AnalysisPlan, VariableDefinition, VariableMap
+from src.pipeline.advanced_robustness_step import AdvancedGLMMRobustnessStep
 from src.pipeline.context import ResearchContext
 from src.pipeline.orchestrator import ResearchOrchestrator
 from src.pipeline.robustness_step import GLMMRobustnessStep
@@ -11,9 +12,12 @@ from src.pipeline.runtime import PipelineRuntime
 from src.statistics.regression.base import ModelCoefficient, RegressionResult
 from src.statistics.robustness import glmm
 from src.statistics.robustness.glmm import (
+    build_glmm_advanced_robustness_report,
     build_glmm_robustness_report,
+    glmm_advanced_summary_to_dataframe,
     glmm_coefficient_comparison_to_dataframe,
     glmm_model_comparison_to_dataframe,
+    glmm_resampling_to_dataframe,
     glmm_robustness_summary_to_dataframe,
     glmm_stability_summary_to_dataframe,
 )
@@ -165,7 +169,79 @@ def test_builder_registers_glmm_robustness_when_enabled(tmp_path: Path) -> None:
 
     assert registration.model_type == "mixed_poisson_random_intercept"
     assert registration.robustness_registered is True
+    assert registration.advanced_robustness_registered is True
+    advanced_step = orchestrator.registry.get("12_advanced_robustness")
+    assert isinstance(advanced_step, AdvancedGLMMRobustnessStep)
+    assert advanced_step.bootstrap_replications == 200
     step = orchestrator.registry.get("11_robustness_analysis")
     assert isinstance(step, GLMMRobustnessStep)
     assert step.optimizers == ("BFGS", "Powell")
 
+
+
+
+def _advanced_dataframe() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "y": [0, 1, 2, 1, 3, 2],
+            "x": [0.0, 0.3, 0.5, 0.7, 1.0, 1.2],
+            "group": ["a", "a", "b", "b", "c", "c"],
+        }
+    )
+
+
+def test_build_glmm_advanced_robustness_report_with_group_resampling(monkeypatch) -> None:
+    baseline = _baseline()
+    baseline.fit_statistics["group_count"] = 3
+
+    def fake_fit(*args, **kwargs):
+        model_id = kwargs["model_id"]
+        estimate = 0.41 if "group_bootstrap" in model_id else 0.39
+        return RegressionResult(
+            model_id=model_id,
+            model_type=baseline.model_type,
+            dependent_variable="y",
+            independent_variables=["x"],
+            sample_size=6,
+            coefficients=[_coef("const", 0.1), _coef("x", estimate)],
+            fit_statistics={"group_count": 3, "random_intercept_variance": 0.1},
+            converged=True,
+            standard_error_type="test",
+            metadata=baseline.metadata,
+            raw_result=object(),
+        )
+
+    monkeypatch.setattr(glmm, "fit_regression_by_level", fake_fit)
+
+    report = build_glmm_advanced_robustness_report(
+        _advanced_dataframe(),
+        baseline_result=baseline,
+        bootstrap_replications=5,
+        run_leave_one_group_out=True,
+    )
+
+    assert report.model_type == baseline.model_type
+    assert report.group_count == 3
+    assert report.metadata["successful_bootstrap_replications"] == 5
+    assert any(item.term == "x" for item in report.coefficients)
+    assert set(report.leave_one_group_out.columns) >= {"omitted_group", "term", "estimate"}
+    assert not glmm_resampling_to_dataframe(report).empty
+    assert "bootstrap_success_rate" in set(glmm_advanced_summary_to_dataframe(report)["item"])
+
+
+def test_glmm_advanced_robustness_step_runs(monkeypatch, tmp_path: Path) -> None:
+    baseline = _baseline()
+    baseline.fit_statistics["group_count"] = 3
+    runtime = PipelineRuntime(dataframe=_advanced_dataframe())
+    runtime.set_artifact("regression_result:main_model", baseline)
+    monkeypatch.setattr(glmm, "fit_regression_by_level", lambda *args, **kwargs: baseline)
+
+    result = AdvancedGLMMRobustnessStep(
+        runtime,
+        model_id="main_model",
+        bootstrap_replications=5,
+    ).run(ResearchContext(project_name="glmm advanced robustness"), tmp_path)
+
+    assert result.success is True
+    assert len(result.output_files) == 3
+    assert runtime.get_artifact("advanced_robustness_report:main_model").model_type == baseline.model_type

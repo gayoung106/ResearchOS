@@ -10,6 +10,7 @@ from src.common.config_models import (
     VariableMap,
 )
 from src.pipeline.advanced_robustness_step import (
+    AdvancedGLMMRobustnessStep,
     AdvancedMixedEffectsRobustnessStep,
     AdvancedOLSRobustnessStep,
 )
@@ -474,6 +475,23 @@ def register_regression_pipeline(
                 )
             )
             robustness_registered = True
+            run_advanced = bool(options.get("advanced_enabled", True))
+            if run_advanced:
+                orchestrator.register(
+                    AdvancedGLMMRobustnessStep(
+                        runtime,
+                        model_id=model_id,
+                        bootstrap_replications=int(
+                            options.get("glmm_bootstrap_replications", 200)
+                        ),
+                        run_leave_one_group_out=bool(
+                            options.get("glmm_leave_one_group_out", True)
+                        ),
+                        optimizer=optimizers[0] if optimizers else "BFGS",
+                        order=advanced_robustness_order,
+                    )
+                )
+                advanced_robustness_registered = True
 
         orchestrator.register(
             RegressionReportingStep(runtime, model_id=model_id, order=reporting_order)
@@ -493,7 +511,7 @@ def register_regression_pipeline(
             group_variable=group_variable,
             diagnostics_registered=diagnostics_registered,
             robustness_registered=robustness_registered,
-            advanced_robustness_registered=False,
+            advanced_robustness_registered=advanced_robustness_registered,
             effect_size_registered=True,
             reporting_registered=True,
             visualization_registered=True,
