@@ -347,22 +347,41 @@ def _robustness_item(
 ) -> AuditItem:
     if _is_mixed_effects_model(runtime, model_id):
         basic_key = f"robustness_report:{model_id}"
-        if _artifact_exists(runtime, basic_key):
-            report = runtime.artifacts[basic_key]
-            summary = getattr(report, "summary", {})
-            evidence = (
-                "GLMM optimizer sensitivity robustness completed; "
-                f"successful refits={summary.get('successful_optimizer_count', 'unknown')}, "
-                f"stable terms={summary.get('stable_term_count', 'unknown')}."
-            )
+        advanced_key = f"advanced_robustness_report:{model_id}"
+        basic_exists = _artifact_exists(runtime, basic_key)
+        advanced_exists = _artifact_exists(runtime, advanced_key)
+        if basic_exists or advanced_exists:
+            methods: list[str] = []
+            warnings: list[str] = []
+            if basic_exists:
+                report = runtime.artifacts[basic_key]
+                summary = getattr(report, "summary", {})
+                methods.append(
+                    "optimizer sensitivity "
+                    f"successful refits={summary.get('successful_optimizer_count', 'unknown')}, "
+                    f"stable terms={summary.get('stable_term_count', 'unknown')}"
+                )
+                warnings.extend(getattr(report, "warnings", []))
+            if advanced_exists:
+                report = runtime.artifacts[advanced_key]
+                metadata = getattr(report, "metadata", {})
+                methods.append(
+                    "group bootstrap "
+                    f"success rate={metadata.get('bootstrap_success_rate', 'unknown')}, "
+                    f"leave-one-group-out={metadata.get('successful_leave_one_group_out', 'unknown')}"
+                )
+                warnings.extend(getattr(report, "warnings", []))
+            score = 12 if basic_exists and advanced_exists else 8
+            if warnings:
+                score = max(score - 3, 5)
             return AuditItem(
                 category="모형 검증",
                 item="강건성 분석",
-                status="PASS" if not getattr(report, "warnings", []) else "WARNING",
-                score=10 if not getattr(report, "warnings", []) else 7,
-                maximum_score=10,
-                evidence=evidence,
-                recommendation="Report optimizer sensitivity and any unstable GLMM terms.",
+                status="PASS" if not warnings else "WARNING",
+                score=score,
+                maximum_score=12,
+                evidence="; ".join(methods),
+                recommendation="Report optimizer sensitivity, group bootstrap, and leave-one-group-out stability.",
             )
         return AuditItem(
             category="모형 검증",
@@ -370,7 +389,7 @@ def _robustness_item(
             status="NOT_APPLICABLE",
             score=0,
             maximum_score=0,
-            evidence=("현재 자동 강건성 분석은 Random Intercept 혼합효과모형에 적용되지 않습니다."),
+            evidence=("현재 자동 강건성 분석은 혼합효과모형에 적용되지 않습니다."),
             recommendation=(
                 "필요한 경우 ML/REML 비교, 대체 공분산 구조 또는 "
                 "그룹 제외 민감도 분석을 별도로 수행하세요."

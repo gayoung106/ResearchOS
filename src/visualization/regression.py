@@ -310,6 +310,76 @@ def _plot_random_intercepts(
     _save_figure(figure, output_path)
 
 
+
+
+def _plot_random_slopes(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    rows: list[tuple[str, float]] = []
+    if regression_result.model_type in {
+        "mixed_binary_logit_random_slope",
+        "mixed_poisson_random_slope",
+        "mixed_negative_binomial_random_slope",
+    }:
+        random_slopes = regression_result.metadata.get("random_slopes", {})
+        rows = [(str(group), float(effect)) for group, effect in random_slopes.items()]
+    elif regression_result.model_type == "mixed_random_slope":
+        fitted = regression_result.raw_result
+        slope_variable = str(regression_result.metadata.get("random_slope_variable", ""))
+        for group, effect in fitted.random_effects.items():
+            if hasattr(effect, "get") and slope_variable:
+                value = effect.get(slope_variable)
+            else:
+                values = np.asarray(effect, dtype=float).reshape(-1)
+                value = values[1] if values.size > 1 else None
+            if value is not None:
+                rows.append((str(group), float(value)))
+
+    if not rows:
+        raise ValueError("No random slope estimates are available for visualization.")
+
+    rows.sort(key=lambda item: item[1])
+    groups = [item[0] for item in rows]
+    estimates = np.asarray([item[1] for item in rows], dtype=float)
+    positions = np.arange(len(rows))
+    figure_height = max(4.0, 0.28 * len(rows) + 1.5)
+    figure, axis = plt.subplots(figsize=(7.0, figure_height))
+    axis.scatter(estimates, positions)
+    axis.axvline(0)
+    axis.set_yticks(positions)
+    axis.set_yticklabels(groups)
+    axis.set_xlabel("Random slope estimate")
+    axis.set_ylabel("Group")
+    axis.set_title("Group Random Slope Estimates")
+    _save_figure(figure, output_path)
+
+
+def _plot_level3_random_intercepts(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    random_effects = regression_result.metadata.get("level3_random_effects", {})
+    rows = [(str(group), float(effect)) for group, effect in random_effects.items()]
+    if not rows:
+        raise ValueError("No level 3 random effects are available for visualization.")
+    rows.sort(key=lambda item: item[1])
+    groups = [item[0] for item in rows]
+    estimates = np.asarray([item[1] for item in rows], dtype=float)
+    positions = np.arange(len(rows))
+    figure_height = max(4.0, 0.28 * len(rows) + 1.5)
+    figure, axis = plt.subplots(figsize=(7.0, figure_height))
+    axis.scatter(estimates, positions)
+    axis.axvline(0)
+    axis.set_yticks(positions)
+    axis.set_yticklabels(groups)
+    axis.set_xlabel("Level 3 random intercept estimate")
+    axis.set_ylabel("Level 3 group")
+    axis.set_title("Level 3 Random Intercept Estimates")
+    _save_figure(figure, output_path)
+
 def _plot_cross_level_interaction(result: RegressionResult, output_path: Path) -> None:
     metadata = result.metadata.get("cross_level_interaction") or {}
     slopes = metadata.get("conditional_effects") or []
@@ -448,10 +518,27 @@ def build_regression_visualizations(
         )
         output_files.append(str(random_intercepts_path))
         if regression_result.model_type in {
+            "mixed_random_slope",
+            "mixed_binary_logit_random_slope",
+            "mixed_poisson_random_slope",
+            "mixed_negative_binomial_random_slope",
+        }:
+            try:
+                random_slopes_path = output_directory / "random_slopes.png"
+                _plot_random_slopes(regression_result, random_slopes_path)
+                output_files.append(str(random_slopes_path))
+            except ValueError as error:
+                warnings.append(str(error))
+        if regression_result.model_type in {
             "mixed_three_level",
+            "mixed_binary_logit_three_level",
             "mixed_poisson_three_level",
             "mixed_negative_binomial_three_level",
         }:
+            if regression_result.metadata.get("level3_random_effects"):
+                level3_path = output_directory / "level3_random_intercepts.png"
+                _plot_level3_random_intercepts(regression_result, level3_path)
+                output_files.append(str(level3_path))
             variance_path = output_directory / "three_level_variance_partition.png"
             _plot_three_level_variance_partition(regression_result, variance_path)
             output_files.append(str(variance_path))

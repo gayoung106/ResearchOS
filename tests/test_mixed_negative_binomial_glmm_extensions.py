@@ -100,6 +100,7 @@ def test_fit_mixed_negative_binomial_random_slope_integrates_outputs(tmp_path: P
     assert {Path(path).name for path in visualization_report.output_files} == {
         "coefficient_forest.png",
         "random_intercepts.png",
+        "random_slopes.png",
     }
     assert audit_report.metadata["model_type"] == result.model_type
 

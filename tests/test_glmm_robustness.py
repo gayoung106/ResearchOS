@@ -242,6 +242,11 @@ def test_glmm_advanced_robustness_step_runs(monkeypatch, tmp_path: Path) -> None
         bootstrap_replications=5,
     ).run(ResearchContext(project_name="glmm advanced robustness"), tmp_path)
 
+    audit = build_research_audit_report(runtime, model_id="main_model")
+    robustness_item = next(item for item in audit.items if item.item == "강건성 분석")
+
     assert result.success is True
     assert len(result.output_files) == 3
     assert runtime.get_artifact("advanced_robustness_report:main_model").model_type == baseline.model_type
+    assert robustness_item.status == "PASS"
+    assert "group bootstrap" in robustness_item.evidence
