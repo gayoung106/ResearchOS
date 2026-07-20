@@ -18,6 +18,7 @@ _BINARY_DIAGNOSTIC_MODELS = {
     "mixed_binary_logit_random_intercept",
     "mixed_binary_logit_random_slope",
     "mixed_binary_logit_three_level",
+    "gee_logit",
 }
 
 

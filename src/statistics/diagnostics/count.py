@@ -23,12 +23,14 @@ _COUNT_DIAGNOSTIC_MODELS = {
     "mixed_negative_binomial_random_intercept",
     "mixed_negative_binomial_random_slope",
     "mixed_negative_binomial_three_level",
+    "gee_poisson",
 }
 
 _MIXED_NEGATIVE_BINOMIAL_MODELS = {
     "mixed_negative_binomial_random_intercept",
     "mixed_negative_binomial_random_slope",
     "mixed_negative_binomial_three_level",
+    "gee_poisson",
 }
 
 

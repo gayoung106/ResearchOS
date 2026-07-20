@@ -104,6 +104,13 @@ def _model_type_for_level(
     }.get(measurement_level)
 
 
+def _regression_options(
+    analysis_plan: AnalysisPlan,
+) -> dict[str, Any]:
+    options = analysis_plan.analyses.regression.options
+    return options if isinstance(options, dict) else {}
+
+
 def _multilevel_options(
     analysis_plan: AnalysisPlan,
 ) -> dict[str, Any]:
@@ -247,11 +254,64 @@ def register_regression_pipeline(
         variable_map,
     )
 
+    regression_options = _regression_options(analysis_plan)
+    requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
+    requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    gee_requested = requested_estimator == "gee" or requested_model_type in {
+        "gee",
+        "gee_gaussian",
+        "gee_logit",
+        "gee_poisson",
+    }
     multilevel = analysis_plan.analyses.multilevel
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if multilevel.enabled:
+    if gee_requested:
+        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+            model_type = requested_model_type
+        else:
+            model_type = (
+                "gee_logit"
+                if measurement_level == "binary"
+                else "gee_poisson"
+                if measurement_level == "count"
+                else "gee_gaussian"
+                if measurement_level == "continuous"
+                else None
+            )
+        if model_type is None:
+            return not_registered(
+                "GEE supports continuous, binary, or count dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        group_variable = _resolve_cluster_variable(analysis_plan, regression_options)
+        if group_variable is None:
+            return not_registered(
+                "GEE requires a cluster/group variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if group_variable not in variable_map.variables:
+            return not_registered(
+                "GEE cluster variable is missing from variable_map: " + group_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        multilevel_options = {
+            "group_variable": group_variable,
+            "covariance_structure": regression_options.get("covariance_structure", "exchangeable"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get("max_iterations", regression_options.get("maximum_iterations", 100)),
+        }
+    elif multilevel.enabled:
         raw_random_slopes = multilevel_options.get("random_slope_variables")
         random_slope_variables = (
             [str(v).strip() for v in raw_random_slopes]
@@ -616,6 +676,9 @@ def register_regression_pipeline(
         "binary_logit",
         "ordered_logit",
         "count_auto",
+        "gee_gaussian",
+        "gee_logit",
+        "gee_poisson",
     }:
         orchestrator.register(
             RegressionDiagnosticsStep(

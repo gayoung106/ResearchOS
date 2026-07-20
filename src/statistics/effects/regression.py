@@ -446,6 +446,84 @@ def _build_mixed_effects(
     )
 
 
+
+def _build_gee_effects(result: RegressionResult) -> EffectSizeReport:
+    diagnostics = result.metadata.get("diagnostics", {})
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+
+    if result.model_type == "gee_gaussian":
+        endog = np.asarray(diagnostics.get("endog", []), dtype=float)
+        exog = np.asarray(diagnostics.get("exog", []), dtype=float)
+        exog_names = [str(name) for name in diagnostics.get("exog_names", [])]
+        outcome_sd = float(np.std(endog, ddof=1)) if endog.size > 1 else np.nan
+        if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+            warnings.append("GEE standardized effects could not be computed because outcome SD is zero.")
+        coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+        for index, term in enumerate(exog_names):
+            if term.lower() in {"const", "intercept"}:
+                continue
+            coefficient = coefficient_lookup.get(term)
+            if coefficient is None or not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+                continue
+            predictor_sd = float(np.std(exog[:, index], ddof=1)) if exog.shape[0] > 1 else np.nan
+            estimate = coefficient.estimate * predictor_sd / outcome_sd
+            effects.append(
+                EffectSizeResult(
+                    term=term,
+                    effect_type="standardized_beta",
+                    estimate=float(estimate),
+                    standard_error=None,
+                    statistic=coefficient.statistic,
+                    p_value=coefficient.p_value,
+                    confidence_interval_lower=None,
+                    confidence_interval_upper=None,
+                    magnitude=None,
+                    interpretation="Population-averaged standardized GEE coefficient.",
+                )
+            )
+    else:
+        effect_type = "odds_ratio" if result.model_type == "gee_logit" else "incidence_rate_ratio"
+        interpretation = (
+            "Population-averaged odds ratio from GEE."
+            if result.model_type == "gee_logit"
+            else "Population-averaged incidence rate ratio from GEE."
+        )
+        for coefficient in result.coefficients:
+            if coefficient.term.lower() in {"const", "intercept"}:
+                continue
+            effects.append(
+                EffectSizeResult(
+                    term=coefficient.term,
+                    effect_type=effect_type,
+                    estimate=coefficient.exponentiated_estimate,
+                    standard_error=None,
+                    statistic=coefficient.statistic,
+                    p_value=coefficient.p_value,
+                    confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                    confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                    magnitude=None,
+                    interpretation=interpretation,
+                )
+            )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "cluster_count": result.fit_statistics.get("cluster_count"),
+            "mean_cluster_size": result.fit_statistics.get("mean_cluster_size"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "group_variable": result.metadata.get("group_variable"),
+            "covariance_structure": result.metadata.get("covariance_structure"),
+        },
+    )
+
+
 def build_regression_effect_size_report(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -463,6 +541,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
+
+    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+        return _build_gee_effects(result)
 
     if result.model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:
         return _build_mixed_effects(result)

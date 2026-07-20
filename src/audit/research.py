@@ -621,6 +621,14 @@ def build_research_audit_report(
                     ),
                 }
             )
+        elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+            metadata.update(
+                {
+                    "group_variable": regression_result.metadata.get("group_variable"),
+                    "cluster_count": regression_result.fit_statistics.get("cluster_count"),
+                    "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
         elif _is_mixed_effects_model(runtime, model_id):
             metadata.update(
                 {

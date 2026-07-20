@@ -305,7 +305,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "mixed_random_intercept", "mixed_random_slope"}:
+        if regression_result.model_type in {"ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = effect_lookup.get(
                 (
                     coefficient.term,
@@ -324,6 +324,7 @@ def write_korean_results_narrative(
             "mixed_binary_logit_random_slope",
             "mixed_binary_logit_three_level",
             "ordered_logit",
+            "gee_logit",
         }:
             odds_ratio = effect_lookup.get(
                 (
@@ -345,6 +346,7 @@ def write_korean_results_narrative(
             "mixed_negative_binomial_random_intercept",
             "mixed_negative_binomial_random_slope",
             "mixed_negative_binomial_three_level",
+            "gee_poisson",
         }:
             incidence_rate_ratio = effect_lookup.get(
                 (
@@ -508,6 +510,17 @@ def write_korean_results_narrative(
     elif regression_result.model_type in _GLMM_MODELS:
         _append_glmm_structure_sentences(sentences, regression_result)
 
+    elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+        cluster_count = regression_result.fit_statistics.get("cluster_count")
+        group_variable = regression_result.metadata.get("group_variable")
+        covariance_structure = regression_result.metadata.get("covariance_structure")
+        if cluster_count is not None and group_variable is not None:
+            sentences.append(
+                f"GEE accounted for {int(cluster_count)} clusters defined by {group_variable}."
+            )
+        if covariance_structure is not None:
+            sentences.append(f"The working correlation structure was {covariance_structure}.")
+
     elif regression_result.model_type == "poisson":
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -588,6 +601,9 @@ def build_regression_publication_report(
             ]
         )
 
+    if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+        notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -613,6 +629,7 @@ def build_regression_publication_report(
             "optimizer": regression_result.metadata.get("optimizer"),
             "reml": regression_result.metadata.get("reml"),
             "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
+            "covariance_structure": regression_result.metadata.get("covariance_structure"),
         },
     )
 
