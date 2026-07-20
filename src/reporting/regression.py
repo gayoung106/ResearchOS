@@ -71,6 +71,14 @@ def _significance_stars(p_value: float | None) -> str:
     return ""
 
 
+def _coefficient_base_term(term: str) -> str:
+    return term.rsplit("::", 1)[-1]
+
+
+def _is_intercept_term(term: str) -> bool:
+    return _coefficient_base_term(term).lower() in {"const", "intercept"}
+
+
 def _effect_lookup(effect_report: Any | None) -> dict[tuple[str, str], float]:
     lookup: dict[tuple[str, str], float] = {}
 
@@ -97,7 +105,7 @@ def build_publication_table(
             term_type = "threshold"
         elif coefficient.term.startswith("inflate_"):
             term_type = "inflation"
-        elif coefficient.term.lower() in {"const", "intercept"}:
+        elif _is_intercept_term(coefficient.term):
             term_type = "intercept"
         else:
             term_type = "predictor"
@@ -262,7 +270,7 @@ def write_korean_results_narrative(
     substantive = [
         coefficient
         for coefficient in regression_result.coefficients
-        if coefficient.term.lower() not in {"const", "intercept"}
+        if not _is_intercept_term(coefficient.term)
         and "/" not in coefficient.term
         and not coefficient.term.startswith("inflate_")
     ]
@@ -274,6 +282,7 @@ def write_korean_results_narrative(
     model_name = {
         "ols": "OLS 회귀분석",
         "binary_logit": "이항 로지스틱 회귀분석",
+        "multinomial_logit": "Multinomial logistic regression",
         "ordered_logit": "순서형 로지스틱 회귀분석",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
@@ -324,6 +333,7 @@ def write_korean_results_narrative(
             "mixed_binary_logit_random_slope",
             "mixed_binary_logit_three_level",
             "ordered_logit",
+            "multinomial_logit",
             "gee_logit",
         }:
             odds_ratio = effect_lookup.get(
@@ -521,6 +531,17 @@ def write_korean_results_narrative(
         if covariance_structure is not None:
             sentences.append(f"The working correlation structure was {covariance_structure}.")
 
+    elif regression_result.model_type == "multinomial_logit":
+        reference_category = regression_result.metadata.get("reference_category")
+        category_count = regression_result.fit_statistics.get("category_count")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_mcfadden")
+        if category_count is not None and reference_category is not None:
+            sentences.append(
+                f"The nominal outcome had {int(category_count)} categories; {reference_category} was the reference category."
+            )
+        if pseudo is not None:
+            sentences.append(f"McFadden pseudo R-squared was {float(pseudo):.3f}.")
+
     elif regression_result.model_type == "poisson":
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -575,6 +596,7 @@ def build_regression_publication_report(
         "mixed_binary_logit_random_slope",
         "mixed_binary_logit_three_level",
         "ordered_logit",
+        "multinomial_logit",
     }:
         notes.append("로짓 모형은 오즈비를 함께 제시한다.")
     elif regression_result.model_type in {
@@ -630,6 +652,8 @@ def build_regression_publication_report(
             "reml": regression_result.metadata.get("reml"),
             "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
             "covariance_structure": regression_result.metadata.get("covariance_structure"),
+            "reference_category": regression_result.metadata.get("reference_category"),
+            "category_labels": regression_result.metadata.get("category_labels"),
         },
     )
 

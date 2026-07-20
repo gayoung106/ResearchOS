@@ -8,8 +8,15 @@ from src.common.config_models import AnalysisPlan, VariableDefinition, VariableM
 from src.pipeline.context import ResearchContext
 from src.pipeline.orchestrator import ResearchOrchestrator
 from src.pipeline.regression_builder import register_regression_pipeline
+from src.pipeline.regression_diagnostics_step import RegressionDiagnosticsStep
 from src.pipeline.runtime import PipelineRuntime
 from src.reporting.regression import build_regression_publication_report
+from src.statistics.diagnostics.gee import (
+    build_gee_diagnostics,
+    gee_cluster_diagnostics_to_dataframe,
+    gee_diagnostic_summary_to_dataframe,
+    gee_residuals_to_dataframe,
+)
 from src.statistics.effects.regression import build_regression_effect_size_report
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.selector import fit_regression_by_level
@@ -124,3 +131,33 @@ def test_builder_registers_explicit_gee_pipeline(tmp_path: Path) -> None:
     assert registration.reporting_registered is True
     assert registration.visualization_registered is True
     assert registration.audit_registered is True
+
+
+
+def test_gee_diagnostics_and_pipeline_step(tmp_path: Path) -> None:
+    result = fit_gee(
+        _gaussian_data(),
+        dependent_variable="y",
+        independent_variables=["x"],
+        group_variable="cluster",
+        model_type="gee_gaussian",
+    )
+    report = build_gee_diagnostics(result)
+    runtime = PipelineRuntime(dataframe=_gaussian_data())
+    runtime.set_artifact("regression_result:main_model", result)
+    step_result = RegressionDiagnosticsStep(runtime, model_id="main_model").run(
+        ResearchContext(project_name="gee diagnostics"),
+        tmp_path,
+    )
+    audit = build_research_audit_report(runtime, model_id="main_model")
+
+    assert report.cluster_count == 8
+    assert gee_cluster_diagnostics_to_dataframe(report).shape[0] == 8
+    assert gee_residuals_to_dataframe(report).shape[0] == result.sample_size
+    assert "max_abs_cluster_mean_pearson_residual" in set(
+        gee_diagnostic_summary_to_dataframe(report)["item"]
+    )
+    assert step_result.success is True
+    assert len(step_result.output_files) == 3
+    assert runtime.get_artifact("regression_diagnostics:main_model").model_type == "gee_gaussian"
+    assert any("GEE diagnostics" in item.evidence for item in audit.items)

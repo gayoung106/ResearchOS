@@ -100,6 +100,7 @@ def _model_type_for_level(
         "binary": "binary_logit",
         "ordinal": "ordered_logit",
         "scale_item": "ordered_logit",
+        "nominal": "multinomial_logit",
         "count": "count_auto",
     }.get(measurement_level)
 
@@ -675,6 +676,7 @@ def register_regression_pipeline(
         "ols",
         "binary_logit",
         "ordered_logit",
+        "multinomial_logit",
         "count_auto",
         "gee_gaussian",
         "gee_logit",

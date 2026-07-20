@@ -71,6 +71,14 @@ def _configure_matplotlib_font() -> None:
     _FONT_INITIALIZED = True
 
 
+def _coefficient_base_term(term: str) -> str:
+    return term.rsplit("::", 1)[-1]
+
+
+def _is_intercept_term(term: str) -> bool:
+    return _coefficient_base_term(term).lower() in {"const", "intercept"}
+
+
 def _save_figure(
     figure: Any,
     output_path: Path,
@@ -190,11 +198,7 @@ def _plot_coefficient_forest(
     coefficients = [
         coefficient
         for coefficient in regression_result.coefficients
-        if coefficient.term.lower()
-        not in {
-            "const",
-            "intercept",
-        }
+        if not _is_intercept_term(coefficient.term)
         and "/" not in coefficient.term
     ]
 

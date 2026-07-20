@@ -24,6 +24,7 @@ from src.statistics.regression.mixed_negative_binomial import (
     fit_mixed_negative_binomial_random_slope,
     fit_mixed_negative_binomial_three_level,
 )
+from src.statistics.regression.multinomial_logit import fit_multinomial_logit
 from src.statistics.regression.negative_binomial import (
     fit_negative_binomial,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "fit_mixed_negative_binomial_three_level",
     "fit_binary_logit",
     "fit_ordered_logit",
+    "fit_multinomial_logit",
     "fit_poisson",
     "fit_negative_binomial",
     "fit_zero_inflated_poisson",

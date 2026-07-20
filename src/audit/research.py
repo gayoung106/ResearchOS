@@ -314,6 +314,25 @@ def _diagnostics_item(
     report = runtime.artifacts[key]
     warning_count = len(report.warnings)
 
+    result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"GEE diagnostics, clusters={summary.get('cluster_count', 'unknown')}, "
+            f"max cluster mean Pearson residual={summary.get('max_abs_cluster_mean_pearson_residual', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="????",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="GEE cluster residual diagnostics and working correlation should be reported.",
+        )
+
     if _is_mixed_effects_model(runtime, model_id):
         summary = getattr(report, "summary", {})
         group_count = getattr(report, "group_count", None)
@@ -619,6 +638,14 @@ def build_research_audit_report(
                         "level3_vpc",
                         regression_result.fit_statistics.get("level3_intraclass_correlation"),
                     ),
+                }
+            )
+        elif regression_result.model_type == "multinomial_logit":
+            metadata.update(
+                {
+                    "category_count": regression_result.fit_statistics.get("category_count"),
+                    "reference_category": regression_result.metadata.get("reference_category"),
+                    "category_labels": regression_result.metadata.get("category_labels"),
                 }
             )
         elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:

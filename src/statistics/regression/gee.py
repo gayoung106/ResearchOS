@@ -66,7 +66,12 @@ def _safe_qic(fitted: Any) -> tuple[float | None, float | None, list[dict[str, s
     return float(qic), float(qicu), qic_warnings
 
 
-def _diagnostic_metadata(fitted: Any, outcome: pd.Series, predictors: pd.DataFrame) -> dict[str, Any]:
+def _diagnostic_metadata(
+    fitted: Any,
+    outcome: pd.Series,
+    predictors: pd.DataFrame,
+    groups: pd.Series,
+) -> dict[str, Any]:
     predicted = np.asarray(fitted.predict(), dtype=float)
     return {
         "diagnostics": {
@@ -75,6 +80,7 @@ def _diagnostic_metadata(fitted: Any, outcome: pd.Series, predictors: pd.DataFra
             "exog": predictors.to_numpy(dtype=float),
             "exog_names": [str(column) for column in predictors.columns],
             "row_labels": list(outcome.index),
+            "group_labels": groups.loc[outcome.index].astype(str).tolist(),
         }
     }
 
@@ -194,7 +200,7 @@ def fit_gee(
             **design.metadata,
             "design_matrix_columns": [str(column) for column in predictors.columns],
             "fixed_effect_column_count": len(design.fixed_effect_columns),
-            **_diagnostic_metadata(fitted, outcome, predictors),
+            **_diagnostic_metadata(fitted, outcome, predictors, groups),
         },
         raw_result=fitted,
     )

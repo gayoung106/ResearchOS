@@ -274,6 +274,14 @@ def _build_ordered_logit_effects(
     )
 
 
+def _coefficient_base_term(term: str) -> str:
+    return term.rsplit("::", 1)[-1]
+
+
+def _is_intercept_term(term: str) -> bool:
+    return _coefficient_base_term(term).lower() in {"const", "intercept"}
+
+
 def _build_count_effects(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -323,6 +331,42 @@ def _build_count_effects(
         warnings=warnings,
         metadata={
             "sample_size": result.sample_size,
+        },
+    )
+
+
+def _build_multinomial_logit_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if _is_intercept_term(coefficient.term):
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="odds_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Category-specific odds ratio relative to the multinomial reference category.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "mcfadden_pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared_mcfadden"),
+            "category_count": result.fit_statistics.get("category_count"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "reference_category": result.metadata.get("reference_category"),
+            "category_labels": result.metadata.get("category_labels"),
         },
     )
 
@@ -541,6 +585,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
+
+    if result.model_type == "multinomial_logit":
+        return _build_multinomial_logit_effects(result)
 
     if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         return _build_gee_effects(result)
