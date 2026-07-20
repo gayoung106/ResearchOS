@@ -640,6 +640,14 @@ def build_research_audit_report(
                     ),
                 }
             )
+        elif regression_result.model_type == "fractional_logit":
+            metadata.update(
+                {
+                    "boundary_count": regression_result.fit_statistics.get("boundary_count"),
+                    "dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio"),
+                    "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
+                }
+            )
         elif regression_result.model_type == "cox_proportional_hazards":
             metadata.update(
                 {

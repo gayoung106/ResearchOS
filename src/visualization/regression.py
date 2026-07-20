@@ -189,6 +189,25 @@ def _plot_influence(
     )
 
 
+def _plot_observed_vs_predicted(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    observed = np.asarray(fitted.model.endog, dtype=float)
+    predicted = np.asarray(fitted.fittedvalues, dtype=float)
+    figure, axis = plt.subplots(figsize=(5.5, 5.0))
+    axis.scatter(predicted, observed, alpha=0.75)
+    axis.plot([0, 1], [0, 1], linestyle="--")
+    axis.set_xlim(-0.02, 1.02)
+    axis.set_ylim(-0.02, 1.02)
+    axis.set_xlabel("Predicted proportion")
+    axis.set_ylabel("Observed proportion")
+    axis.set_title("Observed vs Predicted Proportions")
+    _save_figure(figure, output_path)
+
+
 def _plot_baseline_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -523,6 +542,10 @@ def build_regression_visualizations(
             influence_path,
         )
         output_files.append(str(influence_path))
+    elif regression_result.model_type == "fractional_logit":
+        observed_path = output_directory / "fractional_observed_vs_predicted.png"
+        _plot_observed_vs_predicted(regression_result, observed_path)
+        output_files.append(str(observed_path))
     elif regression_result.model_type == "cox_proportional_hazards":
         baseline_path = output_directory / "cox_baseline_survival.png"
         _plot_baseline_survival(regression_result, baseline_path)

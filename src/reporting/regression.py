@@ -338,6 +338,18 @@ def write_korean_results_narrative(
             else:
                 effect_text = f"B={coefficient.estimate:.3f}"
 
+        elif regression_result.model_type == "fractional_logit":
+            fractional_or = effect_lookup.get(
+                (
+                    coefficient.term,
+                    "fractional_odds_ratio",
+                )
+            )
+            effect_text = (
+                f"FOR={fractional_or:.3f}"
+                if fractional_or is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
         elif regression_result.model_type == "cox_proportional_hazards":
             hazard_ratio = effect_lookup.get(
                 (
@@ -428,6 +440,17 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "fractional_logit":
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
+        dispersion = regression_result.fit_statistics.get("dispersion_ratio")
+        boundary_count = regression_result.fit_statistics.get("boundary_count")
+        if pseudo is not None:
+            sentences.append(f"Deviance pseudo R-squared was {float(pseudo):.3f}.")
+        if dispersion is not None:
+            sentences.append(f"Pearson dispersion ratio was {float(dispersion):.3f}.")
+        if boundary_count is not None:
+            sentences.append(f"Boundary observations at 0 or 1 numbered {int(boundary_count)}.")
 
     elif regression_result.model_type == "cox_proportional_hazards":
         event_count = regression_result.fit_statistics.get("event_count")
@@ -671,6 +694,9 @@ def build_regression_publication_report(
             ]
         )
 
+    if regression_result.model_type == "fractional_logit":
+        notes.append("Fractional logit models report fractional odds ratios and average marginal effects when available.")
+
     if regression_result.model_type == "cox_proportional_hazards":
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
 
@@ -708,6 +734,7 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "boundary_count": regression_result.fit_statistics.get("boundary_count"),
         },
     )
 

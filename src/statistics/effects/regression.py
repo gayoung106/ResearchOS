@@ -156,6 +156,61 @@ def _build_ols_effects(
     )
 
 
+def _build_fractional_logit_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    fitted = result.raw_result
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="fractional_odds_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Odds-scale effect for a fractional logit mean model.",
+            )
+        )
+    if fitted is not None:
+        try:
+            marginal = fitted.get_margeff(at="overall", method="dydx").summary_frame()
+            for term in marginal.index:
+                effects.append(
+                    EffectSizeResult(
+                        term=str(term),
+                        effect_type="average_marginal_effect",
+                        estimate=float(marginal.loc[term, "dy/dx"]),
+                        standard_error=float(marginal.loc[term, "Std. Err."]),
+                        statistic=float(marginal.loc[term, "z"]),
+                        p_value=float(marginal.loc[term, "Pr(>|z|)"]),
+                        confidence_interval_lower=float(marginal.loc[term, "Conf. Int. Low"]),
+                        confidence_interval_upper=float(marginal.loc[term, "Cont. Int. Hi."] if "Cont. Int. Hi." in marginal.columns else marginal.loc[term, "Conf. Int. Hi."]),
+                        magnitude=None,
+                        interpretation="Average marginal effect on the expected proportion.",
+                    )
+                )
+        except (AttributeError, KeyError, ValueError, np.linalg.LinAlgError) as error:
+            warnings.append(f"Average marginal effects could not be computed: {error}")
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "pseudo_r_squared_deviance": result.fit_statistics.get("pseudo_r_squared_deviance"),
+            "dispersion_ratio": result.fit_statistics.get("dispersion_ratio"),
+            "mean_absolute_error": result.fit_statistics.get("mean_absolute_error"),
+        },
+        warnings=warnings,
+        metadata={"sample_size": result.sample_size},
+    )
+
+
 def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     for coefficient in result.coefficients:
@@ -665,6 +720,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "cox_proportional_hazards":
         return _build_cox_effects(result)
+
+    if result.model_type == "fractional_logit":
+        return _build_fractional_logit_effects(result)
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)

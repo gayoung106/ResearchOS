@@ -30,6 +30,13 @@ from src.statistics.diagnostics.cox import (
     cox_ph_checks_to_dataframe,
     cox_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.fractional_logit import (
+    build_fractional_logit_diagnostics,
+    fractional_diagnostic_summary_to_dataframe,
+    fractional_multicollinearity_to_dataframe,
+    fractional_observations_to_dataframe,
+    fractional_prediction_metrics_to_dataframe,
+)
 from src.statistics.diagnostics.gee import (
     build_gee_diagnostics,
     gee_cluster_diagnostics_to_dataframe,
@@ -114,6 +121,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "fractional_logit":
+            return self._run_fractional_logit(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "cox_proportional_hazards":
             return self._run_cox(
@@ -209,6 +222,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_fractional_logit(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_fractional_logit_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "observations": output_dir / "observations.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        fractional_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        fractional_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        fractional_observations_to_dataframe(report).to_excel(paths["observations"], index=False)
+        fractional_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_cox(
         self,

@@ -102,6 +102,7 @@ def _model_type_for_level(
         "scale_item": "ordered_logit",
         "nominal": "multinomial_logit",
         "count": "count_auto",
+        "proportion": "fractional_logit",
     }.get(measurement_level)
 
 
@@ -736,6 +737,7 @@ def register_regression_pipeline(
         "ols",
         "quantile_regression",
         "cox_proportional_hazards",
+        "fractional_logit",
         "binary_logit",
         "ordered_logit",
         "multinomial_logit",
