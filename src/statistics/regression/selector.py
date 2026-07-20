@@ -32,6 +32,7 @@ from src.statistics.regression.mixed_negative_binomial import (
 from src.statistics.regression.multinomial_logit import fit_multinomial_logit
 from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
+from src.statistics.regression.quantile import fit_quantile_regression
 
 
 def fit_regression_by_level(
@@ -47,6 +48,19 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "quantile_regression":
+        options = mixed_effects_options or {}
+        return fit_quantile_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            quantile=float(options.get("quantile", 0.5)),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 1000))),
+        )
+
     if model_type == "multinomial_logit":
         options = mixed_effects_options or {}
         return fit_multinomial_logit(

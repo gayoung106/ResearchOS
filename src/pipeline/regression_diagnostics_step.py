@@ -61,6 +61,13 @@ from src.statistics.diagnostics.ordered_logit import (
     ordered_predictions_to_dataframe,
     ordered_thresholds_to_dataframe,
 )
+from src.statistics.diagnostics.quantile import (
+    build_quantile_diagnostics,
+    quantile_diagnostic_summary_to_dataframe,
+    quantile_multicollinearity_to_dataframe,
+    quantile_residual_summary_to_dataframe,
+    quantile_residuals_to_dataframe,
+)
 
 
 class RegressionDiagnosticsStep(PipelineStep):
@@ -99,6 +106,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "quantile_regression":
+            return self._run_quantile(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "multinomial_logit":
             return self._run_multinomial_logit(
@@ -182,6 +195,35 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_quantile(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_quantile_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "residual_summary": output_dir / "residual_summary.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        quantile_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        quantile_residual_summary_to_dataframe(report).to_excel(
+            paths["residual_summary"], index=False
+        )
+        quantile_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        quantile_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_multinomial_logit(
         self,

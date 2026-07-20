@@ -640,6 +640,14 @@ def build_research_audit_report(
                     ),
                 }
             )
+        elif regression_result.model_type == "quantile_regression":
+            metadata.update(
+                {
+                    "quantile": regression_result.fit_statistics.get("quantile"),
+                    "pseudo_r_squared": regression_result.fit_statistics.get("pseudo_r_squared"),
+                    "pinball_loss": regression_result.fit_statistics.get("pinball_loss"),
+                }
+            )
         elif regression_result.model_type == "multinomial_logit":
             metadata.update(
                 {

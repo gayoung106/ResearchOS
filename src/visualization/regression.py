@@ -471,6 +471,7 @@ def build_regression_visualizations(
 
     if regression_result.model_type in {
         "ols",
+        "quantile_regression",
         "mixed_random_intercept",
         "mixed_random_slope",
         "mixed_three_level",

@@ -156,6 +156,58 @@ def _build_ols_effects(
     )
 
 
+def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted quantile regression result is required.")
+
+    endog = np.asarray(fitted.model.endog, dtype=float)
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    outcome_sd = float(np.std(endog, ddof=1))
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Quantile standardized effects could not be computed because outcome SD is zero.")
+        outcome_sd = np.nan
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept"}:
+            continue
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None or not np.isfinite(outcome_sd):
+            continue
+        predictor_sd = float(np.std(exog[:, index], ddof=1))
+        estimate = coefficient.estimate * predictor_sd / outcome_sd
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="standardized_quantile_beta",
+                estimate=float(estimate),
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized coefficient for the modeled conditional quantile.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "quantile": result.fit_statistics.get("quantile"),
+            "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
+            "pinball_loss": result.fit_statistics.get("pinball_loss"),
+        },
+        warnings=warnings,
+        metadata={"sample_size": result.sample_size},
+    )
+
+
 def _build_binary_logit_effects(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -574,6 +626,9 @@ def build_regression_effect_size_report(
     """회귀모형 종류에 맞는 효과크기 보고서를 생성한다."""
     if result.model_type == "ols":
         return _build_ols_effects(result)
+
+    if result.model_type == "quantile_regression":
+        return _build_quantile_effects(result)
 
     if result.model_type in {
         "binary_logit",

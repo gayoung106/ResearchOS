@@ -314,11 +314,16 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "quantile_regression", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = effect_lookup.get(
                 (
                     coefficient.term,
                     "standardized_beta",
+                )
+            ) or effect_lookup.get(
+                (
+                    coefficient.term,
+                    "standardized_quantile_beta",
                 )
             )
 
@@ -394,6 +399,17 @@ def write_korean_results_narrative(
                 )
             else:
                 sentences.append(f"모형의 설명력은 R²={r_squared:.3f}이었다.")
+
+    elif regression_result.model_type == "quantile_regression":
+        quantile = regression_result.fit_statistics.get("quantile")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
+        pinball = regression_result.fit_statistics.get("pinball_loss")
+        if quantile is not None:
+            sentences.append(f"The modeled conditional quantile was q={float(quantile):.2f}.")
+        if pseudo is not None:
+            sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
+        if pinball is not None:
+            sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
 
     elif regression_result.model_type in {
         "mixed_random_intercept",
@@ -588,7 +604,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type == "ols":
+    if regression_result.model_type in {"ols", "quantile_regression"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -654,6 +670,7 @@ def build_regression_publication_report(
             "covariance_structure": regression_result.metadata.get("covariance_structure"),
             "reference_category": regression_result.metadata.get("reference_category"),
             "category_labels": regression_result.metadata.get("category_labels"),
+            "quantile": regression_result.fit_statistics.get("quantile"),
         },
     )
 

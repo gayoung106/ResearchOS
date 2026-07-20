@@ -258,6 +258,10 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    quantile_requested = requested_estimator in {"quantile", "quantile_regression"} or requested_model_type in {
+        "quantile",
+        "quantile_regression",
+    }
     gee_requested = requested_estimator == "gee" or requested_model_type in {
         "gee",
         "gee_gaussian",
@@ -268,7 +272,24 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if gee_requested:
+    if quantile_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Quantile regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "quantile_regression"
+        multilevel_options = {
+            "quantile": regression_options.get("quantile", 0.5),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 1000)
+            ),
+        }
+    elif gee_requested:
         if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
             model_type = requested_model_type
         else:
@@ -674,6 +695,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "quantile_regression",
         "binary_logit",
         "ordered_logit",
         "multinomial_logit",
