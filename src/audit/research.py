@@ -9,6 +9,20 @@ import pandas as pd
 
 from src.pipeline.runtime import PipelineRuntime
 
+_THREE_LEVEL_MIXED_MODELS = {
+    "mixed_three_level",
+    "mixed_binary_logit_three_level",
+    "mixed_poisson_three_level",
+    "mixed_negative_binomial_three_level",
+}
+
+_MIXED_RANDOM_SLOPE_MODELS = {
+    "mixed_random_slope",
+    "mixed_binary_logit_random_slope",
+    "mixed_poisson_random_slope",
+    "mixed_negative_binomial_random_slope",
+}
+
 
 @dataclass(slots=True)
 class AuditItem:
@@ -71,8 +85,8 @@ def _is_mixed_effects_model(
             "mixed_poisson_random_slope",
             "mixed_poisson_three_level",
             "mixed_negative_binomial_random_intercept",
-            "mixed_negative_binomial_random_slope",
-            "mixed_negative_binomial_three_level",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
         }
     )
 
@@ -211,13 +225,13 @@ def _regression_item(
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",
         "mixed_negative_binomial_random_intercept",
-            "mixed_negative_binomial_random_slope",
-            "mixed_negative_binomial_three_level",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
     }:
         group_variable = result.metadata.get("group_variable", "미확인")
         group_count = result.fit_statistics.get("group_count", "미확인")
         cross_level = result.metadata.get("cross_level_interaction")
-        if result.model_type == "mixed_three_level":
+        if result.model_type in _THREE_LEVEL_MIXED_MODELS:
             level2_group = result.metadata.get("level2_group", "미확인")
             level3_group = result.metadata.get("level3_group", "미확인")
             level2_count = result.fit_statistics.get("level2_group_count", "미확인")
@@ -243,15 +257,9 @@ def _regression_item(
             )
         structure = (
             "3-Level"
-            if result.model_type
-            in {"mixed_three_level", "mixed_binary_logit_three_level", "mixed_poisson_three_level"}
+            if result.model_type in _THREE_LEVEL_MIXED_MODELS
             else "Random Slope"
-            if result.model_type
-            in {
-                "mixed_random_slope",
-                "mixed_binary_logit_random_slope",
-                "mixed_poisson_random_slope",
-            }
+            if result.model_type in _MIXED_RANDOM_SLOPE_MODELS
             else "Random Intercept"
         )
         covariance_structure = result.metadata.get("random_effect_covariance", "correlated")
@@ -338,6 +346,24 @@ def _robustness_item(
     model_id: str,
 ) -> AuditItem:
     if _is_mixed_effects_model(runtime, model_id):
+        basic_key = f"robustness_report:{model_id}"
+        if _artifact_exists(runtime, basic_key):
+            report = runtime.artifacts[basic_key]
+            summary = getattr(report, "summary", {})
+            evidence = (
+                "GLMM optimizer sensitivity robustness completed; "
+                f"successful refits={summary.get('successful_optimizer_count', 'unknown')}, "
+                f"stable terms={summary.get('stable_term_count', 'unknown')}."
+            )
+            return AuditItem(
+                category="모형 검증",
+                item="강건성 분석",
+                status="PASS" if not getattr(report, "warnings", []) else "WARNING",
+                score=10 if not getattr(report, "warnings", []) else 7,
+                maximum_score=10,
+                evidence=evidence,
+                recommendation="Report optimizer sensitivity and any unstable GLMM terms.",
+            )
         return AuditItem(
             category="모형 검증",
             item="강건성 분석",
@@ -555,17 +581,35 @@ def build_research_audit_report(
     }
     if regression_result is not None:
         metadata["model_type"] = regression_result.model_type
-        if regression_result.model_type in {
-            "mixed_random_intercept",
-            "mixed_random_slope",
-            "mixed_three_level",
-        }:
+        if regression_result.model_type in _THREE_LEVEL_MIXED_MODELS:
+            metadata.update(
+                {
+                    "level2_group": regression_result.metadata.get("level2_group"),
+                    "level3_group": regression_result.metadata.get("level3_group"),
+                    "level2_group_count": regression_result.fit_statistics.get(
+                        "level2_group_count"
+                    ),
+                    "level3_group_count": regression_result.fit_statistics.get(
+                        "level3_group_count"
+                    ),
+                    "level2_vpc": regression_result.fit_statistics.get(
+                        "level2_vpc",
+                        regression_result.fit_statistics.get("level2_intraclass_correlation"),
+                    ),
+                    "level3_vpc": regression_result.fit_statistics.get(
+                        "level3_vpc",
+                        regression_result.fit_statistics.get("level3_intraclass_correlation"),
+                    ),
+                }
+            )
+        elif _is_mixed_effects_model(runtime, model_id):
             metadata.update(
                 {
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "group_count": regression_result.fit_statistics.get("group_count"),
                     "intraclass_correlation": regression_result.fit_statistics.get(
-                        "intraclass_correlation"
+                        "intraclass_correlation",
+                        regression_result.fit_statistics.get("icc"),
                     ),
                 }
             )

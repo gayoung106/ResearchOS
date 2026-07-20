@@ -15,6 +15,27 @@ from src.statistics.regression.base import ModelCoefficient, RegressionResult
 from src.statistics.regression.design_matrix import prepare_regression_design_matrix
 
 
+def _sigmoid(values: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-np.clip(values, -30, 30)))
+
+
+def _binary_diagnostic_metadata(
+    outcome: pd.Series,
+    predictors: pd.DataFrame,
+    fixed_effects: np.ndarray,
+    random_offset: np.ndarray,
+    fixed_names: list[str],
+) -> dict[str, object]:
+    probabilities = _sigmoid(predictors.to_numpy(dtype=float) @ fixed_effects + random_offset)
+    return {
+        "endog": outcome.to_numpy(dtype=float).tolist(),
+        "predicted_probability": probabilities.tolist(),
+        "exog": predictors.to_numpy(dtype=float).tolist(),
+        "exog_names": fixed_names,
+        "row_labels": outcome.index.tolist(),
+    }
+
+
 def fit_mixed_binary_logit_random_intercept(
     dataframe: pd.DataFrame,
     *,
@@ -126,6 +147,12 @@ def fit_mixed_binary_logit_random_intercept(
             "일부 그룹의 사례 수가 5개 미만이어서 Random Intercept 추정이 불안정할 수 있습니다."
         )
 
+    random_effects = dict(zip(random_names, map(float, fitted.vc_mean), strict=True))
+    random_offset = np.asarray([random_effects[str(group)] for group in groups], dtype=float)
+    diagnostics = _binary_diagnostic_metadata(
+        outcome, predictors, np.asarray(fitted.fe_mean, dtype=float), random_offset, fixed_names
+    )
+
     return RegressionResult(
         model_id=model_id,
         model_type="mixed_binary_logit_random_intercept",
@@ -152,7 +179,8 @@ def fit_mixed_binary_logit_random_intercept(
             "optimizer": optimizer,
             "max_iterations": int(max_iterations),
             "estimation_method": "variational_bayes",
-            "random_effects": dict(zip(random_names, map(float, fitted.vc_mean), strict=True)),
+            "random_effects": random_effects,
+            "diagnostics": diagnostics,
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },
@@ -292,6 +320,18 @@ def fit_mixed_binary_logit_random_slope(
         )
 
     vc_mean = list(map(float, fitted.vc_mean))
+    random_effects = dict(zip(group_names, vc_mean[:group_count], strict=True))
+    random_slopes = dict(zip(group_names, vc_mean[group_count:], strict=True))
+    random_offset = np.asarray(
+        [
+            random_effects[str(group)] + random_slopes[str(group)] * slope
+            for group, slope in zip(groups, slope_values, strict=True)
+        ],
+        dtype=float,
+    )
+    diagnostics = _binary_diagnostic_metadata(
+        outcome, predictors, np.asarray(fitted.fe_mean, dtype=float), random_offset, fixed_names
+    )
     return RegressionResult(
         model_id=model_id,
         model_type="mixed_binary_logit_random_slope",
@@ -322,8 +362,9 @@ def fit_mixed_binary_logit_random_slope(
             "optimizer": optimizer,
             "max_iterations": int(max_iterations),
             "estimation_method": "variational_bayes",
-            "random_effects": dict(zip(group_names, vc_mean[:group_count], strict=True)),
-            "random_slopes": dict(zip(group_names, vc_mean[group_count:], strict=True)),
+            "random_effects": random_effects,
+            "random_slopes": random_slopes,
+            "diagnostics": diagnostics,
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },
@@ -469,6 +510,20 @@ def fit_mixed_binary_logit_three_level(
         warnings.append("일부 Level 3 그룹에 중첩된 Level 2 그룹이 2개 미만입니다.")
 
     vc_mean = list(map(float, fitted.vc_mean))
+    level2_random_effects = dict(zip(level2_names, vc_mean[:level2_count], strict=True))
+    level3_random_effects = dict(zip(level3_names, vc_mean[level2_count:], strict=True))
+    random_offset = np.asarray(
+        [
+            level2_random_effects[str(level2)] + level3_random_effects[str(level3)]
+            for level2, level3 in zip(
+                groups[level2_group], groups[level3_group], strict=True
+            )
+        ],
+        dtype=float,
+    )
+    diagnostics = _binary_diagnostic_metadata(
+        outcome, predictors, np.asarray(fitted.fe_mean, dtype=float), random_offset, fixed_names
+    )
     return RegressionResult(
         model_id=model_id,
         model_type="mixed_binary_logit_three_level",
@@ -502,8 +557,9 @@ def fit_mixed_binary_logit_three_level(
             "optimizer": optimizer,
             "max_iterations": int(max_iterations),
             "estimation_method": "variational_bayes",
-            "level2_random_effects": dict(zip(level2_names, vc_mean[:level2_count], strict=True)),
-            "level3_random_effects": dict(zip(level3_names, vc_mean[level2_count:], strict=True)),
+            "level2_random_effects": level2_random_effects,
+            "level3_random_effects": level3_random_effects,
+            "diagnostics": diagnostics,
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },

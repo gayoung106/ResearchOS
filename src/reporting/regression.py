@@ -9,6 +9,42 @@ import pandas as pd
 
 from src.statistics.regression.base import RegressionResult
 
+_MIXED_BINARY_LOGIT_MODELS = {
+    "mixed_binary_logit_random_intercept",
+    "mixed_binary_logit_random_slope",
+    "mixed_binary_logit_three_level",
+}
+
+_MIXED_POISSON_MODELS = {
+    "mixed_poisson_random_intercept",
+    "mixed_poisson_random_slope",
+    "mixed_poisson_three_level",
+}
+
+_MIXED_NEGATIVE_BINOMIAL_MODELS = {
+    "mixed_negative_binomial_random_intercept",
+    "mixed_negative_binomial_random_slope",
+    "mixed_negative_binomial_three_level",
+}
+
+_THREE_LEVEL_GLMM_MODELS = {
+    "mixed_binary_logit_three_level",
+    "mixed_poisson_three_level",
+    "mixed_negative_binomial_three_level",
+}
+
+_RANDOM_SLOPE_GLMM_MODELS = {
+    "mixed_binary_logit_random_slope",
+    "mixed_poisson_random_slope",
+    "mixed_negative_binomial_random_slope",
+}
+
+_GLMM_MODELS = (
+    _MIXED_BINARY_LOGIT_MODELS
+    | _MIXED_POISSON_MODELS
+    | _MIXED_NEGATIVE_BINOMIAL_MODELS
+)
+
 
 @dataclass(slots=True)
 class RegressionPublicationReport:
@@ -158,6 +194,64 @@ def _format_p_value(p_value: float) -> str:
         return "p<.001"
     return f"p={p_value:.3f}"
 
+
+
+
+def _append_glmm_structure_sentences(
+    sentences: list[str],
+    regression_result: RegressionResult,
+) -> None:
+    if regression_result.model_type in _THREE_LEVEL_GLMM_MODELS:
+        level2_group = regression_result.metadata.get("level2_group", "Level 2")
+        level3_group = regression_result.metadata.get("level3_group", "Level 3")
+        level2_count = regression_result.fit_statistics.get("level2_group_count")
+        level3_count = regression_result.fit_statistics.get("level3_group_count")
+        if level2_count is not None and level3_count is not None:
+            sentences.append(
+                f"3-level GLMM included {int(level2_count)} {level2_group} groups "
+                f"nested within {int(level3_count)} {level3_group} groups."
+            )
+        level2_vpc = regression_result.fit_statistics.get("level2_vpc")
+        level3_vpc = regression_result.fit_statistics.get("level3_vpc")
+        if level2_vpc is not None and level3_vpc is not None:
+            sentences.append(
+                f"Variance partition coefficients were Level 2={float(level2_vpc):.3f} "
+                f"and Level 3={float(level3_vpc):.3f}."
+            )
+    else:
+        group_variable = regression_result.metadata.get("group_variable")
+        group_count = regression_result.fit_statistics.get("group_count")
+        if group_variable is not None and group_count is not None:
+            sentences.append(
+                f"The GLMM included {int(group_count)} groups defined by {group_variable}."
+            )
+
+    if regression_result.model_type in _RANDOM_SLOPE_GLMM_MODELS:
+        slope = regression_result.metadata.get("random_slope_variable")
+        slope_variance = regression_result.fit_statistics.get("random_slope_variance")
+        if slope is not None and slope_variance is not None:
+            sentences.append(
+                f"A random slope for {slope} was estimated "
+                f"(variance={float(slope_variance):.3f})."
+            )
+
+    intercept_variance = regression_result.fit_statistics.get("random_intercept_variance")
+    if intercept_variance is not None:
+        sentences.append(f"Random intercept variance was {float(intercept_variance):.3f}.")
+
+    icc = regression_result.fit_statistics.get("icc")
+    if icc is not None:
+        sentences.append(f"The latent-scale ICC was {float(icc):.3f}.")
+
+    alpha = regression_result.fit_statistics.get("dispersion_alpha")
+    if alpha is not None:
+        sentences.append(f"The NB2 dispersion parameter alpha was {float(alpha):.3f}.")
+
+    sentences.append(
+        "The GLMM converged."
+        if regression_result.converged
+        else "The GLMM did not converge; interpretation requires caution."
+    )
 
 def write_korean_results_narrative(
     regression_result: RegressionResult,
@@ -408,6 +502,9 @@ def write_korean_results_narrative(
         if lr_p is not None:
             sentences.append(f"우도비 검정의 유의확률은 {_format_p_value(float(lr_p))}였다.")
 
+    elif regression_result.model_type in _GLMM_MODELS:
+        _append_glmm_structure_sentences(sentences, regression_result)
+
     elif regression_result.model_type == "poisson":
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -488,6 +585,11 @@ def build_regression_publication_report(
             ]
         )
 
+    if regression_result.model_type in _GLMM_MODELS:
+        notes.append(
+            "GLMM notes include group structure, variance components, and convergence status."
+        )
+
     return RegressionPublicationReport(
         model_id=regression_result.model_id,
         model_type=regression_result.model_type,
@@ -500,6 +602,10 @@ def build_regression_publication_report(
             "sample_size": regression_result.sample_size,
             "group_variable": regression_result.metadata.get("group_variable"),
             "group_count": regression_result.fit_statistics.get("group_count"),
+            "level2_group": regression_result.metadata.get("level2_group"),
+            "level3_group": regression_result.metadata.get("level3_group"),
+            "level2_group_count": regression_result.fit_statistics.get("level2_group_count"),
+            "level3_group_count": regression_result.fit_statistics.get("level3_group_count"),
             "converged": regression_result.converged,
             "optimizer": regression_result.metadata.get("optimizer"),
             "reml": regression_result.metadata.get("reml"),

@@ -12,6 +12,25 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from src.statistics.diagnostics.ols import MulticollinearityResult
 from src.statistics.regression.base import RegressionResult
 
+_COUNT_DIAGNOSTIC_MODELS = {
+    "poisson",
+    "negative_binomial",
+    "zero_inflated_poisson",
+    "zero_inflated_negative_binomial",
+    "mixed_poisson_random_intercept",
+    "mixed_poisson_random_slope",
+    "mixed_poisson_three_level",
+    "mixed_negative_binomial_random_intercept",
+    "mixed_negative_binomial_random_slope",
+    "mixed_negative_binomial_three_level",
+}
+
+_MIXED_NEGATIVE_BINOMIAL_MODELS = {
+    "mixed_negative_binomial_random_intercept",
+    "mixed_negative_binomial_random_slope",
+    "mixed_negative_binomial_three_level",
+}
+
 
 @dataclass(slots=True)
 class CountPredictionMetrics:
@@ -46,12 +65,7 @@ def _validate_count_result(
     result: RegressionResult,
 ) -> Any:
     """지원되는 계수형 회귀결과인지 확인한다."""
-    if result.model_type not in {
-        "poisson",
-        "negative_binomial",
-        "zero_inflated_poisson",
-        "zero_inflated_negative_binomial",
-    }:
+    if result.model_type not in _COUNT_DIAGNOSTIC_MODELS:
         raise ValueError(
             "계수형 회귀 진단은 Poisson 또는 Negative Binomial 결과에만 적용할 수 있습니다."
         )
@@ -62,32 +76,43 @@ def _validate_count_result(
     return result.raw_result
 
 
+def _count_diagnostic_arrays(
+    result: RegressionResult,
+) -> tuple[np.ndarray, np.ndarray, list[object], np.ndarray, list[str]]:
+    fitted = _validate_count_result(result)
+    diagnostics = result.metadata.get("diagnostics", {})
+
+    if diagnostics:
+        actual = np.asarray(diagnostics["endog"], dtype=float)
+        predicted = np.asarray(diagnostics["predicted_mean"], dtype=float)
+        row_labels = list(diagnostics.get("row_labels", range(len(actual))))
+        exog = np.asarray(diagnostics["exog"], dtype=float)
+        exog_names = [str(name) for name in diagnostics["exog_names"]]
+        return actual, predicted, row_labels, exog, exog_names
+
+    actual = np.asarray(fitted.model.endog, dtype=float)
+    predicted = np.asarray(fitted.predict(), dtype=float)
+    row_labels = getattr(fitted.model.data, "row_labels", None)
+    if row_labels is None:
+        row_labels = list(range(len(actual)))
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    raw_names = list(getattr(fitted.model, "exog_names", []))
+    predictor_count = int(exog.shape[1])
+    if len(raw_names) >= predictor_count:
+        exog_names = [str(name) for name in raw_names[:predictor_count]]
+    else:
+        exog_names = [f"x{index + 1}" for index in range(predictor_count)]
+    return actual, predicted, list(row_labels), exog, exog_names
+
+
 def _design_matrix(
     result: RegressionResult,
 ) -> tuple[np.ndarray, list[str]]:
-    """실제 설계행렬과 열 이름을 반환한다."""
-    fitted = _validate_count_result(result)
-    exog = np.asarray(
-        fitted.model.exog,
-        dtype=float,
-    )
+    """Return the design matrix and column names used for diagnostics."""
+    _, _, _, exog, names = _count_diagnostic_arrays(result)
 
     if exog.ndim != 2:
-        raise ValueError("계수형 회귀 설계행렬이 2차원이 아닙니다.")
-
-    raw_names = list(
-        getattr(
-            fitted.model,
-            "exog_names",
-            [],
-        )
-    )
-    predictor_count = int(exog.shape[1])
-
-    if len(raw_names) >= predictor_count:
-        names = [str(name) for name in raw_names[:predictor_count]]
-    else:
-        names = [f"x{index + 1}" for index in range(predictor_count)]
+        raise ValueError("count regression design matrix must be two-dimensional.")
 
     return exog, names
 
@@ -159,10 +184,11 @@ def _nb2_alpha(
     if result.model_type not in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
         return 0.0
 
-    alpha = result.fit_statistics.get("alpha")
+    alpha = result.fit_statistics.get("alpha", result.fit_statistics.get("dispersion_alpha"))
     if alpha is None:
         return 0.0
 
@@ -260,14 +286,7 @@ def calculate_count_predictions(
 ]:
     """예측성능과 사례별 잔차·영향력 지표를 계산한다."""
     fitted = _validate_count_result(result)
-    actual = np.asarray(
-        fitted.model.endog,
-        dtype=float,
-    )
-    predicted = np.asarray(
-        fitted.predict(),
-        dtype=float,
-    )
+    actual, predicted, row_labels, _, _ = _count_diagnostic_arrays(result)
 
     if actual.shape[0] != predicted.shape[0]:
         raise ValueError("실제 관측치와 예측값의 길이가 일치하지 않습니다.")
@@ -297,6 +316,7 @@ def calculate_count_predictions(
     if result.model_type in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
         deviance_residual = _negative_binomial_deviance_residuals(
             actual,
@@ -327,7 +347,7 @@ def calculate_count_predictions(
             fitted.predict(which="prob-zero"),
             dtype=float,
         )
-    elif result.model_type == "negative_binomial":
+    elif result.model_type == "negative_binomial" or result.model_type in _MIXED_NEGATIVE_BINOMIAL_MODELS:
         predicted_zero_probability = (1 + alpha * predicted) ** (-1 / alpha)
     else:
         predicted_zero_probability = np.exp(-predicted)
@@ -344,14 +364,6 @@ def calculate_count_predictions(
         predicted_zero_proportion=(predicted_zero_proportion),
         zero_proportion_difference=float(observed_zero_proportion - predicted_zero_proportion),
     )
-
-    row_labels = getattr(
-        fitted.model.data,
-        "row_labels",
-        None,
-    )
-    if row_labels is None:
-        row_labels = list(range(sample_size))
 
     observations = pd.DataFrame(
         {
@@ -387,6 +399,11 @@ def build_count_diagnostics(
     flagged_count = int(observations["any_diagnostic_flag"].sum())
     extreme_residual_count = int(observations["pearson_residual_flag"].sum())
     high_leverage_count = int(observations["leverage_flag"].sum())
+    residual_degrees_of_freedom = max(sample_size - parameter_count, 1)
+    pearson_dispersion_ratio = float(
+        np.sum(observations["pearson_residual"].to_numpy(dtype=float) ** 2)
+        / residual_degrees_of_freedom
+    )
 
     warnings: list[str] = []
 
@@ -427,6 +444,8 @@ def build_count_diagnostics(
         "model_type": result.model_type,
         "sample_size": sample_size,
         "parameter_count": parameter_count,
+        "residual_degrees_of_freedom": residual_degrees_of_freedom,
+        "pearson_dispersion_ratio": pearson_dispersion_ratio,
         "mean_absolute_error": (metrics.mean_absolute_error),
         "root_mean_squared_error": (metrics.root_mean_squared_error),
         "mean_error": metrics.mean_error,
@@ -445,8 +464,11 @@ def build_count_diagnostics(
     elif result.model_type in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
-        summary["alpha"] = result.fit_statistics.get("alpha")
+        summary["alpha"] = result.fit_statistics.get(
+            "alpha", result.fit_statistics.get("dispersion_alpha")
+        )
     else:
         summary["inflation_model"] = result.metadata.get("inflation_model")
 

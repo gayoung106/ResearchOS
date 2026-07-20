@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.statistics.diagnostics.count import build_count_diagnostics
 from src.statistics.regression.mixed_count import fit_mixed_poisson_random_intercept
 from src.statistics.regression.selector import fit_regression_by_level
 
@@ -23,6 +24,11 @@ def test_fit_mixed_poisson_random_intercept_returns_irr() -> None:
     assert result.fit_statistics["group_count"] == 12
     assert result.fit_statistics["random_intercept_variance"] >= 0
     assert all(coefficient.exponentiated_estimate > 0 for coefficient in result.coefficients)
+    assert "diagnostics" in result.metadata
+
+    diagnostics = build_count_diagnostics(result)
+    assert diagnostics.model_type == result.model_type
+    assert len(diagnostics.observations) == result.sample_size
 
 
 def test_selector_routes_mixed_poisson_random_intercept() -> None:

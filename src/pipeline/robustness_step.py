@@ -175,3 +175,74 @@ class MixedEffectsRobustnessStep(PipelineStep):
             warnings=report.warnings,
             metadata=report.summary,
         )
+
+
+class GLMMRobustnessStep(PipelineStep):
+    """Optimizer sensitivity robustness step for non-Gaussian GLMMs."""
+
+    supported_model_types = {
+        "mixed_binary_logit_random_intercept",
+        "mixed_binary_logit_random_slope",
+        "mixed_binary_logit_three_level",
+        "mixed_poisson_random_intercept",
+        "mixed_poisson_random_slope",
+        "mixed_poisson_three_level",
+        "mixed_negative_binomial_random_intercept",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
+    }
+
+    def __init__(
+        self,
+        runtime: PipelineRuntime,
+        *,
+        model_id: str,
+        optimizers: tuple[str, ...] = ("BFGS",),
+        order: int = 110,
+    ) -> None:
+        super().__init__(name="11_robustness_analysis", order=order, required=False)
+        self.runtime = runtime
+        self.model_id = model_id
+        self.optimizers = optimizers
+
+    def should_run(self, context: ResearchContext) -> bool:
+        key = f"regression_result:{self.model_id}"
+        return key in self.runtime.artifacts and self.runtime.artifacts[key].model_type in self.supported_model_types
+
+    def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
+        from src.statistics.robustness.glmm import (
+            build_glmm_robustness_report,
+            glmm_coefficient_comparison_to_dataframe,
+            glmm_model_comparison_to_dataframe,
+            glmm_robustness_summary_to_dataframe,
+            glmm_stability_summary_to_dataframe,
+        )
+
+        baseline = self.runtime.get_artifact(f"regression_result:{self.model_id}")
+        report = build_glmm_robustness_report(
+            self.runtime.require_dataframe(),
+            baseline_result=baseline,
+            optimizers=self.optimizers,
+        )
+        self.runtime.set_artifact(f"robustness_report:{self.model_id}", report)
+
+        output_dir = working_directory / "result" / "11_robustness" / self.model_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        paths = {
+            "coefficient": output_dir / "coefficient_comparison.xlsx",
+            "stability": output_dir / "term_stability.xlsx",
+            "model": output_dir / "model_comparison.xlsx",
+            "summary": output_dir / "robustness_summary.xlsx",
+        }
+        glmm_coefficient_comparison_to_dataframe(report).to_excel(paths["coefficient"], index=False)
+        glmm_stability_summary_to_dataframe(report).to_excel(paths["stability"], index=False)
+        glmm_model_comparison_to_dataframe(report).to_excel(paths["model"], index=False)
+        glmm_robustness_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )

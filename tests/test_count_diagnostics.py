@@ -112,6 +112,8 @@ def test_build_poisson_diagnostics() -> None:
     assert report.model_type == "poisson"
     assert report.sample_size == 300
     assert report.summary["root_mean_squared_error"] >= 0
+    assert report.summary["pearson_dispersion_ratio"] >= 0
+    assert report.summary["residual_degrees_of_freedom"] > 0
     assert "dispersion_ratio" in report.summary
 
 
@@ -125,6 +127,7 @@ def test_build_negative_binomial_diagnostics() -> None:
     assert report.model_type == "negative_binomial"
     assert report.sample_size == 500
     assert report.summary["alpha"] > 0
+    assert report.summary["pearson_dispersion_ratio"] >= 0
     assert len(report.observations) == 500
 
 

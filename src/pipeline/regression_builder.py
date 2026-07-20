@@ -1,4 +1,4 @@
-"""회귀분석 관련 전체 단계를 조건부 등록하는 빌더."""
+﻿"""?뚭?遺꾩꽍 愿???꾩껜 ?④퀎瑜?議곌굔遺 ?깅줉?섎뒗 鍮뚮뜑."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from src.pipeline.research_audit_step import (
     ResearchAuditStep,
 )
 from src.pipeline.robustness_step import (
+    GLMMRobustnessStep,
     MixedEffectsRobustnessStep,
     OLSRobustnessStep,
 )
@@ -43,7 +44,7 @@ from src.pipeline.runtime import PipelineRuntime
 
 @dataclass(slots=True)
 class RegressionRegistration:
-    """회귀 파이프라인 등록 결과."""
+    """?뚭? ?뚯씠?꾨씪???깅줉 寃곌낵."""
 
     registered: bool
     model_id: str | None
@@ -75,7 +76,7 @@ def _resolve_dependent_measurement_level(
 def _collect_predictors(
     analysis_plan: AnalysisPlan,
 ) -> list[str]:
-    """고정효과를 제외한 일반 설명변수를 수집한다."""
+    """怨좎젙?④낵瑜??쒖쇅???쇰컲 ?ㅻ챸蹂?섎? ?섏쭛?쒕떎."""
     groups = analysis_plan.variables
 
     return list(
@@ -86,7 +87,7 @@ def _collect_predictors(
 def _collect_fixed_effects(
     analysis_plan: AnalysisPlan,
 ) -> list[str]:
-    """고정효과 변수를 중복 없이 수집한다."""
+    """怨좎젙?④낵 蹂?섎? 以묐났 ?놁씠 ?섏쭛?쒕떎."""
     return list(dict.fromkeys(analysis_plan.variables.fixed_effects))
 
 
@@ -167,7 +168,7 @@ def register_regression_pipeline(
     visualization_order: int = 150,
     audit_order: int = 160,
 ) -> RegressionRegistration:
-    """설정에 따라 회귀분석 관련 전체 단계를 등록한다."""
+    """?ㅼ젙???곕씪 ?뚭?遺꾩꽍 愿???꾩껜 ?④퀎瑜??깅줉?쒕떎."""
     warnings: list[str] = []
 
     def not_registered(
@@ -198,15 +199,15 @@ def register_regression_pipeline(
         )
 
     if not (analysis_plan.analyses.regression.enabled):
-        return not_registered("회귀분석 설정이 비활성화되어 있습니다.")
+        return not_registered("?뚭?遺꾩꽍 ?ㅼ젙??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎.")
 
     dependent_variables = analysis_plan.variables.dependent
 
     if not dependent_variables:
-        return not_registered("종속변수가 지정되지 않았습니다.")
+        return not_registered("醫낆냽蹂?섍? 吏?뺣릺吏 ?딆븯?듬땲??")
 
     if len(dependent_variables) > 1:
-        return not_registered("현재 기본 회귀 빌더는 종속변수 1개만 지원합니다.")
+        return not_registered("?꾩옱 湲곕낯 ?뚭? 鍮뚮뜑??醫낆냽蹂??1媛쒕쭔 吏?먰빀?덈떎.")
 
     dependent_variable = dependent_variables[0]
     independent_variables = _collect_predictors(analysis_plan)
@@ -214,7 +215,7 @@ def register_regression_pipeline(
 
     if not independent_variables:
         return not_registered(
-            "회귀분석에 사용할 독립변수가 없습니다.",
+            "?뚭?遺꾩꽍???ъ슜???낅┰蹂?섍? ?놁뒿?덈떎.",
             dependent_variable=(dependent_variable),
             fixed_effects=fixed_effects,
         )
@@ -222,7 +223,7 @@ def register_regression_pipeline(
     duplicated = [variable for variable in fixed_effects if variable in independent_variables]
     if duplicated:
         return not_registered(
-            "고정효과 변수가 일반 설명변수에도 중복 지정되었습니다: " + ", ".join(duplicated),
+            "怨좎젙?④낵 蹂?섍? ?쇰컲 ?ㅻ챸蹂?섏뿉??以묐났 吏?뺣릺?덉뒿?덈떎: " + ", ".join(duplicated),
             dependent_variable=(dependent_variable),
             independent_variables=(independent_variables),
             fixed_effects=fixed_effects,
@@ -233,8 +234,8 @@ def register_regression_pipeline(
     ]
     if missing_fixed_effect_definitions:
         return not_registered(
-            "고정효과 변수의 variable_map "
-            "정의가 없습니다: " + ", ".join(missing_fixed_effect_definitions),
+            "怨좎젙?④낵 蹂?섏쓽 variable_map "
+            "?뺤쓽媛 ?놁뒿?덈떎: " + ", ".join(missing_fixed_effect_definitions),
             dependent_variable=(dependent_variable),
             independent_variables=(independent_variables),
             fixed_effects=fixed_effects,
@@ -275,7 +276,7 @@ def register_regression_pipeline(
             count_distribution = "negative_binomial"
         if count_distribution not in {"poisson", "negative_binomial"}:
             return not_registered(
-                "계수형 혼합모형의 count_distribution은 poisson 또는 negative_binomial이어야 합니다.",
+                "怨꾩닔???쇳빀紐⑦삎??count_distribution? poisson ?먮뒗 negative_binomial?댁뼱???⑸땲??",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -284,7 +285,7 @@ def register_regression_pipeline(
         if level2_group or level3_group:
             if not level2_group or not level3_group:
                 return not_registered(
-                    "3수준 혼합효과 모형에는 level2_group과 level3_group을 모두 지정해야 합니다.",
+                    "3?섏? ?쇳빀?④낵 紐⑦삎?먮뒗 level2_group怨?level3_group??紐⑤몢 吏?뺥빐???⑸땲??",
                     dependent_variable=dependent_variable,
                     independent_variables=independent_variables,
                     fixed_effects=fixed_effects,
@@ -324,7 +325,7 @@ def register_regression_pipeline(
         )
         if covariance_structure not in {"correlated", "diagonal"}:
             return not_registered(
-                "random_effect_covariance는 correlated 또는 diagonal이어야 합니다.",
+                "random_effect_covariance??correlated ?먮뒗 diagonal?댁뼱???⑸땲??",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -339,7 +340,7 @@ def register_regression_pipeline(
 
         if measurement_level not in {"continuous", "binary", "count"}:
             return not_registered(
-                "혼합효과 모형은 연속형, 이항 또는 계수형 종속변수를 지원합니다.",
+                "?쇳빀?④낵 紐⑦삎? ?곗냽?? ?댄빆 ?먮뒗 怨꾩닔??醫낆냽蹂?섎? 吏?먰빀?덈떎.",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -348,7 +349,7 @@ def register_regression_pipeline(
 
         if group_variable is None:
             return not_registered(
-                "혼합효과 모형의 그룹변수가 지정되지 않았습니다.",
+                "?쇳빀?④낵 紐⑦삎??洹몃９蹂?섍? 吏?뺣릺吏 ?딆븯?듬땲??",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -368,7 +369,7 @@ def register_regression_pipeline(
         ]
         if missing_group_definitions:
             return not_registered(
-                "그룹변수의 variable_map 정의가 없습니다: " + ", ".join(missing_group_definitions),
+                "洹몃９蹂?섏쓽 variable_map ?뺤쓽媛 ?놁뒿?덈떎: " + ", ".join(missing_group_definitions),
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -377,7 +378,7 @@ def register_regression_pipeline(
 
         if group_variable == dependent_variable or group_variable in independent_variables:
             return not_registered(
-                "그룹변수는 종속변수 또는 일반 설명변수와 중복될 수 없습니다.",
+                "洹몃９蹂?섎뒗 醫낆냽蹂???먮뒗 ?쇰컲 ?ㅻ챸蹂?섏? 以묐났?????놁뒿?덈떎.",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -389,7 +390,7 @@ def register_regression_pipeline(
         ]
         if missing_random_slopes:
             return not_registered(
-                "Random Slope 변수는 일반 설명변수에 포함되어야 합니다: "
+                "Random Slope 蹂?섎뒗 ?쇰컲 ?ㅻ챸蹂?섏뿉 ?ы븿?섏뼱???⑸땲?? "
                 + ", ".join(missing_random_slopes),
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
@@ -399,7 +400,7 @@ def register_regression_pipeline(
 
         if fixed_effects:
             return not_registered(
-                "현재 혼합효과 빌더는 별도 고정효과 변수 지정을 지원하지 않습니다.",
+                "?꾩옱 ?쇳빀?④낵 鍮뚮뜑??蹂꾨룄 怨좎젙?④낵 蹂??吏?뺤쓣 吏?먰븯吏 ?딆뒿?덈떎.",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -410,7 +411,7 @@ def register_regression_pipeline(
 
     if model_type is None:
         return not_registered(
-            f"지원되지 않거나 미확정인 종속변수 측정수준입니다: {measurement_level}",
+            f"吏?먮릺吏 ?딄굅??誘명솗?뺤씤 醫낆냽蹂??痢≪젙?섏??낅땲?? {measurement_level}",
             dependent_variable=(dependent_variable),
             independent_variables=(independent_variables),
             fixed_effects=fixed_effects,
@@ -448,8 +449,32 @@ def register_regression_pipeline(
         "mixed_negative_binomial_three_level",
     }:
         orchestrator.register(
+            RegressionDiagnosticsStep(runtime, model_id=model_id, order=diagnostics_order)
+        )
+        diagnostics_registered = True
+        orchestrator.register(
             RegressionEffectSizeStep(runtime, model_id=model_id, order=effect_size_order)
         )
+        robustness = analysis_plan.analyses.robustness
+        if robustness.enabled:
+            options = _robustness_options(analysis_plan)
+            configured_optimizers = options.get(
+                "mixed_glmm_optimizers",
+                [multilevel_options.get("optimizer", "BFGS")],
+            )
+            optimizers = tuple(
+                str(item).strip() for item in configured_optimizers if str(item).strip()
+            )
+            orchestrator.register(
+                GLMMRobustnessStep(
+                    runtime,
+                    model_id=model_id,
+                    optimizers=optimizers or ("BFGS",),
+                    order=robustness_order,
+                )
+            )
+            robustness_registered = True
+
         orchestrator.register(
             RegressionReportingStep(runtime, model_id=model_id, order=reporting_order)
         )
@@ -466,8 +491,8 @@ def register_regression_pipeline(
             independent_variables=independent_variables,
             fixed_effects=fixed_effects,
             group_variable=group_variable,
-            diagnostics_registered=False,
-            robustness_registered=False,
+            diagnostics_registered=diagnostics_registered,
+            robustness_registered=robustness_registered,
             advanced_robustness_registered=False,
             effect_size_registered=True,
             reporting_registered=True,
@@ -583,7 +608,7 @@ def register_regression_pipeline(
         )
         diagnostics_registered = True
     else:
-        warnings.append("현재 자동 진단 단계가 지원하지 않는 회귀모형입니다.")
+        warnings.append("?꾩옱 ?먮룞 吏꾨떒 ?④퀎媛 吏?먰븯吏 ?딅뒗 ?뚭?紐⑦삎?낅땲??")
 
     if model_type == "ols":
         robustness = analysis_plan.analyses.robustness
@@ -636,11 +661,11 @@ def register_regression_pipeline(
                 )
                 advanced_robustness_registered = True
             else:
-                warnings.append("고급 강건성 분석이 비활성화되어 있습니다.")
+                warnings.append("怨좉툒 媛뺢굔??遺꾩꽍??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎.")
         else:
-            warnings.append("강건성 분석 설정이 비활성화되어 있습니다.")
+            warnings.append("媛뺢굔??遺꾩꽍 ?ㅼ젙??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎.")
     else:
-        warnings.append("현재 자동 강건성 단계는 OLS 모형만 지원합니다.")
+        warnings.append("?꾩옱 ?먮룞 媛뺢굔???④퀎??OLS 紐⑦삎留?吏?먰빀?덈떎.")
 
     orchestrator.register(
         RegressionEffectSizeStep(
@@ -689,3 +714,4 @@ def register_regression_pipeline(
         audit_registered=True,
         warnings=warnings,
     )
+

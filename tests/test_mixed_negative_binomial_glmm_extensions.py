@@ -11,6 +11,7 @@ from src.pipeline.orchestrator import ResearchOrchestrator
 from src.pipeline.regression_builder import register_regression_pipeline
 from src.pipeline.runtime import PipelineRuntime
 from src.reporting.regression import build_regression_publication_report
+from src.statistics.diagnostics.count import build_count_diagnostics
 from src.statistics.effects.regression import build_regression_effect_size_report
 from src.statistics.regression.mixed_negative_binomial import (
     fit_mixed_negative_binomial_random_slope,
@@ -72,6 +73,7 @@ def test_fit_mixed_negative_binomial_random_slope_integrates_outputs(tmp_path: P
         quadrature_points=5,
         max_iterations=90,
     )
+    diagnostics_report = build_count_diagnostics(result)
     effect_report = build_regression_effect_size_report(result)
     publication_report = build_regression_publication_report(result, effect_report)
     visualization_report = build_regression_visualizations(result, output_directory=tmp_path)
@@ -89,6 +91,10 @@ def test_fit_mixed_negative_binomial_random_slope_integrates_outputs(tmp_path: P
     assert result.fit_statistics["random_slope_variance"] >= 0
     assert len(result.metadata["random_intercepts"]) == 6
     assert len(result.metadata["random_slopes"]) == 6
+    assert diagnostics_report.model_type == result.model_type
+    assert diagnostics_report.summary["alpha"] > 0
+    assert diagnostics_report.summary["pearson_dispersion_ratio"] >= 0
+    assert len(diagnostics_report.observations) == result.sample_size
     assert any(item.effect_type == "incidence_rate_ratio" for item in effect_report.effects)
     assert publication_report.model_type == result.model_type
     assert {Path(path).name for path in visualization_report.output_files} == {
@@ -168,6 +174,7 @@ def test_builder_registers_mixed_negative_binomial_random_slope_pipeline(tmp_pat
 
     assert registration.registered is True
     assert registration.model_type == "mixed_negative_binomial_random_slope"
+    assert registration.diagnostics_registered is True
     assert registration.effect_size_registered is True
     assert registration.reporting_registered is True
     assert registration.visualization_registered is True

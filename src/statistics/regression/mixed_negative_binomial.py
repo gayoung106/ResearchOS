@@ -263,6 +263,10 @@ def fit_mixed_negative_binomial_random_intercept(
         group_indices=group_indices,
         group_names=group_names,
     )
+    random_intercept_values = np.asarray(
+        [random_effects[str(group)] for group in groups], dtype=float
+    )
+    predicted_mean = np.exp(np.clip(x @ beta + random_intercept_values, -30, 30))
 
     warnings: list[str] = []
     if not fitted.success:
@@ -300,6 +304,13 @@ def fit_mixed_negative_binomial_random_intercept(
             "estimation_method": "adaptive_gauss_hermite_quadrature",
             "distribution": "negative_binomial_2",
             "random_effects": random_effects,
+            "diagnostics": {
+                "endog": y.tolist(),
+                "predicted_mean": predicted_mean.tolist(),
+                "exog": x.tolist(),
+                "exog_names": fixed_names,
+                "row_labels": outcome.index.tolist(),
+            },
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },
@@ -419,6 +430,13 @@ def fit_mixed_negative_binomial_random_slope(
         group_indices=group_indices,
         group_names=group_names,
     )
+    random_intercept_values = np.asarray(
+        [random_intercepts[str(group)] for group in groups], dtype=float
+    )
+    random_slope_values = np.asarray([random_slopes[str(group)] for group in groups], dtype=float)
+    predicted_mean = np.exp(
+        np.clip(x @ beta + random_intercept_values + random_slope_values * z, -30, 30)
+    )
 
     warnings: list[str] = []
     if not fitted.success:
@@ -462,6 +480,13 @@ def fit_mixed_negative_binomial_random_slope(
             "random_intercepts": random_intercepts,
             "random_slopes": random_slopes,
             "random_effects": random_intercepts,
+            "diagnostics": {
+                "endog": y.tolist(),
+                "predicted_mean": predicted_mean.tolist(),
+                "exog": x.tolist(),
+                "exog_names": fixed_names,
+                "row_labels": outcome.index.tolist(),
+            },
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },
@@ -604,6 +629,13 @@ def fit_mixed_negative_binomial_three_level(
         group_names=level2_names,
     )
     level3_random_effects = {name: 0.0 for name in level3_names}
+    level2_random_values = np.asarray(
+        [level2_random_effects[str(group)] for group in groups[level2_group]], dtype=float
+    )
+    level3_random_values = np.asarray(
+        [level3_random_effects[str(group)] for group in groups[level3_group]], dtype=float
+    )
+    predicted_mean = np.exp(np.clip(x @ beta + level2_random_values + level3_random_values, -30, 30))
 
     warnings: list[str] = []
     if not fitted.success:
@@ -653,6 +685,13 @@ def fit_mixed_negative_binomial_three_level(
             "level2_random_effects": level2_random_effects,
             "level3_random_effects": level3_random_effects,
             "random_effects": level2_random_effects,
+            "diagnostics": {
+                "endog": y.tolist(),
+                "predicted_mean": predicted_mean.tolist(),
+                "exog": x.tolist(),
+                "exog_names": fixed_names,
+                "row_labels": outcome.index.tolist(),
+            },
             **design.metadata,
             "design_matrix_columns": fixed_names,
         },

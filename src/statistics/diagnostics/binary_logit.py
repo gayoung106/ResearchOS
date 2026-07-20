@@ -13,6 +13,13 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from src.statistics.diagnostics.ols import MulticollinearityResult
 from src.statistics.regression.base import RegressionResult
 
+_BINARY_DIAGNOSTIC_MODELS = {
+    "binary_logit",
+    "mixed_binary_logit_random_intercept",
+    "mixed_binary_logit_random_slope",
+    "mixed_binary_logit_three_level",
+}
+
 
 @dataclass(slots=True)
 class BinaryClassificationMetrics:
@@ -54,7 +61,7 @@ def _validate_binary_logit_result(
     result: RegressionResult,
 ) -> Any:
     """Binary Logit 결과인지 확인한다."""
-    if result.model_type != "binary_logit":
+    if result.model_type not in _BINARY_DIAGNOSTIC_MODELS:
         raise ValueError(
             "Binary Logit 진단은 model_type='binary_logit' 결과에만 적용할 수 있습니다."
         )
@@ -63,6 +70,30 @@ def _validate_binary_logit_result(
         raise ValueError("원본 statsmodels 결과 객체가 없습니다.")
 
     return result.raw_result
+
+
+def _binary_diagnostic_arrays(
+    result: RegressionResult,
+) -> tuple[np.ndarray, np.ndarray, list[object], np.ndarray, list[str]]:
+    fitted = _validate_binary_logit_result(result)
+    diagnostics = result.metadata.get("diagnostics", {})
+
+    if diagnostics:
+        actual = np.asarray(diagnostics["endog"], dtype=int)
+        probabilities = np.asarray(diagnostics["predicted_probability"], dtype=float)
+        row_labels = list(diagnostics.get("row_labels", range(len(actual))))
+        exog = np.asarray(diagnostics["exog"], dtype=float)
+        exog_names = [str(name) for name in diagnostics["exog_names"]]
+        return actual, probabilities, row_labels, exog, exog_names
+
+    actual = np.asarray(fitted.model.endog, dtype=int)
+    probabilities = np.asarray(fitted.predict(), dtype=float)
+    row_labels = getattr(fitted.model.data, "row_labels", None)
+    if row_labels is None:
+        row_labels = list(range(len(actual)))
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    return actual, probabilities, list(row_labels), exog, exog_names
 
 
 def _safe_divide(
@@ -74,6 +105,34 @@ def _safe_divide(
         return None
 
     return float(numerator / denominator)
+
+
+def _expected_calibration_error(
+    actual: np.ndarray,
+    probabilities: np.ndarray,
+    *,
+    bin_count: int = 10,
+) -> float:
+    bins = np.linspace(0.0, 1.0, bin_count + 1)
+    total = len(actual)
+    error = 0.0
+
+    for index in range(bin_count):
+        lower = bins[index]
+        upper = bins[index + 1]
+        if index == bin_count - 1:
+            mask = (probabilities >= lower) & (probabilities <= upper)
+        else:
+            mask = (probabilities >= lower) & (probabilities < upper)
+
+        if not mask.any():
+            continue
+
+        observed_rate = float(np.mean(actual[mask]))
+        predicted_rate = float(np.mean(probabilities[mask]))
+        error += float(mask.sum() / total) * abs(observed_rate - predicted_rate)
+
+    return float(error)
 
 
 def _calculate_roc_auc(
@@ -105,13 +164,7 @@ def calculate_binary_multicollinearity(
     result: RegressionResult,
 ) -> list[MulticollinearityResult]:
     """Binary Logit 설계행렬의 VIF를 계산한다."""
-    fitted = _validate_binary_logit_result(result)
-
-    exog = np.asarray(
-        fitted.model.exog,
-        dtype=float,
-    )
-    exog_names = list(fitted.model.exog_names)
+    _, _, _, exog, exog_names = _binary_diagnostic_arrays(result)
 
     output: list[MulticollinearityResult] = []
 
@@ -173,16 +226,7 @@ def calculate_binary_classification_metrics(
     if not 0 < threshold < 1:
         raise ValueError("분류 임계값은 0과 1 사이여야 합니다.")
 
-    fitted = _validate_binary_logit_result(result)
-
-    actual = np.asarray(
-        fitted.model.endog,
-        dtype=int,
-    )
-    probabilities = np.asarray(
-        fitted.predict(),
-        dtype=float,
-    )
+    actual, probabilities, row_labels, _, _ = _binary_diagnostic_arrays(result)
     predicted = (probabilities >= threshold).astype(int)
 
     true_positive = int(((actual == 1) & (predicted == 1)).sum())
@@ -218,14 +262,6 @@ def calculate_binary_classification_metrics(
         probabilities,
     )
     brier_score = float(np.mean((probabilities - actual) ** 2))
-
-    row_labels = getattr(
-        fitted.model.data,
-        "row_labels",
-        None,
-    )
-    if row_labels is None:
-        row_labels = list(range(len(actual)))
 
     predictions = pd.DataFrame(
         {
@@ -264,7 +300,7 @@ def build_binary_logit_diagnostics(
     threshold: float = 0.5,
 ) -> BinaryLogitDiagnosticsReport:
     """Binary Logit 진단 보고서를 생성한다."""
-    fitted = _validate_binary_logit_result(result)
+    _validate_binary_logit_result(result)
 
     multicollinearity = calculate_binary_multicollinearity(result)
     (
@@ -275,13 +311,10 @@ def build_binary_logit_diagnostics(
         threshold=threshold,
     )
 
-    sample_size = int(fitted.nobs)
-    parameter_count = int(len(fitted.params))
+    sample_size = result.sample_size
+    parameter_count = len(result.coefficients)
 
-    actual = np.asarray(
-        fitted.model.endog,
-        dtype=int,
-    )
+    actual = predictions["actual"].to_numpy(dtype=int)
     event_count = int((actual == 1).sum())
     non_event_count = int((actual == 0).sum())
     events_per_parameter = float(
@@ -304,7 +337,9 @@ def build_binary_logit_diagnostics(
     if events_per_parameter < 10:
         warnings.append("사건 또는 비사건 수 대비 추정 모수 수가 부족할 수 있습니다.")
 
-    probabilities = predictions["predicted_probability"]
+    probabilities = predictions["predicted_probability"].to_numpy(dtype=float)
+    calibration_mean_error = float(np.mean(actual - probabilities))
+    expected_calibration_error = _expected_calibration_error(actual, probabilities)
 
     extreme_probability_count = int(((probabilities < 0.01) | (probabilities > 0.99)).sum())
     if extreme_probability_count:
@@ -334,6 +369,8 @@ def build_binary_logit_diagnostics(
         ),
         "roc_auc": classification_metrics.roc_auc,
         "brier_score": (classification_metrics.brier_score),
+        "calibration_mean_error": calibration_mean_error,
+        "expected_calibration_error": expected_calibration_error,
         "accuracy": classification_metrics.accuracy,
         "sensitivity": (classification_metrics.sensitivity),
         "specificity": (classification_metrics.specificity),

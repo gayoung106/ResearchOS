@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from src.statistics.diagnostics.binary_logit import build_binary_logit_diagnostics
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
 )
@@ -30,6 +31,11 @@ def test_fit_mixed_binary_logit_random_intercept_returns_odds_ratios() -> None:
     assert x.exponentiated_estimate is not None
     assert x.estimate > 0
     assert len(result.metadata["random_effects"]) == 10
+    assert "diagnostics" in result.metadata
+
+    diagnostics = build_binary_logit_diagnostics(result)
+    assert diagnostics.sample_size == result.sample_size
+    assert len(diagnostics.predictions) == result.sample_size
 
 
 def test_selector_routes_explicit_mixed_binary_logit() -> None:

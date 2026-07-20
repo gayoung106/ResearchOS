@@ -102,7 +102,12 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type == "binary_logit":
+        if result.model_type in {
+            "binary_logit",
+            "mixed_binary_logit_random_intercept",
+            "mixed_binary_logit_random_slope",
+            "mixed_binary_logit_three_level",
+        }:
             return self._run_binary_logit(
                 result,
                 output_dir,
@@ -119,6 +124,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             "negative_binomial",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
+            "mixed_poisson_random_intercept",
+            "mixed_poisson_random_slope",
+            "mixed_poisson_three_level",
+            "mixed_negative_binomial_random_intercept",
+            "mixed_negative_binomial_random_slope",
+            "mixed_negative_binomial_three_level",
         }:
             return self._run_count(
                 result,
