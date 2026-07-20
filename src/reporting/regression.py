@@ -287,7 +287,10 @@ def write_korean_results_narrative(
         "mixed_poisson_random_slope": "Random Slope 혼합 포아송 회귀분석",
         "mixed_poisson_three_level": "3수준 혼합 포아송 회귀분석",
         "mixed_negative_binomial_random_intercept": "Random Intercept 혼합 음이항 회귀분석",
+        "mixed_negative_binomial_random_slope": "Random Slope 혼합 음이항 회귀분석",
+        "mixed_negative_binomial_three_level": "3수준 혼합 음이항 회귀분석",
         "mixed_random_slope": "Random Slope 혼합효과모형",
+        "mixed_three_level": "3수준 혼합효과모형",
     }.get(
         regression_result.model_type,
         regression_result.model_type,

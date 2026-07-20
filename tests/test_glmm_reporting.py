@@ -96,3 +96,30 @@ def test_reporting_narrative_describes_three_level_glmm_structure() -> None:
     assert report.metadata["level2_group_count"] == 9
     assert "3-level GLMM included 9 cluster groups nested within 3 region groups." in report.narrative
     assert "Variance partition coefficients were Level 2=0.600 and Level 3=0.400." in report.narrative
+
+
+def test_reporting_labels_three_level_negative_binomial_glmm() -> None:
+    result = RegressionResult(
+        model_id="main_model",
+        model_type="mixed_negative_binomial_three_level",
+        dependent_variable="y",
+        independent_variables=["x"],
+        sample_size=120,
+        coefficients=[_coefficient()],
+        fit_statistics={
+            "level2_group_count": 10,
+            "level3_group_count": 4,
+            "level2_vpc": 0.55,
+            "level3_vpc": 0.35,
+            "dispersion_alpha": 0.7,
+        },
+        converged=True,
+        standard_error_type="maximum_likelihood_hessian",
+        metadata={"level2_group": "classroom", "level3_group": "school"},
+        raw_result=object(),
+    )
+
+    report = build_regression_publication_report(result, _effect_report(result.model_type))
+
+    assert "3-level GLMM included 10 classroom groups nested within 4 school groups." in report.narrative
+    assert report.metadata["level3_group"] == "school"
