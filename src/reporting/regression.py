@@ -294,6 +294,7 @@ def write_korean_results_narrative(
         "binary_logit": "이항 로지스틱 회귀분석",
         "log_binomial": "Log-binomial regression",
         "piecewise_exponential": "Piecewise exponential regression",
+        "discrete_time_hazard": "Discrete-time hazard regression",
         "exponential_aft": "Exponential AFT regression",
         "loglogistic_aft": "Log-logistic AFT regression",
         "lognormal_aft": "Log-normal AFT regression",
@@ -445,6 +446,15 @@ def write_korean_results_narrative(
             effect_text = (
                 f"HR={hazard_ratio:.3f}"
                 if hazard_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
+        elif regression_result.model_type == "discrete_time_hazard":
+            hazard_effect = effect_lookup.get((coefficient.term, "hazard_odds_ratio"))
+            if hazard_effect is None:
+                hazard_effect = effect_lookup.get((coefficient.term, "discrete_hazard_ratio"))
+            effect_text = (
+                f"DHR={hazard_effect:.3f}"
+                if hazard_effect is not None
                 else f"B={coefficient.estimate:.3f}"
             )
         elif regression_result.model_type in {"exponential_aft", "loglogistic_aft", "lognormal_aft", "weibull_aft"}:
@@ -793,6 +803,27 @@ def write_korean_results_narrative(
         if dispersion is not None:
             sentences.append(f"Poisson dispersion ratio was {float(dispersion):.3f}.")
 
+    elif regression_result.model_type == "discrete_time_hazard":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        interval_count = regression_result.fit_statistics.get("interval_count")
+        long_row_count = regression_result.fit_statistics.get("long_row_count")
+        link = regression_result.metadata.get("link")
+        brier = regression_result.fit_statistics.get("brier_score")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The discrete-time hazard model included {int(event_count)} events and "
+                f"{int(censored_count)} censored observations."
+            )
+        if interval_count is not None and long_row_count is not None:
+            sentences.append(
+                f"Person-period data used {int(long_row_count)} rows across {int(interval_count)} time intervals."
+            )
+        if link is not None:
+            sentences.append(f"The discrete-time hazard link was {link}.")
+        if brier is not None:
+            sentences.append(f"Person-period Brier score was {float(brier):.3f}.")
+
     elif regression_result.model_type == "exponential_aft":
         event_count = regression_result.fit_statistics.get("event_count")
         censored_count = regression_result.fit_statistics.get("censored_count")
@@ -1135,6 +1166,8 @@ def build_regression_publication_report(
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
     if regression_result.model_type == "piecewise_exponential":
         notes.append("Piecewise exponential models report hazard ratios from a Poisson model with log-exposure offsets.")
+    if regression_result.model_type == "discrete_time_hazard":
+        notes.append("Discrete-time hazard models report interval-specific hazard effects from person-period data.")
     if regression_result.model_type == "stratified_cox":
         notes.append("Stratified Cox models allow separate baseline hazards across strata.")
     if regression_result.model_type == "left_truncated_cox":
@@ -1232,6 +1265,8 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "interval_count": regression_result.fit_statistics.get("interval_count"),
             "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
+            "discrete_time_link": regression_result.metadata.get("link") if regression_result.model_type == "discrete_time_hazard" else None,
+            "person_period_event_rate": regression_result.fit_statistics.get("person_period_event_rate"),
             "total_exposure": regression_result.fit_statistics.get("total_exposure"),
             "cause_variable": regression_result.metadata.get("cause_variable"),
             "target_event_code": regression_result.metadata.get("target_event_code"),

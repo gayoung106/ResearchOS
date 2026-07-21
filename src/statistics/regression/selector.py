@@ -17,6 +17,7 @@ from src.statistics.regression.cox import (
     fit_left_truncated_cox,
     fit_stratified_cox,
 )
+from src.statistics.regression.discrete_time_hazard import fit_discrete_time_hazard_model
 from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
@@ -395,6 +396,24 @@ def fit_regression_by_level(
             independent_variables=independent_variables,
             fixed_effects=fixed_effects,
             breakpoints=options.get("breakpoints", options.get("interval_breakpoints")),
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+    if model_type == "discrete_time_hazard":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Discrete-time hazard regression requires event_variable.")
+        return fit_discrete_time_hazard_model(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            breakpoints=options.get("breakpoints", options.get("interval_breakpoints")),
+            link=str(options.get("link", "logit")),
             model_id=model_id,
             covariance_type=str(options.get("covariance_type", "HC3")),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),

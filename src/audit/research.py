@@ -315,6 +315,24 @@ def _regression_item(
             recommendation="Report interval cut points, duration/event coding, exposure offset, baseline hazards, and hazard ratios.",
         )
 
+    if result.model_type == "discrete_time_hazard":
+        evidence = (
+            f"Discrete-time hazard regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"intervals={result.fit_statistics.get('interval_count', 'unknown')}, "
+            f"link={result.metadata.get('link', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report interval cut points, duration/event coding, person-period construction, link function, and hazard effects.",
+        )
+
     if result.model_type == "log_binomial":
         evidence = (
             f"Log-binomial regression, N={result.sample_size}, "
@@ -1210,6 +1228,14 @@ def _effect_size_item(
             f"intervals={model_effects.get('interval_count', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios with interval-specific baseline hazards and log-exposure offsets."
+    elif getattr(report, "model_type", None) == "discrete_time_hazard":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Discrete-time hazard effects {len(report.effects)} generated; "
+            f"intervals={model_effects.get('interval_count', 'unknown')}, link={metadata.get('link', 'unknown')}"
+        )
+        recommendation = "Interpret effects on interval-specific discrete hazards from person-period data."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1474,13 +1500,15 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential", "discrete_time_hazard"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
                     "event_variable": regression_result.metadata.get("event_variable"),
                     "interval_count": regression_result.fit_statistics.get("interval_count"),
                     "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
+                    "discrete_time_link": regression_result.metadata.get("link") if regression_result.model_type == "discrete_time_hazard" else None,
+                    "person_period_event_rate": regression_result.fit_statistics.get("person_period_event_rate"),
                     "total_exposure": regression_result.fit_statistics.get("total_exposure"),
                     "cause_variable": regression_result.metadata.get("cause_variable"),
                     "target_event_code": regression_result.metadata.get("target_event_code"),

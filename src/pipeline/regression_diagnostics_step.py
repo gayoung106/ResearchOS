@@ -37,6 +37,12 @@ from src.statistics.diagnostics.cox import (
     cox_ph_checks_to_dataframe,
     cox_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.discrete_time_hazard import (
+    build_discrete_time_hazard_diagnostics,
+    discrete_time_diagnostic_summary_to_dataframe,
+    discrete_time_interval_hazards_to_dataframe,
+    discrete_time_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.exponential_aft import (
     build_exponential_aft_diagnostics,
     exponential_aft_diagnostic_summary_to_dataframe,
@@ -288,6 +294,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type == "piecewise_exponential":
             return self._run_piecewise_exponential(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "discrete_time_hazard":
+            return self._run_discrete_time_hazard(
                 result,
                 output_dir,
             )
@@ -745,6 +757,31 @@ class RegressionDiagnosticsStep(PipelineStep):
             metadata=report.summary,
         )
 
+
+    def _run_discrete_time_hazard(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_discrete_time_hazard_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "interval_hazards": output_dir / "interval_hazards.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        discrete_time_interval_hazards_to_dataframe(report).to_excel(paths["interval_hazards"], index=False)
+        discrete_time_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        discrete_time_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_exponential_aft(
         self,

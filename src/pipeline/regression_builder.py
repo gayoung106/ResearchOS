@@ -436,6 +436,15 @@ def register_regression_pipeline(
         "piecewise_exponential_regression",
         "piecewise_exponential_survival",
     }
+    discrete_time_hazard_requested = requested_estimator in {
+        "discrete_time_hazard",
+        "discrete_hazard",
+        "discrete_time_survival",
+    } or requested_model_type in {
+        "discrete_time_hazard",
+        "discrete_hazard",
+        "discrete_time_survival",
+    }
     aft_requested = requested_estimator in {"aft", "weibull_aft", "weibull-aft"} or requested_model_type in {
         "aft",
         "weibull_aft",
@@ -864,6 +873,42 @@ def register_regression_pipeline(
         multilevel_options = {
             "event_variable": event_variable,
             "breakpoints": regression_options.get("breakpoints", regression_options.get("interval_breakpoints")),
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif discrete_time_hazard_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Discrete-time hazard regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Discrete-time hazard regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Discrete-time hazard event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "discrete_time_hazard"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "breakpoints": regression_options.get("breakpoints", regression_options.get("interval_breakpoints")),
+            "link": regression_options.get("link", "logit"),
             "covariance_type": regression_options.get("covariance_type", "HC3"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
@@ -1724,6 +1769,7 @@ def register_regression_pipeline(
         "panel_fixed_effects",
         "parametric_survival_auto",
         "piecewise_exponential",
+        "discrete_time_hazard",
         "quantile_regression",
         "cox_proportional_hazards",
         "stratified_cox",

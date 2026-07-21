@@ -293,6 +293,53 @@ def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_discrete_time_hazard_effects(result: RegressionResult) -> EffectSizeReport:
+    link = str(result.metadata.get("link", "logit"))
+    effect_type = "hazard_odds_ratio" if link == "logit" else "discrete_hazard_ratio"
+    interpretation = (
+        "Odds ratio for the interval-specific discrete-time hazard."
+        if link == "logit"
+        else "Exponentiated complementary log-log coefficient for the interval-specific hazard."
+    )
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"} or coefficient.term.startswith("baseline_interval_"):
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type=effect_type,
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation=interpretation,
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "event_count": result.fit_statistics.get("event_count"),
+            "censored_count": result.fit_statistics.get("censored_count"),
+            "interval_count": result.fit_statistics.get("interval_count"),
+            "long_row_count": result.fit_statistics.get("long_row_count"),
+            "brier_score": result.fit_statistics.get("brier_score"),
+            "pseudo_r_squared_mcfadden": result.fit_statistics.get("pseudo_r_squared_mcfadden"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "duration_variable": result.metadata.get("duration_variable"),
+            "event_variable": result.metadata.get("event_variable"),
+            "link": link,
+            "interval_count": result.fit_statistics.get("interval_count"),
+        },
+    )
+
 def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -1603,6 +1650,9 @@ def build_regression_effect_size_report(
 
     if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
         return _build_cox_effects(result)
+
+    if result.model_type == "discrete_time_hazard":
+        return _build_discrete_time_hazard_effects(result)
 
     if result.model_type == "fractional_logit":
         return _build_fractional_logit_effects(result)

@@ -11,6 +11,13 @@ from src.statistics.diagnostics.binary_logit import (
     calculate_binary_multicollinearity,
     classification_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.discrete_time_hazard import (
+    DiscreteTimeHazardDiagnosticsReport,
+    build_discrete_time_hazard_diagnostics,
+    discrete_time_diagnostic_summary_to_dataframe,
+    discrete_time_interval_hazards_to_dataframe,
+    discrete_time_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.mixed_effects import (
     MixedEffectsDiagnosticsReport,
     build_mixed_effects_diagnostics,
@@ -62,6 +69,7 @@ __all__ = [
     "BinaryClassificationMetrics",
     "BinaryLogitDiagnosticsReport",
     "DiagnosticTestResult",
+    "DiscreteTimeHazardDiagnosticsReport",
     "InfluenceThresholds",
     "MulticollinearityResult",
     "run_mixed_effects_diagnostic_tests",
@@ -83,6 +91,7 @@ __all__ = [
     "binary_multicollinearity_to_dataframe",
     "binary_predictions_to_dataframe",
     "build_binary_logit_diagnostics",
+    "build_discrete_time_hazard_diagnostics",
     "build_ols_diagnostics",
     "build_piecewise_exponential_diagnostics",
     "build_ordered_logit_diagnostics",
@@ -93,6 +102,9 @@ __all__ = [
     "calculate_ordered_thresholds",
     "classification_metrics_to_dataframe",
     "diagnostic_summary_to_dataframe",
+    "discrete_time_diagnostic_summary_to_dataframe",
+    "discrete_time_interval_hazards_to_dataframe",
+    "discrete_time_residuals_to_dataframe",
     "influence_to_dataframe",
     "multicollinearity_to_dataframe",
     "ordered_classification_metrics_to_dataframe",

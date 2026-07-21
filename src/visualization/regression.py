@@ -271,6 +271,26 @@ def _plot_piecewise_exponential_survival(
     _save_figure(figure, output_path)
 
 
+def _plot_discrete_time_hazard_survival(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    frame = regression_result.metadata.get("baseline_interval_hazards", [])
+    if not frame:
+        raise ValueError("No discrete-time baseline hazard estimates are available for visualization.")
+    import pandas as pd
+
+    data = pd.DataFrame(frame)
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    axis.step(data["stop"], data["baseline_survival"], where="post")
+    axis.set_ylim(0.0, 1.02)
+    axis.set_xlabel("Time")
+    axis.set_ylabel("Baseline survival")
+    axis.set_title("Discrete-Time Hazard Baseline Survival")
+    _save_figure(figure, output_path)
+
+
 def _plot_exponential_aft_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -694,6 +714,10 @@ def build_regression_visualizations(
     elif regression_result.model_type == "piecewise_exponential":
         survival_path = output_directory / "piecewise_exponential_survival_curve.png"
         _plot_piecewise_exponential_survival(regression_result, survival_path)
+        output_files.append(str(survival_path))
+    elif regression_result.model_type == "discrete_time_hazard":
+        survival_path = output_directory / "discrete_time_hazard_survival_curve.png"
+        _plot_discrete_time_hazard_survival(regression_result, survival_path)
         output_files.append(str(survival_path))
     elif regression_result.model_type == "exponential_aft":
         survival_path = output_directory / "exponential_aft_survival_curve.png"

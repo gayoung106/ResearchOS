@@ -17,6 +17,7 @@ from src.statistics.regression.cox import (
     fit_left_truncated_cox,
     fit_stratified_cox,
 )
+from src.statistics.regression.discrete_time_hazard import fit_discrete_time_hazard_model
 from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
@@ -103,6 +104,7 @@ __all__ = [
     "fit_zero_inflated_poisson",
     "fit_zero_inflated_negative_binomial",
     "fit_count_regression",
+    "fit_discrete_time_hazard_model",
     "fit_cause_specific_cox",
     "fit_clustered_cox",
     "fit_cox_proportional_hazards",
