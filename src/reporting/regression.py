@@ -323,7 +323,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -359,6 +359,12 @@ def write_korean_results_narrative(
                     (
                         coefficient.term,
                         "regularized_standardized_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "iv_standardized_beta",
                     )
                 )
             )
@@ -494,6 +500,23 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "iv_2sls_regression":
+        endogenous = regression_result.metadata.get("endogenous_variables") or []
+        instruments = regression_result.metadata.get("instrument_variables") or []
+        min_f = regression_result.fit_statistics.get("minimum_first_stage_f_statistic")
+        r_squared = regression_result.fit_statistics.get("r_squared")
+        sentences.append(
+            "IV 2SLS treated "
+            + ", ".join(str(value) for value in endogenous)
+            + " as endogenous and used instruments "
+            + ", ".join(str(value) for value in instruments)
+            + "."
+        )
+        if min_f is not None:
+            sentences.append(f"Minimum first-stage excluded-instrument F statistic was {float(min_f):.3f}.")
+        if r_squared is not None:
+            sentences.append(f"Second-stage R-squared was {float(r_squared):.3f}.")
 
     elif regression_result.model_type == "regularized_regression":
         penalty = regression_result.fit_statistics.get("penalty")
@@ -823,7 +846,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -888,6 +911,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "regularized_regression":
         notes.append("Regularized regression reports penalized coefficients; standard errors and p-values are not inferential.")
 
+    if regression_result.model_type == "iv_2sls_regression":
+        notes.append("IV 2SLS reports second-stage coefficients and first-stage instrument strength diagnostics.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -923,6 +949,9 @@ def build_regression_publication_report(
             "gamma_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "gamma_regression" else None,
             "inverse_gaussian_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "inverse_gaussian_regression" else None,
             "precision": regression_result.fit_statistics.get("precision"),
+            "iv_endogenous_variables": regression_result.metadata.get("endogenous_variables"),
+            "iv_instrument_variables": regression_result.metadata.get("instrument_variables"),
+            "minimum_first_stage_f_statistic": regression_result.fit_statistics.get("minimum_first_stage_f_statistic"),
             "regularized_penalty": regression_result.fit_statistics.get("penalty"),
             "regularized_alpha": regression_result.fit_statistics.get("alpha"),
             "regularized_l1_ratio": regression_result.fit_statistics.get("l1_ratio"),

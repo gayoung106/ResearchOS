@@ -13,6 +13,7 @@ from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
+from src.statistics.regression.iv import fit_iv_2sls_regression
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
     fit_mixed_binary_logit_random_slope,
@@ -57,6 +58,21 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "iv_2sls_regression":
+        options = mixed_effects_options or {}
+        endogenous = options.get("endogenous_variables", options.get("endogenous", []))
+        instruments = options.get("instrument_variables", options.get("instruments", []))
+        return fit_iv_2sls_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            endogenous_variables=[str(value) for value in endogenous] if isinstance(endogenous, (list, tuple)) else [str(endogenous)],
+            instrument_variables=[str(value) for value in instruments] if isinstance(instruments, (list, tuple)) else [str(instruments)],
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            add_intercept=bool(options.get("add_intercept", True)),
+        )
+
     if model_type == "inverse_gaussian_regression":
         options = mixed_effects_options or {}
         return fit_inverse_gaussian_regression(

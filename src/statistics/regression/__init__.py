@@ -13,6 +13,7 @@ from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
+from src.statistics.regression.iv import fit_iv_2sls_regression
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
     fit_mixed_binary_logit_random_slope,
@@ -81,5 +82,6 @@ __all__ = [
     "fit_fractional_logit",
     "fit_gamma_regression",
     "fit_inverse_gaussian_regression",
+    "fit_iv_2sls_regression",
     "fit_gee",
 ]

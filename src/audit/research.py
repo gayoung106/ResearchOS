@@ -214,6 +214,25 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "iv_2sls_regression":
+        endogenous = result.metadata.get("endogenous_variables", [])
+        instruments = result.metadata.get("instrument_variables", [])
+        min_f = result.fit_statistics.get("minimum_first_stage_f_statistic", "unknown")
+        evidence = (
+            f"IV 2SLS regression, N={result.sample_size}, "
+            f"endogenous={endogenous}, instruments={instruments}, "
+            f"minimum first-stage F={min_f}, converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report endogenous variables, excluded instruments, first-stage strength, and exclusion rationale.",
+        )
+
     if result.model_type == "inverse_gaussian_regression":
         dispersion = result.fit_statistics.get("dispersion_ratio", "unknown")
         pseudo = result.fit_statistics.get("pseudo_r_squared_deviance", "unknown")
@@ -434,6 +453,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "iv_2sls_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"IV diagnostics, minimum first-stage F={summary.get('minimum_first_stage_f_statistic', 'unknown')}, "
+            f"weak-instrument warning={summary.get('weak_instrument_warning', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report first-stage diagnostics, weak-instrument screening, and second-stage residual checks.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "inverse_gaussian_regression":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -715,7 +752,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "inverse_gaussian_regression":
+    if getattr(report, "model_type", None) == "iv_2sls_regression":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"IV standardized effects {len(report.effects)} generated; "
+            f"minimum first-stage F={model_effects.get('minimum_first_stage_f_statistic', 'unknown')}"
+        )
+        recommendation = "Interpret IV coefficients with instrument strength and exclusion restrictions."
+    elif getattr(report, "model_type", None) == "inverse_gaussian_regression":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Inverse Gaussian mean-ratio effects {len(report.effects)} generated; "
@@ -958,6 +1002,19 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "iv_2sls_regression":
+            metadata.update(
+                {
+                    "endogenous_variables": regression_result.metadata.get("endogenous_variables"),
+                    "instrument_variables": regression_result.metadata.get("instrument_variables"),
+                    "instrument_count": regression_result.fit_statistics.get("instrument_count"),
+                    "minimum_first_stage_f_statistic": regression_result.fit_statistics.get("minimum_first_stage_f_statistic"),
+                    "weak_instrument_warning": bool(
+                        regression_result.fit_statistics.get("minimum_first_stage_f_statistic") is not None
+                        and float(regression_result.fit_statistics.get("minimum_first_stage_f_statistic")) < 10.0
+                    ),
                 }
             )
         elif regression_result.model_type == "inverse_gaussian_regression":

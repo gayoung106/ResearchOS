@@ -64,6 +64,13 @@ from src.statistics.diagnostics.inverse_gaussian import (
     inverse_gaussian_observations_to_dataframe,
     inverse_gaussian_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.iv import (
+    build_iv_2sls_diagnostics,
+    iv_diagnostic_summary_to_dataframe,
+    iv_first_stage_to_dataframe,
+    iv_multicollinearity_to_dataframe,
+    iv_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.mixed_effects import (
     build_mixed_effects_diagnostics,
     mixed_effects_diagnostic_summary_to_dataframe,
@@ -171,6 +178,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "iv_2sls_regression":
+            return self._run_iv_2sls_regression(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "inverse_gaussian_regression":
             return self._run_inverse_gaussian_regression(
@@ -314,6 +327,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_iv_2sls_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_iv_2sls_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "first_stage": output_dir / "first_stage.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        iv_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        iv_first_stage_to_dataframe(report).to_excel(paths["first_stage"], index=False)
+        iv_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        iv_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_inverse_gaussian_regression(
         self,

@@ -259,6 +259,17 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    iv_requested = requested_estimator in {
+        "iv",
+        "2sls",
+        "iv_2sls",
+        "iv_2sls_regression",
+    } or requested_model_type in {
+        "iv",
+        "2sls",
+        "iv_2sls",
+        "iv_2sls_regression",
+    }
     inverse_gaussian_requested = requested_estimator in {
         "inverse_gaussian",
         "inverse-gaussian",
@@ -325,7 +336,47 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if inverse_gaussian_requested:
+    if iv_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "IV 2SLS regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        endogenous = regression_options.get("endogenous_variables", regression_options.get("endogenous", []))
+        instruments = regression_options.get("instrument_variables", regression_options.get("instruments", []))
+        endogenous_variables = [str(value) for value in endogenous] if isinstance(endogenous, (list, tuple)) else [str(endogenous)] if endogenous else []
+        instrument_variables = [str(value) for value in instruments] if isinstance(instruments, (list, tuple)) else [str(instruments)] if instruments else []
+        if not endogenous_variables or not instrument_variables:
+            return not_registered(
+                "IV 2SLS requires endogenous_variables and instrument_variables options.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        missing_iv_variables = [
+            variable
+            for variable in [*endogenous_variables, *instrument_variables]
+            if variable not in variable_map.variables
+        ]
+        if missing_iv_variables:
+            return not_registered(
+                "IV variable is missing from variable_map: " + ", ".join(missing_iv_variables),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "iv_2sls_regression"
+        multilevel_options = {
+            "endogenous_variables": endogenous_variables,
+            "instrument_variables": instrument_variables,
+            "add_intercept": regression_options.get("add_intercept", True),
+        }
+    elif inverse_gaussian_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Inverse Gaussian regression supports strictly positive continuous dependent variables.",
@@ -945,6 +996,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "iv_2sls_regression",
         "inverse_gaussian_regression",
         "gamma_regression",
         "regularized_regression",
