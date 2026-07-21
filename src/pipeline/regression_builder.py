@@ -217,7 +217,7 @@ def register_regression_pipeline(
         return not_registered("醫낆냽蹂?섍? 吏?뺣릺吏 ?딆븯?듬땲??")
 
     if len(dependent_variables) > 1:
-        return not_registered("?꾩옱 湲곕낯 ?뚭? 鍮뚮뜑??醫낆냽蹂??1媛쒕쭔 吏?먰빀?덈떎.")
+        return not_registered("현재 기본 회귀 빌더는 종속변수 1개만 지원합니다.")
 
     dependent_variable = dependent_variables[0]
     independent_variables = _collect_predictors(analysis_plan)
@@ -244,8 +244,8 @@ def register_regression_pipeline(
     ]
     if missing_fixed_effect_definitions:
         return not_registered(
-            "怨좎젙?④낵 蹂?섏쓽 variable_map "
-            "?뺤쓽媛 ?놁뒿?덈떎: " + ", ".join(missing_fixed_effect_definitions),
+            "고정효과 변수의 variable_map 정의가 없습니다: "
+            + ", ".join(missing_fixed_effect_definitions),
             dependent_variable=(dependent_variable),
             independent_variables=(independent_variables),
             fixed_effects=fixed_effects,
@@ -1603,7 +1603,7 @@ def register_regression_pipeline(
 
         if group_variable is None:
             return not_registered(
-                "?쇳빀?④낵 紐⑦삎??洹몃９蹂?섍? 吏?뺣릺吏 ?딆븯?듬땲??",
+                "혼합효과 모형의 그룹변수가 지정되지 않았습니다.",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -1623,7 +1623,7 @@ def register_regression_pipeline(
         ]
         if missing_group_definitions:
             return not_registered(
-                "洹몃９蹂?섏쓽 variable_map ?뺤쓽媛 ?놁뒿?덈떎: " + ", ".join(missing_group_definitions),
+                "그룹변수의 variable_map 정의가 없습니다: " + ", ".join(missing_group_definitions),
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -1968,9 +1968,9 @@ def register_regression_pipeline(
             else:
                 warnings.append("怨좉툒 媛뺢굔??遺꾩꽍??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎.")
         else:
-            warnings.append("媛뺢굔??遺꾩꽍 ?ㅼ젙??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎.")
+            warnings.append("강건성 분석 설정이 비활성화되어 있습니다.")
     else:
-        warnings.append("?꾩옱 ?먮룞 媛뺢굔???④퀎??OLS 紐⑦삎留?吏?먰빀?덈떎.")
+        warnings.append("현재 자동 강건성 단계는 OLS 모형만 지원합니다.")
 
     orchestrator.register(
         RegressionEffectSizeStep(
