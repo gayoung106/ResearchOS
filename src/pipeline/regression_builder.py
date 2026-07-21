@@ -416,6 +416,15 @@ def register_regression_pipeline(
         "cluster_robust_cox",
         "cox_clustered",
     }
+    time_varying_cox_requested = requested_estimator in {
+        "time_varying_cox",
+        "start_stop_cox",
+        "cox_time_varying",
+    } or requested_model_type in {
+        "time_varying_cox",
+        "start_stop_cox",
+        "cox_time_varying",
+    }
     parametric_survival_requested = requested_estimator in {
         "parametric_survival",
         "parametric_survival_auto",
@@ -1118,6 +1127,62 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
             ),
         }
+    elif time_varying_cox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Time-varying Cox regression supports continuous stop-time variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        start_variable = str(regression_options.get("start_variable", regression_options.get("start", ""))).strip()
+        stop_variable = str(regression_options.get("stop_variable", dependent_variable)).strip()
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        subject_variable = regression_options.get(
+            "subject_variable",
+            regression_options.get("id_variable", regression_options.get("subject")),
+        )
+        if not start_variable:
+            return not_registered(
+                "Time-varying Cox regression requires regression.options.start_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if not event_variable:
+            return not_registered(
+                "Time-varying Cox regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        missing_time_variables = [
+            variable
+            for variable in [start_variable, stop_variable, event_variable, subject_variable]
+            if variable and variable not in variable_map.variables
+        ]
+        if missing_time_variables:
+            return not_registered(
+                "Time-varying Cox variable is missing from variable_map: " + ", ".join(missing_time_variables),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "time_varying_cox"
+        multilevel_options = {
+            "start_variable": start_variable,
+            "stop_variable": stop_variable,
+            "event_variable": event_variable,
+            "subject_variable": subject_variable,
+            "ties": regression_options.get("ties", "breslow"),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
     elif cox_requested:
         if measurement_level != "continuous":
             return not_registered(
@@ -1776,6 +1841,7 @@ def register_regression_pipeline(
         "left_truncated_cox",
         "cause_specific_cox",
         "clustered_cox",
+        "time_varying_cox",
         "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",

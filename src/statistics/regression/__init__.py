@@ -16,6 +16,7 @@ from src.statistics.regression.cox import (
     fit_cox_proportional_hazards,
     fit_left_truncated_cox,
     fit_stratified_cox,
+    fit_time_varying_cox,
 )
 from src.statistics.regression.discrete_time_hazard import fit_discrete_time_hazard_model
 from src.statistics.regression.exponential_aft import fit_exponential_aft
@@ -109,6 +110,7 @@ __all__ = [
     "fit_clustered_cox",
     "fit_cox_proportional_hazards",
     "fit_left_truncated_cox",
+    "fit_time_varying_cox",
     "fit_stratified_cox",
     "fit_exponential_aft",
     "fit_fractional_logit",

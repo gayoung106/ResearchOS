@@ -1221,6 +1221,14 @@ def _effect_size_item(
             f"clusters={metadata.get('cluster_count', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios with cluster-robust standard errors."
+    elif getattr(report, "model_type", None) == "time_varying_cox":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Time-varying Cox hazard-ratio effects {len(report.effects)} generated; "
+            f"rows={metadata.get('time_varying_row_count', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios from start-stop risk intervals and report subject clustering when used."
     elif getattr(report, "model_type", None) == "piecewise_exponential":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1500,11 +1508,16 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential", "discrete_time_hazard"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox", "piecewise_exponential", "discrete_time_hazard"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
                     "event_variable": regression_result.metadata.get("event_variable"),
+                    "start_variable": regression_result.metadata.get("start_variable"),
+                    "stop_variable": regression_result.metadata.get("stop_variable"),
+                    "subject_variable": regression_result.metadata.get("subject_variable"),
+                    "subject_count": regression_result.fit_statistics.get("subject_count"),
+                    "time_varying_row_count": regression_result.fit_statistics.get("time_varying_row_count"),
                     "interval_count": regression_result.fit_statistics.get("interval_count"),
                     "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
                     "discrete_time_link": regression_result.metadata.get("link") if regression_result.model_type == "discrete_time_hazard" else None,

@@ -16,6 +16,7 @@ from src.statistics.regression.cox import (
     fit_cox_proportional_hazards,
     fit_left_truncated_cox,
     fit_stratified_cox,
+    fit_time_varying_cox,
 )
 from src.statistics.regression.discrete_time_hazard import fit_discrete_time_hazard_model
 from src.statistics.regression.exponential_aft import fit_exponential_aft
@@ -510,6 +511,29 @@ def fit_regression_by_level(
             event_variable=event_variable,
             cluster_variable=cluster_variable,
             independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            ties=str(options.get("ties", "breslow")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+    if model_type == "time_varying_cox":
+        options = mixed_effects_options or {}
+        start_variable = str(options.get("start_variable", options.get("start", ""))).strip()
+        stop_variable = str(options.get("stop_variable", dependent_variable)).strip()
+        event_variable = str(options.get("event_variable", "")).strip()
+        subject_variable = options.get("subject_variable", options.get("id_variable", options.get("subject")))
+        if not start_variable:
+            raise ValueError("Time-varying Cox regression requires start_variable.")
+        if not event_variable:
+            raise ValueError("Time-varying Cox regression requires event_variable.")
+        return fit_time_varying_cox(
+            dataframe,
+            start_variable=start_variable,
+            stop_variable=stop_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            subject_variable=subject_variable,
             fixed_effects=fixed_effects,
             model_id=model_id,
             ties=str(options.get("ties", "breslow")),

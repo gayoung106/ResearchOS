@@ -40,7 +40,7 @@ class CoxDiagnosticsReport:
 
 
 def _validate_cox_result(result: RegressionResult) -> Any:
-    if result.model_type not in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+    if result.model_type not in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:
         raise ValueError("Cox diagnostics require a Cox model result.")
     if result.raw_result is None:
         raise ValueError("A fitted statsmodels result is required for Cox diagnostics.")

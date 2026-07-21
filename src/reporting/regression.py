@@ -745,7 +745,7 @@ def write_korean_results_narrative(
         if boundary_count is not None:
             sentences.append(f"Boundary observations at 0 or 1 numbered {int(boundary_count)}.")
 
-    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:
         event_count = regression_result.fit_statistics.get("event_count")
         censored_count = regression_result.fit_statistics.get("censored_count")
         events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
@@ -782,6 +782,18 @@ def write_korean_results_narrative(
             sentences.append(
                 f"Cluster-robust standard errors accounted for {int(cluster_count)} clusters defined by {cluster_variable}."
             )
+        if regression_result.model_type == "time_varying_cox":
+            start_variable = regression_result.metadata.get("start_variable")
+            stop_variable = regression_result.metadata.get("stop_variable")
+            row_count = regression_result.fit_statistics.get("time_varying_row_count")
+            subject_count = regression_result.fit_statistics.get("subject_count")
+            if subject_count is not None:
+                sentences.append(
+                    f"Time-varying Cox used {int(row_count)} start-stop intervals from {int(subject_count)} subjects."
+                )
+            else:
+                sentences.append(f"Time-varying Cox used {int(row_count)} start-stop intervals.")
+            sentences.append(f"Intervals were defined by {start_variable} and {stop_variable}.")
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
@@ -1162,7 +1174,7 @@ def build_regression_publication_report(
     if regression_result.model_type == "inverse_gaussian_regression":
         notes.append("Inverse Gaussian regression uses a log link and reports multiplicative mean ratios.")
 
-    if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+    if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
     if regression_result.model_type == "piecewise_exponential":
         notes.append("Piecewise exponential models report hazard ratios from a Poisson model with log-exposure offsets.")
@@ -1176,6 +1188,8 @@ def build_regression_publication_report(
         notes.append("Cause-specific Cox models estimate cause-specific hazards by censoring competing events.")
     if regression_result.model_type == "clustered_cox":
         notes.append("Clustered Cox models report cluster-robust standard errors while retaining Cox hazard ratios.")
+    if regression_result.model_type == "time_varying_cox":
+        notes.append("Time-varying Cox models use start-stop intervals and can account for repeated subject intervals with robust standard errors.")
 
     if regression_result.model_type == "exponential_aft":
         notes.append("Exponential AFT models report time ratios under a constant-hazard survival model.")
@@ -1263,6 +1277,11 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "start_variable": regression_result.metadata.get("start_variable"),
+            "stop_variable": regression_result.metadata.get("stop_variable"),
+            "subject_variable": regression_result.metadata.get("subject_variable"),
+            "subject_count": regression_result.fit_statistics.get("subject_count"),
+            "time_varying_row_count": regression_result.fit_statistics.get("time_varying_row_count"),
             "interval_count": regression_result.fit_statistics.get("interval_count"),
             "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
             "discrete_time_link": regression_result.metadata.get("link") if regression_result.model_type == "discrete_time_hazard" else None,

@@ -580,3 +580,81 @@ def fit_clustered_cox(
         ties=ties,
         maximum_iterations=maximum_iterations,
     )
+
+
+def fit_time_varying_cox(
+    dataframe: pd.DataFrame,
+    *,
+    start_variable: str,
+    stop_variable: str,
+    event_variable: str,
+    independent_variables: list[str],
+    subject_variable: str | None = None,
+    fixed_effects: list[str] | None = None,
+    model_id: str = "time_varying_cox_1",
+    ties: str = "breslow",
+    maximum_iterations: int = 100,
+) -> RegressionResult:
+    """Fit a start-stop Cox model for time-varying covariates."""
+    if ties not in {"breslow", "efron"}:
+        raise ValueError("Cox regression ties must be 'breslow' or 'efron'.")
+    start_variable = str(start_variable).strip()
+    stop_variable = str(stop_variable).strip()
+    subject_variable = str(subject_variable).strip() if subject_variable is not None else None
+    if not start_variable:
+        raise ValueError("Time-varying Cox regression requires start_variable.")
+    if not stop_variable:
+        raise ValueError("Time-varying Cox regression requires stop_variable.")
+    if start_variable == stop_variable:
+        raise ValueError("Time-varying Cox start_variable and stop_variable must differ.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+    duration, event, predictors, metadata = _prepare_cox_design(
+        dataframe,
+        duration_variable=stop_variable,
+        event_variable=event_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+        entry_variable=start_variable,
+        cluster_variable=subject_variable,
+    )
+    metadata.update(
+        {
+            "start_variable": start_variable,
+            "stop_variable": stop_variable,
+            "time_varying_row_count": int(len(duration)),
+            "interval_count": int(len(duration)),
+        }
+    )
+    fit_kwargs: dict[str, Any] = {"maxiter": maximum_iterations}
+    if subject_variable is not None:
+        if int(metadata["cluster_count"]) < 2:
+            raise ValueError("Time-varying Cox cluster-robust estimation requires at least two subjects.")
+        metadata["subject_variable"] = subject_variable
+        metadata["subject_count"] = metadata["cluster_count"]
+        fit_kwargs["groups"] = metadata["cluster_values"]
+
+    fitted = PHReg(
+        duration,
+        predictors,
+        status=event,
+        entry=metadata["entry_values"],
+        ties=ties,
+    ).fit(**fit_kwargs)
+    result = _finalize_cox_result(
+        fitted=fitted,
+        model_id=model_id,
+        model_type="time_varying_cox",
+        duration_variable=stop_variable,
+        independent_variables=independent_variables,
+        duration=duration,
+        event=event,
+        metadata=metadata,
+        ties=ties,
+        maximum_iterations=maximum_iterations,
+    )
+    result.fit_statistics["time_varying_row_count"] = int(len(duration))
+    result.fit_statistics["interval_count"] = int(len(duration))
+    if subject_variable is not None:
+        result.fit_statistics["subject_count"] = metadata["subject_count"]
+    return result

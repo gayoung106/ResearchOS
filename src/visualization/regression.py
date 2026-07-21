@@ -707,7 +707,7 @@ def build_regression_visualizations(
         observed_path = output_directory / "beta_observed_vs_predicted.png"
         _plot_observed_vs_predicted(regression_result, observed_path)
         output_files.append(str(observed_path))
-    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:
         baseline_path = output_directory / "cox_baseline_survival.png"
         _plot_baseline_survival(regression_result, baseline_path)
         output_files.append(str(baseline_path))

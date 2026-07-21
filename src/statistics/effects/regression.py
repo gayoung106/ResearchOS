@@ -279,6 +279,11 @@ def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
             "sample_size": result.sample_size,
             "duration_variable": result.metadata.get("duration_variable"),
             "event_variable": result.metadata.get("event_variable"),
+            "start_variable": result.metadata.get("start_variable"),
+            "stop_variable": result.metadata.get("stop_variable"),
+            "subject_variable": result.metadata.get("subject_variable"),
+            "subject_count": result.fit_statistics.get("subject_count"),
+            "time_varying_row_count": result.fit_statistics.get("time_varying_row_count"),
             "interval_count": result.fit_statistics.get("interval_count"),
             "cause_variable": result.metadata.get("cause_variable"),
             "target_event_code": result.metadata.get("target_event_code"),
@@ -1648,7 +1653,7 @@ def build_regression_effect_size_report(
     if result.model_type in {"ols", "weighted_least_squares"}:
         return _build_ols_effects(result)
 
-    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
+    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox", "piecewise_exponential"}:
         return _build_cox_effects(result)
 
     if result.model_type == "discrete_time_hazard":
