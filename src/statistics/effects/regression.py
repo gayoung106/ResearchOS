@@ -831,6 +831,69 @@ def _build_binary_logit_effects(
     )
 
 
+def _build_binary_probit_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted binary probit result is required.")
+
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="probit_latent_coefficient",
+                estimate=coefficient.estimate,
+                standard_error=coefficient.standard_error,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=coefficient.confidence_interval_lower,
+                confidence_interval_upper=coefficient.confidence_interval_upper,
+                magnitude=None,
+                interpretation="Latent-index coefficient from a binary probit model.",
+            )
+        )
+
+    warnings: list[str] = []
+    try:
+        marginal_effects = fitted.get_margeff(at="overall", method="dydx")
+        frame = marginal_effects.summary_frame()
+        for term in frame.index:
+            effects.append(
+                EffectSizeResult(
+                    term=str(term),
+                    effect_type="average_marginal_effect",
+                    estimate=float(frame.loc[term, "dy/dx"]),
+                    standard_error=float(frame.loc[term, "Std. Err."]),
+                    statistic=float(frame.loc[term, "z"]),
+                    p_value=float(frame.loc[term, "Pr(>|z|)"]),
+                    confidence_interval_lower=float(frame.loc[term, "Conf. Int. Low"]),
+                    confidence_interval_upper=float(
+                        frame.loc[term, "Cont. Int. Hi."]
+                        if "Cont. Int. Hi." in frame.columns
+                        else frame.loc[term, "Conf. Int. Hi."]
+                    ),
+                    magnitude=None,
+                    interpretation="Average marginal effect on event probability from a binary probit model.",
+                )
+            )
+    except (AttributeError, KeyError, ValueError, np.linalg.LinAlgError) as error:
+        warnings.append(f"Average marginal effects could not be computed: {error}")
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "mcfadden_pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared_mcfadden"),
+            "brier_score": result.fit_statistics.get("brier_score"),
+        },
+        warnings=warnings,
+        metadata={"sample_size": result.sample_size, "link": result.metadata.get("link")},
+    )
+
+
 def _build_ordered_logit_effects(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -1203,6 +1266,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "panel_fixed_effects":
         return _build_panel_fixed_effects(result)
+
+    if result.model_type == "binary_probit":
+        return _build_binary_probit_effects(result)
 
     if result.model_type in {
         "binary_logit",

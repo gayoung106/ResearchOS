@@ -15,6 +15,7 @@ from src.statistics.regression.base import RegressionResult
 
 _BINARY_DIAGNOSTIC_MODELS = {
     "binary_logit",
+    "binary_probit",
     "mixed_binary_logit_random_intercept",
     "mixed_binary_logit_random_slope",
     "mixed_binary_logit_three_level",
@@ -46,6 +47,7 @@ class BinaryLogitDiagnosticsReport:
     """Binary Logit 진단 결과."""
 
     model_id: str
+    model_type: str
     sample_size: int
     parameter_count: int
     event_count: int
@@ -380,6 +382,7 @@ def build_binary_logit_diagnostics(
 
     return BinaryLogitDiagnosticsReport(
         model_id=result.model_id,
+        model_type=result.model_type,
         sample_size=sample_size,
         parameter_count=parameter_count,
         event_count=event_count,

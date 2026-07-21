@@ -259,6 +259,15 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    probit_requested = requested_estimator in {
+        "probit",
+        "binary_probit",
+        "probit_regression",
+    } or requested_model_type in {
+        "probit",
+        "binary_probit",
+        "probit_regression",
+    }
     heckman_requested = requested_estimator in {
         "heckman",
         "heckman_selection",
@@ -345,7 +354,24 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if heckman_requested:
+    if probit_requested:
+        if measurement_level != "binary":
+            return not_registered(
+                "Binary probit supports binary dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "binary_probit"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif heckman_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Heckman selection supports continuous observed outcomes.",
@@ -1065,6 +1091,7 @@ def register_regression_pipeline(
         "fractional_logit",
         "beta_regression",
         "binary_logit",
+        "binary_probit",
         "ordered_logit",
         "multinomial_logit",
         "count_auto",
