@@ -1113,6 +1113,43 @@ def _build_lognormal_aft_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_weibull_ph_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="hazard_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Hazard ratio from a Weibull proportional hazards model.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "event_count": result.fit_statistics.get("event_count"),
+            "censored_count": result.fit_statistics.get("censored_count"),
+            "events_per_parameter": result.fit_statistics.get("events_per_parameter"),
+            "shape": result.fit_statistics.get("shape"),
+            "baseline_rate": result.fit_statistics.get("baseline_rate"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "duration_variable": result.metadata.get("duration_variable"),
+            "event_variable": result.metadata.get("event_variable"),
+        },
+    )
+
 def _build_weibull_aft_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     for coefficient in result.coefficients:
@@ -1700,6 +1737,9 @@ def build_regression_effect_size_report(
         return _build_loglogistic_aft_effects(result)
     if result.model_type == "lognormal_aft":
         return _build_lognormal_aft_effects(result)
+    if result.model_type == "weibull_ph":
+        return _build_weibull_ph_effects(result)
+
     if result.model_type == "weibull_aft":
         return _build_weibull_aft_effects(result)
 

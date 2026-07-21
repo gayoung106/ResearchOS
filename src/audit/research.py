@@ -279,6 +279,24 @@ def _regression_item(
             recommendation="Report duration/event coding, log-normal distribution, censoring, time ratios, and convergence.",
         )
 
+    if result.model_type == "weibull_ph":
+        evidence = (
+            f"Weibull PH regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"censored={result.fit_statistics.get('censored_count', 'unknown')}, "
+            f"shape={result.fit_statistics.get('shape', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report duration/event coding, Weibull PH parameterization, censoring, hazard ratios, and convergence.",
+        )
+
     if result.model_type == "weibull_aft":
         evidence = (
             f"Weibull AFT regression, N={result.sample_size}, "
@@ -1182,6 +1200,13 @@ def _effect_size_item(
             f"sigma={model_effects.get('sigma', 'unknown')}"
         )
         recommendation = "Interpret time ratios as acceleration or deceleration of median survival time."
+    elif getattr(report, "model_type", None) == "weibull_ph":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Weibull PH hazard-ratio effects {len(report.effects)} generated; "
+            f"shape={model_effects.get('shape', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios under the Weibull proportional hazards parameterization."
     elif getattr(report, "model_type", None) == "weibull_aft":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1583,7 +1608,7 @@ def build_research_audit_report(
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
             )
-        elif regression_result.model_type == "weibull_aft":
+        elif regression_result.model_type in {"weibull_aft", "weibull_ph"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
@@ -1594,6 +1619,7 @@ def build_research_audit_report(
                     "strata_variable": regression_result.metadata.get("strata_variable"),
                     "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                     "weibull_shape": regression_result.fit_statistics.get("shape"),
+                    "weibull_baseline_rate": regression_result.fit_statistics.get("baseline_rate"),
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
             )

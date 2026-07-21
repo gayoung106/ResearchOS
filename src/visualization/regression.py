@@ -350,6 +350,29 @@ def _plot_lognormal_aft_survival(
     _save_figure(figure, output_path)
 
 
+def _plot_weibull_ph_survival(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    shape = float(regression_result.fit_statistics["shape"])
+    baseline_rate = regression_result.fit_statistics.get("baseline_rate")
+    if baseline_rate is None:
+        scale = float(np.median(fitted.predict(kind="scale")))
+        baseline_rate = scale ** (-shape)
+    durations = np.asarray(fitted.model.endog, dtype=float)
+    grid = np.linspace(float(np.min(durations)), float(np.max(durations)), 120)
+    survival = np.exp(-float(baseline_rate) * (grid**shape))
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    axis.plot(grid, survival)
+    axis.set_ylim(0.0, 1.02)
+    axis.set_xlabel("Time")
+    axis.set_ylabel("Baseline survival")
+    axis.set_title("Weibull PH Baseline Survival")
+    _save_figure(figure, output_path)
+
+
 def _plot_weibull_aft_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -730,6 +753,10 @@ def build_regression_visualizations(
     elif regression_result.model_type == "lognormal_aft":
         survival_path = output_directory / "lognormal_aft_survival_curve.png"
         _plot_lognormal_aft_survival(regression_result, survival_path)
+        output_files.append(str(survival_path))
+    elif regression_result.model_type == "weibull_ph":
+        survival_path = output_directory / "weibull_ph_survival_curve.png"
+        _plot_weibull_ph_survival(regression_result, survival_path)
         output_files.append(str(survival_path))
     elif regression_result.model_type == "weibull_aft":
         survival_path = output_directory / "weibull_aft_survival_curve.png"

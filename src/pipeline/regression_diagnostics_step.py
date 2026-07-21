@@ -187,6 +187,13 @@ from src.statistics.diagnostics.weibull_aft import (
     weibull_aft_prediction_metrics_to_dataframe,
     weibull_aft_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.weibull_ph import (
+    build_weibull_ph_diagnostics,
+    weibull_ph_diagnostic_summary_to_dataframe,
+    weibull_ph_multicollinearity_to_dataframe,
+    weibull_ph_prediction_metrics_to_dataframe,
+    weibull_ph_residuals_to_dataframe,
+)
 
 
 class RegressionDiagnosticsStep(PipelineStep):
@@ -324,6 +331,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type == "weibull_aft":
             return self._run_weibull_aft(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "weibull_ph":
+            return self._run_weibull_ph(
                 result,
                 output_dir,
             )
@@ -882,6 +895,33 @@ class RegressionDiagnosticsStep(PipelineStep):
         weibull_aft_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
         weibull_aft_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
         weibull_aft_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
+
+    def _run_weibull_ph(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_weibull_ph_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        weibull_ph_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        weibull_ph_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        weibull_ph_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        weibull_ph_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
 
         return StepResult(
             stage_name=self.name,

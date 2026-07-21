@@ -299,6 +299,7 @@ def write_korean_results_narrative(
         "loglogistic_aft": "Log-logistic AFT regression",
         "lognormal_aft": "Log-normal AFT regression",
         "weibull_aft": "Weibull AFT regression",
+        "weibull_ph": "Weibull PH regression",
         "binary_cloglog": "Binary complementary log-log regression",
         "binary_probit": "Binary probit regression",
         "multinomial_logit": "Multinomial logistic regression",
@@ -443,6 +444,13 @@ def write_korean_results_narrative(
                     "hazard_ratio",
                 )
             )
+            effect_text = (
+                f"HR={hazard_ratio:.3f}"
+                if hazard_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
+        elif regression_result.model_type == "weibull_ph":
+            hazard_ratio = effect_lookup.get((coefficient.term, "hazard_ratio"))
             effect_text = (
                 f"HR={hazard_ratio:.3f}"
                 if hazard_ratio is not None
@@ -897,6 +905,27 @@ def write_korean_results_narrative(
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
+    elif regression_result.model_type == "weibull_ph":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
+        shape = regression_result.fit_statistics.get("shape")
+        baseline_rate = regression_result.fit_statistics.get("baseline_rate")
+        event_variable = regression_result.metadata.get("event_variable")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The Weibull PH model included {int(event_count)} events and "
+                f"{int(censored_count)} censored observations."
+            )
+        if event_variable is not None:
+            sentences.append(f"Event status was defined by {event_variable}.")
+        if shape is not None:
+            sentences.append(f"Weibull shape was {float(shape):.3f}.")
+        if baseline_rate is not None:
+            sentences.append(f"Baseline rate was {float(baseline_rate):.3f}.")
+        if events_per_parameter is not None:
+            sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
+
     elif regression_result.model_type == "weibull_aft":
         event_count = regression_result.fit_statistics.get("event_count")
         censored_count = regression_result.fit_statistics.get("censored_count")
@@ -1200,6 +1229,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "lognormal_aft":
         notes.append("Log-normal AFT models report time ratios; values above 1 indicate longer median survival time.")
 
+    if regression_result.model_type == "weibull_ph":
+        notes.append("Weibull PH models report hazard ratios under a parametric proportional hazards assumption.")
+
     if regression_result.model_type == "weibull_aft":
         notes.append("Weibull AFT models report time ratios; values above 1 indicate longer survival time.")
 
@@ -1302,6 +1334,7 @@ def build_regression_publication_report(
             "candidate_survival_model_count": regression_result.metadata.get("candidate_survival_model_count"),
             "candidate_survival_models": regression_result.metadata.get("candidate_survival_models"),
             "weibull_shape": regression_result.fit_statistics.get("shape"),
+            "weibull_baseline_rate": regression_result.fit_statistics.get("baseline_rate"),
             "loglogistic_shape": regression_result.fit_statistics.get("shape") if regression_result.model_type == "loglogistic_aft" else None,
             "lognormal_sigma": regression_result.fit_statistics.get("sigma"),
             "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),

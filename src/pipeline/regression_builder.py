@@ -459,6 +459,15 @@ def register_regression_pipeline(
         "weibull_aft",
         "weibull-aft",
     }
+    weibull_ph_requested = requested_estimator in {
+        "weibull_ph",
+        "weibull_proportional_hazards",
+        "weibull-ph",
+    } or requested_model_type in {
+        "weibull_ph",
+        "weibull_proportional_hazards",
+        "weibull-ph",
+    }
     exponential_aft_requested = requested_estimator in {
         "exponential",
         "exponential_aft",
@@ -1222,6 +1231,40 @@ def register_regression_pipeline(
 
 
 
+    elif weibull_ph_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Weibull PH regression supports positive continuous duration outcomes.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Weibull PH regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Weibull PH event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "weibull_ph"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 500)
+            ),
+        }
     elif parametric_survival_requested:
         if measurement_level != "continuous":
             return not_registered(
@@ -1846,6 +1889,7 @@ def register_regression_pipeline(
         "loglogistic_aft",
         "lognormal_aft",
         "weibull_aft",
+        "weibull_ph",
         "fractional_logit",
         "beta_regression",
         "binary_logit",

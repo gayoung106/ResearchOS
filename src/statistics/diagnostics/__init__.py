@@ -64,6 +64,14 @@ from src.statistics.diagnostics.piecewise_exponential import (
     piecewise_interval_hazards_to_dataframe,
     piecewise_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.weibull_ph import (
+    WeibullPHDiagnosticsReport,
+    build_weibull_ph_diagnostics,
+    weibull_ph_diagnostic_summary_to_dataframe,
+    weibull_ph_multicollinearity_to_dataframe,
+    weibull_ph_prediction_metrics_to_dataframe,
+    weibull_ph_residuals_to_dataframe,
+)
 
 __all__ = [
     "BinaryClassificationMetrics",
@@ -85,6 +93,7 @@ __all__ = [
     "MixedEffectsDiagnosticsReport",
     "OLSDiagnosticsReport",
     "PiecewiseExponentialDiagnosticsReport",
+    "WeibullPHDiagnosticsReport",
     "OrderedClassificationMetrics",
     "OrderedLogitDiagnosticsReport",
     "binary_diagnostic_summary_to_dataframe",
@@ -94,6 +103,7 @@ __all__ = [
     "build_discrete_time_hazard_diagnostics",
     "build_ols_diagnostics",
     "build_piecewise_exponential_diagnostics",
+    "build_weibull_ph_diagnostics",
     "build_ordered_logit_diagnostics",
     "calculate_binary_classification_metrics",
     "calculate_binary_multicollinearity",
@@ -116,6 +126,10 @@ __all__ = [
     "piecewise_diagnostic_summary_to_dataframe",
     "piecewise_interval_hazards_to_dataframe",
     "piecewise_residuals_to_dataframe",
+    "weibull_ph_diagnostic_summary_to_dataframe",
+    "weibull_ph_multicollinearity_to_dataframe",
+    "weibull_ph_prediction_metrics_to_dataframe",
+    "weibull_ph_residuals_to_dataframe",
     "residuals_to_dataframe",
     "tests_to_dataframe",
 ]
