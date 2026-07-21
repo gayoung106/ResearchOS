@@ -534,6 +534,7 @@ def build_regression_visualizations(
 
     if regression_result.model_type in {
         "ols",
+        "weighted_least_squares",
         "heckman_selection",
         "iv_2sls_regression",
         "quantile_regression",

@@ -46,6 +46,7 @@ from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
 from src.statistics.regression.zero_inflated_negative_binomial import (
     fit_zero_inflated_negative_binomial,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "fit_regularized_regression",
     "fit_robust_regression",
     "fit_tobit_regression",
+    "fit_weighted_least_squares",
     "fit_negative_binomial",
     "fit_zero_inflated_poisson",
     "fit_zero_inflated_negative_binomial",

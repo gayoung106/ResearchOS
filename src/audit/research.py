@@ -214,6 +214,24 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "weighted_least_squares":
+        evidence = (
+            f"Weighted least squares regression, N={result.sample_size}, "
+            f"weight={result.metadata.get('weight_variable', 'unknown')}, "
+            f"R-squared={result.fit_statistics.get('r_squared', 'unknown')}, "
+            f"weight ratio={result.fit_statistics.get('weight_ratio', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the weight variable, weight construction rationale, weight range, and robust standard errors.",
+        )
+
     if result.model_type == "binary_cloglog":
         evidence = (
             f"Binary cloglog regression, N={result.sample_size}, "
@@ -525,6 +543,19 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "weighted_least_squares":
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = f"WLS diagnostics, diagnostic warnings={warning_count}"
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report WLS residual diagnostics, heteroskedasticity tests, VIF screening, and influence checks.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "binary_cloglog":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -895,7 +926,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "binary_cloglog":
+    if getattr(report, "model_type", None) == "weighted_least_squares":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"WLS standardized effects {len(report.effects)} generated; "
+            f"R-squared={model_effects.get('r_squared', 'unknown')}"
+        )
+        recommendation = "Interpret standardized WLS coefficients with the analytic weights and residual diagnostics."
+    elif getattr(report, "model_type", None) == "binary_cloglog":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Binary cloglog effects {len(report.effects)} generated; "
@@ -1173,6 +1211,15 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "weighted_least_squares":
+            metadata.update(
+                {
+                    "weight_variable": regression_result.metadata.get("weight_variable"),
+                    "weight_sum": regression_result.fit_statistics.get("weight_sum"),
+                    "weight_ratio": regression_result.fit_statistics.get("weight_ratio"),
+                    "r_squared": regression_result.fit_statistics.get("r_squared"),
                 }
             )
         elif regression_result.model_type == "binary_cloglog":

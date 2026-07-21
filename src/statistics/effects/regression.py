@@ -1317,7 +1317,7 @@ def build_regression_effect_size_report(
     result: RegressionResult,
 ) -> EffectSizeReport:
     """회귀모형 종류에 맞는 효과크기 보고서를 생성한다."""
-    if result.model_type == "ols":
+    if result.model_type in {"ols", "weighted_least_squares"}:
         return _build_ols_effects(result)
 
     if result.model_type == "cox_proportional_hazards":

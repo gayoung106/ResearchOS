@@ -280,7 +280,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type == "ols":
+        if result.model_type in {"ols", "weighted_least_squares"}:
             return self._run_ols(
                 result,
                 output_dir,

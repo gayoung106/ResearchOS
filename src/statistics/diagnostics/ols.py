@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.stats.diagnostic import het_breuschpagan, het_white, linear_reset
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+from statsmodels.stats.outliers_influence import OLSInfluence, variance_inflation_factor
 
 from src.statistics.regression.base import RegressionResult
 
@@ -56,12 +56,11 @@ class OLSDiagnosticsReport:
 
 
 def _validate_ols_result(result: RegressionResult) -> Any:
-    if result.model_type != "ols":
-        raise ValueError("OLS 진단은 model_type='ols' 결과에만 적용할 수 있습니다.")
+    if result.model_type not in {"ols", "weighted_least_squares"}:
+        raise ValueError("OLS diagnostics require model_type='ols' or 'weighted_least_squares'.")
     if result.raw_result is None:
-        raise ValueError("원본 statsmodels 결과 객체가 없습니다.")
+        raise ValueError("A fitted statsmodels result is required.")
     return result.raw_result
-
 
 def _status_from_p_value(p_value: float | None, *, alpha: float) -> str:
     if p_value is None or np.isnan(p_value):
@@ -214,7 +213,10 @@ def calculate_residuals_and_influence(
     result: RegressionResult,
 ) -> tuple[pd.DataFrame, pd.DataFrame, InfluenceThresholds]:
     fitted = _validate_ols_result(result)
-    influence = fitted.get_influence()
+    try:
+        influence = fitted.get_influence()
+    except AttributeError:
+        influence = OLSInfluence(fitted)
 
     sample_size = int(fitted.nobs)
     parameter_count = int(len(fitted.params))

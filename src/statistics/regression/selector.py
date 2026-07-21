@@ -47,6 +47,7 @@ from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
 
 
 def fit_regression_by_level(
@@ -62,6 +63,22 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "weighted_least_squares":
+        options = mixed_effects_options or {}
+        weight_variable = str(options.get("weight_variable", options.get("weights", ""))).strip()
+        if not weight_variable:
+            raise ValueError("Weighted least squares requires weight_variable.")
+        return fit_weighted_least_squares(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            weight_variable=weight_variable,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+        )
+
     if model_type == "binary_cloglog":
         options = mixed_effects_options or {}
         return fit_binary_cloglog(

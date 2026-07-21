@@ -259,6 +259,15 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    wls_requested = requested_estimator in {
+        "wls",
+        "weighted",
+        "weighted_least_squares",
+    } or requested_model_type in {
+        "wls",
+        "weighted",
+        "weighted_least_squares",
+    }
     cloglog_requested = requested_estimator in {
         "cloglog",
         "binary_cloglog",
@@ -374,7 +383,39 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if cloglog_requested:
+    if wls_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Weighted least squares supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        weight_variable = str(regression_options.get("weight_variable", regression_options.get("weights", ""))).strip()
+        if not weight_variable:
+            return not_registered(
+                "Weighted least squares requires regression.options.weight_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if weight_variable not in variable_map.variables:
+            return not_registered(
+                "WLS weight variable is missing from variable_map: " + weight_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "weighted_least_squares"
+        multilevel_options = {
+            "weight_variable": weight_variable,
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+        }
+    elif cloglog_requested:
         if measurement_level != "binary":
             return not_registered(
                 "Binary cloglog supports binary dependent variables.",
@@ -1130,6 +1171,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "weighted_least_squares",
         "heckman_selection",
         "iv_2sls_regression",
         "inverse_gaussian_regression",

@@ -290,6 +290,7 @@ def write_korean_results_narrative(
 
     model_name = {
         "ols": "OLS 회귀분석",
+        "weighted_least_squares": "Weighted least squares regression",
         "binary_logit": "이항 로지스틱 회귀분석",
         "binary_cloglog": "Binary complementary log-log regression",
         "binary_probit": "Binary probit regression",
@@ -326,7 +327,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -519,6 +520,20 @@ def write_korean_results_narrative(
                 )
             else:
                 sentences.append(f"모형의 설명력은 R²={r_squared:.3f}이었다.")
+
+    elif regression_result.model_type == "weighted_least_squares":
+        r_squared = regression_result.fit_statistics.get("r_squared")
+        weight_variable = regression_result.metadata.get("weight_variable")
+        weight_sum = regression_result.fit_statistics.get("weight_sum")
+        weight_ratio = regression_result.fit_statistics.get("weight_ratio")
+        if weight_variable is not None:
+            sentences.append(f"WLS used analytic weights from {weight_variable}.")
+        if r_squared is not None:
+            sentences.append(f"Weighted R-squared was {float(r_squared):.3f}.")
+        if weight_sum is not None and weight_ratio is not None:
+            sentences.append(
+                f"Weights summed to {float(weight_sum):.3f}; max/min weight ratio was {float(weight_ratio):.3f}."
+            )
 
     elif regression_result.model_type == "quantile_regression":
         quantile = regression_result.fit_statistics.get("quantile")
@@ -906,7 +921,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -970,6 +985,9 @@ def build_regression_publication_report(
     if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
 
+    if regression_result.model_type == "weighted_least_squares":
+        notes.append("Weighted least squares reports coefficients estimated with positive analytic case weights.")
+
     if regression_result.model_type == "panel_fixed_effects":
         notes.append("Panel fixed-effects models report within-panel coefficients after absorbing entity and optional time effects.")
 
@@ -1003,6 +1021,9 @@ def build_regression_publication_report(
         metadata={
             "dependent_variable": regression_result.dependent_variable,
             "sample_size": regression_result.sample_size,
+            "weight_variable": regression_result.metadata.get("weight_variable"),
+            "weight_sum": regression_result.fit_statistics.get("weight_sum"),
+            "weight_ratio": regression_result.fit_statistics.get("weight_ratio"),
             "group_variable": regression_result.metadata.get("group_variable"),
             "group_count": regression_result.fit_statistics.get("group_count"),
             "level2_group": regression_result.metadata.get("level2_group"),
