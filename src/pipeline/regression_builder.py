@@ -499,6 +499,26 @@ def register_regression_pipeline(
         "log_logistic_aft",
         "log-logistic-aft",
     }
+    zero_inflated_poisson_requested = requested_estimator in {
+        "zip",
+        "zero_inflated_poisson",
+        "zero-inflated-poisson",
+    } or requested_model_type in {
+        "zip",
+        "zero_inflated_poisson",
+        "zero-inflated-poisson",
+    }
+    zero_inflated_negative_binomial_requested = requested_estimator in {
+        "zinb",
+        "zero_inflated_negative_binomial",
+        "zero-inflated-negative-binomial",
+        "zero_inflated_nb",
+    } or requested_model_type in {
+        "zinb",
+        "zero_inflated_negative_binomial",
+        "zero-inflated-negative-binomial",
+        "zero_inflated_nb",
+    }
     quantile_requested = requested_estimator in {"quantile", "quantile_regression"} or requested_model_type in {
         "quantile",
         "quantile_regression",
@@ -1460,6 +1480,31 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 1000)
             ),
         }
+    elif zero_inflated_poisson_requested or zero_inflated_negative_binomial_requested:
+        if measurement_level != "count":
+            return not_registered(
+                "Zero-inflated count models support count dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = (
+            "zero_inflated_negative_binomial"
+            if zero_inflated_negative_binomial_requested
+            else "zero_inflated_poisson"
+        )
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations",
+                regression_options.get(
+                    "maximum_iterations",
+                    500 if zero_inflated_negative_binomial_requested else 300,
+                ),
+            ),
+        }
     elif gee_requested:
         if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
             model_type = requested_model_type
@@ -1899,6 +1944,8 @@ def register_regression_pipeline(
         "ordered_logit",
         "ordered_probit",
         "multinomial_logit",
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
         "count_auto",
         "gee_gaussian",
         "gee_logit",

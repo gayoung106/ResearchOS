@@ -230,6 +230,26 @@ def _plot_observed_vs_predicted_continuous(
     _save_figure(figure, output_path)
 
 
+
+def _plot_count_observed_vs_predicted(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    observed = np.asarray(fitted.model.endog, dtype=float)
+    predicted = np.asarray(fitted.predict(), dtype=float)
+    upper = float(max(np.max(observed), np.max(predicted), 1.0))
+    figure, axis = plt.subplots(figsize=(5.5, 5.0))
+    axis.scatter(predicted, observed, alpha=0.7)
+    axis.plot([0.0, upper], [0.0, upper], linestyle="--")
+    axis.set_xlim(0.0, upper * 1.05)
+    axis.set_ylim(0.0, upper * 1.05)
+    axis.set_xlabel("Predicted count")
+    axis.set_ylabel("Observed count")
+    axis.set_title("Observed vs Predicted Counts")
+    _save_figure(figure, output_path)
+
 def _plot_baseline_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -729,6 +749,13 @@ def build_regression_visualizations(
     elif regression_result.model_type == "beta_regression":
         observed_path = output_directory / "beta_observed_vs_predicted.png"
         _plot_observed_vs_predicted(regression_result, observed_path)
+        output_files.append(str(observed_path))
+    elif regression_result.model_type in {
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
+    }:
+        observed_path = output_directory / "zero_inflated_observed_vs_predicted.png"
+        _plot_count_observed_vs_predicted(regression_result, observed_path)
         output_files.append(str(observed_path))
     elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:
         baseline_path = output_directory / "cox_baseline_survival.png"

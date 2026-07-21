@@ -64,6 +64,10 @@ from src.statistics.regression.tobit import fit_tobit_regression
 from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weibull_ph import fit_weibull_ph
 from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
+from src.statistics.regression.zero_inflated_negative_binomial import (
+    fit_zero_inflated_negative_binomial,
+)
+from src.statistics.regression.zero_inflated_poisson import fit_zero_inflated_poisson
 
 
 def fit_regression_by_level(
@@ -79,6 +83,32 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "zero_inflated_poisson":
+        options = mixed_effects_options or {}
+        return fit_zero_inflated_poisson(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 300))),
+        )
+
+    if model_type == "zero_inflated_negative_binomial":
+        options = mixed_effects_options or {}
+        return fit_zero_inflated_negative_binomial(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
+
     if model_type == "log_binomial":
         options = mixed_effects_options or {}
         return fit_log_binomial(

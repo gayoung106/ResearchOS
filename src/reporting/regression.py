@@ -523,6 +523,8 @@ def write_korean_results_narrative(
         elif regression_result.model_type in {
             "poisson",
             "negative_binomial",
+            "zero_inflated_poisson",
+            "zero_inflated_negative_binomial",
             "mixed_poisson_random_intercept",
             "mixed_poisson_random_slope",
             "mixed_poisson_three_level",
@@ -1105,7 +1107,7 @@ def write_korean_results_narrative(
         if pseudo is not None:
             sentences.append(f"McFadden pseudo R-squared was {float(pseudo):.3f}.")
 
-    elif regression_result.model_type == "poisson":
+    elif regression_result.model_type in {"poisson", "zero_inflated_poisson"}:
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
 
@@ -1168,6 +1170,8 @@ def build_regression_publication_report(
     elif regression_result.model_type in {
         "poisson",
         "negative_binomial",
+        "zero_inflated_poisson",
+        "zero_inflated_negative_binomial",
         "mixed_poisson_random_intercept",
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",

@@ -1639,6 +1639,22 @@ def build_research_audit_report(
                     "category_labels": regression_result.metadata.get("category_labels"),
                 }
             )
+        elif regression_result.model_type in {
+            "poisson",
+            "negative_binomial",
+            "zero_inflated_poisson",
+            "zero_inflated_negative_binomial",
+        }:
+            metadata.update(
+                {
+                    "zero_count": regression_result.fit_statistics.get("zero_count"),
+                    "zero_proportion": regression_result.fit_statistics.get("zero_proportion"),
+                    "predicted_zero_proportion": regression_result.fit_statistics.get("predicted_zero_proportion"),
+                    "alpha": regression_result.fit_statistics.get("alpha"),
+                    "selected_count_model": regression_result.metadata.get("selected_count_model"),
+                    "inflation_model": regression_result.metadata.get("inflation_model"),
+                }
+            )
         elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
             metadata.update(
                 {
