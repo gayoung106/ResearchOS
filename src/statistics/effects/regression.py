@@ -331,6 +331,42 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_inverse_gaussian_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="mean_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Multiplicative mean ratio from an Inverse Gaussian log-link model.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "pseudo_r_squared_deviance": result.fit_statistics.get("pseudo_r_squared_deviance"),
+            "dispersion_ratio": result.fit_statistics.get("dispersion_ratio"),
+            "root_mean_squared_error": result.fit_statistics.get("root_mean_squared_error"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "link": result.metadata.get("link"),
+            "family": result.metadata.get("family"),
+        },
+    )
+
+
 def _build_gamma_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     for coefficient in result.coefficients:
@@ -1031,6 +1067,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "gamma_regression":
         return _build_gamma_effects(result)
+
+    if result.model_type == "inverse_gaussian_regression":
+        return _build_inverse_gaussian_effects(result)
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)

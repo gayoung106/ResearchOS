@@ -259,6 +259,15 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    inverse_gaussian_requested = requested_estimator in {
+        "inverse_gaussian",
+        "inverse-gaussian",
+        "inverse_gaussian_regression",
+    } or requested_model_type in {
+        "inverse_gaussian",
+        "inverse-gaussian",
+        "inverse_gaussian_regression",
+    }
     gamma_requested = requested_estimator in {"gamma", "gamma_regression"} or requested_model_type in {
         "gamma",
         "gamma_regression",
@@ -316,7 +325,24 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if gamma_requested:
+    if inverse_gaussian_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Inverse Gaussian regression supports strictly positive continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "inverse_gaussian_regression"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif gamma_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Gamma regression supports strictly positive continuous dependent variables.",
@@ -919,6 +945,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "inverse_gaussian_regression",
         "gamma_regression",
         "regularized_regression",
         "robust_regression",

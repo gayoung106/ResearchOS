@@ -12,6 +12,7 @@ from src.statistics.regression.cox import fit_cox_proportional_hazards
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
+from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
     fit_mixed_binary_logit_random_slope,
@@ -56,6 +57,19 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "inverse_gaussian_regression":
+        options = mixed_effects_options or {}
+        return fit_inverse_gaussian_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
     if model_type == "gamma_regression":
         options = mixed_effects_options or {}
         return fit_gamma_regression(

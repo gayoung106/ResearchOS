@@ -569,6 +569,10 @@ def build_regression_visualizations(
             influence_path,
         )
         output_files.append(str(influence_path))
+    elif regression_result.model_type == "inverse_gaussian_regression":
+        observed_path = output_directory / "inverse_gaussian_observed_vs_predicted.png"
+        _plot_observed_vs_predicted_continuous(regression_result, observed_path)
+        output_files.append(str(observed_path))
     elif regression_result.model_type == "gamma_regression":
         observed_path = output_directory / "gamma_observed_vs_predicted.png"
         _plot_observed_vs_predicted_continuous(regression_result, observed_path)
