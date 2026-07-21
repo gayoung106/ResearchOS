@@ -298,7 +298,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type == "ordered_logit":
+        if result.model_type in {"ordered_logit", "ordered_probit"}:
             return self._run_ordered_logit(
                 result,
                 output_dir,

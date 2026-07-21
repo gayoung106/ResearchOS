@@ -28,6 +28,7 @@ class OrderedLogitDiagnosticsReport:
     """Ordered Logit 진단 결과."""
 
     model_id: str
+    model_type: str
     sample_size: int
     parameter_count: int
     category_count: int
@@ -44,17 +45,16 @@ class OrderedLogitDiagnosticsReport:
 def _validate_ordered_logit_result(
     result: RegressionResult,
 ) -> Any:
-    """Ordered Logit 결과인지 확인한다."""
-    if result.model_type != "ordered_logit":
+    """Validate that the result can use ordered-outcome diagnostics."""
+    if result.model_type not in {"ordered_logit", "ordered_probit"}:
         raise ValueError(
-            "Ordered Logit 진단은 model_type='ordered_logit' 결과에만 적용할 수 있습니다."
+            "Ordered diagnostics require model_type='ordered_logit' or 'ordered_probit'."
         )
 
     if result.raw_result is None:
-        raise ValueError("원본 statsmodels 결과 객체가 없습니다.")
+        raise ValueError("A fitted statsmodels ordered result is required.")
 
     return result.raw_result
-
 
 def _ordered_categories(
     actual: np.ndarray,
@@ -412,6 +412,7 @@ def build_ordered_logit_diagnostics(
 
     return OrderedLogitDiagnosticsReport(
         model_id=result.model_id,
+        model_type=result.model_type,
         sample_size=sample_size,
         parameter_count=parameter_count,
         category_count=len(categories),

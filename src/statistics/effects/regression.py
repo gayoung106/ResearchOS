@@ -930,6 +930,35 @@ def _build_ordered_logit_effects(
     )
 
 
+def _build_ordered_probit_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if "/" in coefficient.term:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="ordered_probit_latent_coefficient",
+                estimate=coefficient.estimate,
+                standard_error=coefficient.standard_error,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=coefficient.confidence_interval_lower,
+                confidence_interval_upper=coefficient.confidence_interval_upper,
+                magnitude=None,
+                interpretation="Latent-index coefficient from an ordered probit model.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={"category_count": result.fit_statistics.get("category_count")},
+        metadata={"sample_size": result.sample_size, "link": result.metadata.get("link")},
+    )
+
+
 def _coefficient_base_term(term: str) -> str:
     return term.rsplit("::", 1)[-1]
 
@@ -1280,6 +1309,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "ordered_logit":
         return _build_ordered_logit_effects(result)
+
+    if result.model_type == "ordered_probit":
+        return _build_ordered_probit_effects(result)
 
     if result.model_type == "multinomial_logit":
         return _build_multinomial_logit_effects(result)

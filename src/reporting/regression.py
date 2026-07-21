@@ -294,6 +294,7 @@ def write_korean_results_narrative(
         "binary_probit": "Binary probit regression",
         "multinomial_logit": "Multinomial logistic regression",
         "ordered_logit": "순서형 로지스틱 회귀분석",
+        "ordered_probit": "Ordered probit regression",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
         "zero_inflated_poisson": "영과잉 포아송 회귀분석",
@@ -434,6 +435,13 @@ def write_korean_results_narrative(
             effect_text = (
                 f"AME={marginal_effect:.3f}"
                 if marginal_effect is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
+        elif regression_result.model_type == "ordered_probit":
+            latent = effect_lookup.get((coefficient.term, "ordered_probit_latent_coefficient"))
+            effect_text = (
+                f"latent B={latent:.3f}"
+                if latent is not None
                 else f"B={coefficient.estimate:.3f}"
             )
         elif regression_result.model_type in {
@@ -797,9 +805,15 @@ def write_korean_results_narrative(
             else "모형이 수렴하지 않아 결과 해석에 주의가 필요하다."
         )
 
+    elif regression_result.model_type == "ordered_probit":
+        category_count = regression_result.fit_statistics.get("category_count")
+        if category_count is not None:
+            sentences.append(f"The ordered probit modeled {int(category_count)} ordinal outcome categories.")
+
     elif regression_result.model_type in {
         "binary_logit",
         "binary_probit",
+        "ordered_probit",
         "mixed_binary_logit_random_intercept",
         "mixed_binary_logit_random_slope",
     }:
@@ -937,6 +951,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "binary_probit":
         notes.append("Binary probit reports latent-index coefficients and average marginal effects when available.")
 
+    if regression_result.model_type == "ordered_probit":
+        notes.append("Ordered probit reports latent-index coefficients and ordered threshold parameters.")
+
     if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
 
@@ -985,6 +1002,7 @@ def build_regression_publication_report(
             "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
             "covariance_structure": regression_result.metadata.get("covariance_structure"),
             "binary_link": regression_result.metadata.get("link") if regression_result.model_type == "binary_probit" else None,
+            "ordered_link": regression_result.metadata.get("link") if regression_result.model_type == "ordered_probit" else None,
             "brier_score": regression_result.fit_statistics.get("brier_score") if regression_result.model_type == "binary_probit" else None,
             "reference_category": regression_result.metadata.get("reference_category"),
             "category_labels": regression_result.metadata.get("category_labels"),

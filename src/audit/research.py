@@ -214,6 +214,22 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "ordered_probit":
+        evidence = (
+            f"Ordered probit regression, N={result.sample_size}, "
+            f"categories={result.fit_statistics.get('category_count', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the probit link, ordinal category coding, threshold parameters, and prediction diagnostics.",
+        )
+
     if result.model_type == "binary_probit":
         evidence = (
             f"Binary probit regression, N={result.sample_size}, "
@@ -491,6 +507,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "ordered_probit":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Ordered probit diagnostics, accuracy={summary.get('accuracy', 'unknown')}, "
+            f"ranked probability score={summary.get('ranked_probability_score', 'unknown')}, "
+            f"warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report ordered-category prediction accuracy, ranked probability score, thresholds, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "binary_probit":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -826,7 +860,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "binary_probit":
+    if getattr(report, "model_type", None) == "ordered_probit":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Ordered probit latent effects {len(report.effects)} generated; "
+            f"categories={model_effects.get('category_count', 'unknown')}"
+        )
+        recommendation = "Interpret latent-index coefficients with ordered thresholds and category prediction diagnostics."
+    elif getattr(report, "model_type", None) == "binary_probit":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Binary probit effects {len(report.effects)} generated; "
@@ -1090,6 +1131,15 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "ordered_probit":
+            metadata.update(
+                {
+                    "link": regression_result.metadata.get("link"),
+                    "category_count": regression_result.fit_statistics.get("category_count"),
+                    "category_counts": regression_result.metadata.get("category_counts"),
+                    "threshold_terms": regression_result.metadata.get("threshold_terms"),
                 }
             )
         elif regression_result.model_type == "binary_probit":

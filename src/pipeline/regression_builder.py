@@ -259,6 +259,15 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    ordered_probit_requested = requested_estimator in {
+        "ordered_probit",
+        "ordinal_probit",
+        "probit_ordinal",
+    } or requested_model_type in {
+        "ordered_probit",
+        "ordinal_probit",
+        "probit_ordinal",
+    }
     probit_requested = requested_estimator in {
         "probit",
         "binary_probit",
@@ -354,7 +363,22 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if probit_requested:
+    if ordered_probit_requested:
+        if measurement_level not in {"ordinal", "scale_item"}:
+            return not_registered(
+                "Ordered probit supports ordinal dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "ordered_probit"
+        multilevel_options = {
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 200)
+            ),
+        }
+    elif probit_requested:
         if measurement_level != "binary":
             return not_registered(
                 "Binary probit supports binary dependent variables.",
@@ -1093,6 +1117,7 @@ def register_regression_pipeline(
         "binary_logit",
         "binary_probit",
         "ordered_logit",
+        "ordered_probit",
         "multinomial_logit",
         "count_auto",
         "gee_gaussian",

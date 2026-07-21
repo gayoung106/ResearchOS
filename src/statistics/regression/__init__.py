@@ -38,6 +38,7 @@ from src.statistics.regression.negative_binomial import (
 )
 from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
+from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import fit_panel_fixed_effects
 from src.statistics.regression.poisson import fit_poisson
 from src.statistics.regression.quantile import fit_quantile_regression
@@ -70,6 +71,7 @@ __all__ = [
     "fit_binary_probit",
     "fit_beta_regression",
     "fit_ordered_logit",
+    "fit_ordered_probit",
     "fit_panel_fixed_effects",
     "fit_multinomial_logit",
     "fit_poisson",
