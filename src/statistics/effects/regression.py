@@ -831,6 +831,65 @@ def _build_binary_logit_effects(
     )
 
 
+def _build_log_binomial_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted log-binomial result is required.")
+
+    effects: list[EffectSizeResult] = []
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    params = np.asarray(fitted.params, dtype=float)
+    probabilities = np.asarray(fitted.predict(), dtype=float)
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept"}:
+            continue
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="risk_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Risk ratio from a log-binomial model.",
+            )
+        )
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="average_marginal_effect",
+                estimate=float(np.mean(probabilities * params[index])),
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Average marginal effect on event probability from a log-binomial model.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "mcfadden_pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared_mcfadden"),
+            "brier_score": result.fit_statistics.get("brier_score"),
+            "out_of_bounds_prediction_count": result.fit_statistics.get("out_of_bounds_prediction_count"),
+        },
+        metadata={"sample_size": result.sample_size, "link": result.metadata.get("link")},
+    )
+
+
 def _build_binary_cloglog_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -1355,6 +1414,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "panel_fixed_effects":
         return _build_panel_fixed_effects(result)
+
+    if result.model_type == "log_binomial":
+        return _build_log_binomial_effects(result)
 
     if result.model_type == "binary_cloglog":
         return _build_binary_cloglog_effects(result)

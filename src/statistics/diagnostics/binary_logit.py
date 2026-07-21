@@ -15,6 +15,7 @@ from src.statistics.regression.base import RegressionResult
 
 _BINARY_DIAGNOSTIC_MODELS = {
     "binary_logit",
+    "log_binomial",
     "binary_cloglog",
     "binary_probit",
     "mixed_binary_logit_random_intercept",

@@ -292,6 +292,7 @@ def write_korean_results_narrative(
         "ols": "OLS 회귀분석",
         "weighted_least_squares": "Weighted least squares regression",
         "binary_logit": "이항 로지스틱 회귀분석",
+        "log_binomial": "Log-binomial regression",
         "binary_cloglog": "Binary complementary log-log regression",
         "binary_probit": "Binary probit regression",
         "multinomial_logit": "Multinomial logistic regression",
@@ -430,6 +431,13 @@ def write_korean_results_narrative(
             effect_text = (
                 f"HR={hazard_ratio:.3f}"
                 if hazard_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
+        elif regression_result.model_type == "log_binomial":
+            risk_ratio = effect_lookup.get((coefficient.term, "risk_ratio"))
+            effect_text = (
+                f"RR={risk_ratio:.3f}"
+                if risk_ratio is not None
                 else f"B={coefficient.estimate:.3f}"
             )
         elif regression_result.model_type == "binary_cloglog":
@@ -835,6 +843,7 @@ def write_korean_results_narrative(
 
     elif regression_result.model_type in {
         "binary_logit",
+        "log_binomial",
         "binary_cloglog",
         "binary_probit",
         "ordered_probit",
@@ -925,6 +934,7 @@ def build_regression_publication_report(
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
+        "log_binomial",
         "binary_cloglog",
         "binary_probit",
         "mixed_binary_logit_random_intercept",
@@ -972,6 +982,9 @@ def build_regression_publication_report(
 
     if regression_result.model_type == "cox_proportional_hazards":
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
+
+    if regression_result.model_type == "log_binomial":
+        notes.append("Log-binomial models report risk ratios and average marginal effects.")
 
     if regression_result.model_type == "binary_cloglog":
         notes.append("Binary complementary log-log models report exponentiated coefficients and average marginal effects.")
@@ -1035,9 +1048,10 @@ def build_regression_publication_report(
             "reml": regression_result.metadata.get("reml"),
             "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
             "covariance_structure": regression_result.metadata.get("covariance_structure"),
-            "binary_link": regression_result.metadata.get("link") if regression_result.model_type in {"binary_cloglog", "binary_probit"} else None,
+            "binary_link": regression_result.metadata.get("link") if regression_result.model_type in {"log_binomial", "binary_cloglog", "binary_probit"} else None,
             "ordered_link": regression_result.metadata.get("link") if regression_result.model_type == "ordered_probit" else None,
-            "brier_score": regression_result.fit_statistics.get("brier_score") if regression_result.model_type in {"binary_cloglog", "binary_probit"} else None,
+            "brier_score": regression_result.fit_statistics.get("brier_score") if regression_result.model_type in {"log_binomial", "binary_cloglog", "binary_probit"} else None,
+            "out_of_bounds_prediction_count": regression_result.fit_statistics.get("out_of_bounds_prediction_count") if regression_result.model_type == "log_binomial" else None,
             "reference_category": regression_result.metadata.get("reference_category"),
             "category_labels": regression_result.metadata.get("category_labels"),
             "quantile": regression_result.fit_statistics.get("quantile"),
