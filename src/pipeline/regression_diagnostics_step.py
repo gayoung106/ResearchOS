@@ -78,6 +78,13 @@ from src.statistics.diagnostics.iv import (
     iv_multicollinearity_to_dataframe,
     iv_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.loglogistic_aft import (
+    build_loglogistic_aft_diagnostics,
+    loglogistic_aft_diagnostic_summary_to_dataframe,
+    loglogistic_aft_multicollinearity_to_dataframe,
+    loglogistic_aft_prediction_metrics_to_dataframe,
+    loglogistic_aft_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.lognormal_aft import (
     build_lognormal_aft_diagnostics,
     lognormal_aft_diagnostic_summary_to_dataframe,
@@ -262,6 +269,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type == "cox_proportional_hazards":
             return self._run_cox(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "loglogistic_aft":
+            return self._run_loglogistic_aft(
                 result,
                 output_dir,
             )
@@ -682,6 +695,34 @@ class RegressionDiagnosticsStep(PipelineStep):
         )
 
 
+
+
+    def _run_loglogistic_aft(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_loglogistic_aft_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        loglogistic_aft_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        loglogistic_aft_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        loglogistic_aft_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        loglogistic_aft_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_lognormal_aft(
         self,

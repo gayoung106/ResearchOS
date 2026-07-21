@@ -18,6 +18,7 @@ from src.statistics.regression.heckman import fit_heckman_selection
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
 from src.statistics.regression.iv import fit_iv_2sls_regression
 from src.statistics.regression.log_binomial import fit_log_binomial
+from src.statistics.regression.loglogistic_aft import fit_loglogistic_aft
 from src.statistics.regression.lognormal_aft import fit_lognormal_aft
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
@@ -99,5 +100,6 @@ __all__ = [
     "fit_iv_2sls_regression",
     "fit_log_binomial",
     "fit_lognormal_aft",
+    "fit_loglogistic_aft",
     "fit_gee",
 ]

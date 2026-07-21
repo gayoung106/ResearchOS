@@ -293,6 +293,7 @@ def write_korean_results_narrative(
         "weighted_least_squares": "Weighted least squares regression",
         "binary_logit": "이항 로지스틱 회귀분석",
         "log_binomial": "Log-binomial regression",
+        "loglogistic_aft": "Log-logistic AFT regression",
         "lognormal_aft": "Log-normal AFT regression",
         "weibull_aft": "Weibull AFT regression",
         "binary_cloglog": "Binary complementary log-log regression",
@@ -435,7 +436,7 @@ def write_korean_results_narrative(
                 if hazard_ratio is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type in {"lognormal_aft", "weibull_aft"}:
+        elif regression_result.model_type in {"loglogistic_aft", "lognormal_aft", "weibull_aft"}:
             time_ratio = effect_lookup.get((coefficient.term, "time_ratio"))
             effect_text = (
                 f"TR={time_ratio:.3f}"
@@ -734,6 +735,27 @@ def write_korean_results_narrative(
             )
         if event_variable is not None:
             sentences.append(f"Event status was defined by {event_variable}.")
+        if events_per_parameter is not None:
+            sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
+
+    elif regression_result.model_type == "loglogistic_aft":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
+        shape = regression_result.fit_statistics.get("shape")
+        median_time = regression_result.fit_statistics.get("median_predicted_time")
+        event_variable = regression_result.metadata.get("event_variable")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The log-logistic AFT model included {int(event_count)} events and "
+                f"{int(censored_count)} censored observations."
+            )
+        if event_variable is not None:
+            sentences.append(f"Event status was defined by {event_variable}.")
+        if shape is not None:
+            sentences.append(f"The log-logistic shape parameter was {float(shape):.3f}.")
+        if median_time is not None:
+            sentences.append(f"Median predicted survival time was {float(median_time):.3f}.")
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
@@ -1038,6 +1060,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "cox_proportional_hazards":
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
 
+    if regression_result.model_type == "loglogistic_aft":
+        notes.append("Log-logistic AFT models report time ratios; values above 1 indicate longer median survival time.")
+
     if regression_result.model_type == "lognormal_aft":
         notes.append("Log-normal AFT models report time ratios; values above 1 indicate longer median survival time.")
 
@@ -1120,6 +1145,7 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "survival_distribution": regression_result.metadata.get("distribution"),
             "weibull_shape": regression_result.fit_statistics.get("shape"),
+            "loglogistic_shape": regression_result.fit_statistics.get("shape") if regression_result.model_type == "loglogistic_aft" else None,
             "lognormal_sigma": regression_result.fit_statistics.get("sigma"),
             "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
