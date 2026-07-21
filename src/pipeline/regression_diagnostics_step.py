@@ -97,6 +97,14 @@ from src.statistics.diagnostics.quantile import (
     quantile_residual_summary_to_dataframe,
     quantile_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.regularized import (
+    build_regularized_diagnostics,
+    regularized_coefficients_to_dataframe,
+    regularized_diagnostic_summary_to_dataframe,
+    regularized_multicollinearity_to_dataframe,
+    regularized_prediction_metrics_to_dataframe,
+    regularized_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.robust import (
     build_robust_diagnostics,
     robust_diagnostic_summary_to_dataframe,
@@ -149,6 +157,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "regularized_regression":
+            return self._run_regularized_regression(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "robust_regression":
             return self._run_robust_regression(
@@ -274,6 +288,35 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_regularized_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_regularized_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "coefficients": output_dir / "coefficient_selection.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        regularized_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        regularized_coefficients_to_dataframe(report).to_excel(paths["coefficients"], index=False)
+        regularized_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        regularized_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        regularized_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_robust_regression(
         self,

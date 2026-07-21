@@ -323,7 +323,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -353,6 +353,12 @@ def write_korean_results_narrative(
                     (
                         coefficient.term,
                         "robust_standardized_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "regularized_standardized_beta",
                     )
                 )
             )
@@ -476,6 +482,25 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "regularized_regression":
+        penalty = regression_result.fit_statistics.get("penalty")
+        alpha = regression_result.fit_statistics.get("alpha")
+        l1_ratio = regression_result.fit_statistics.get("l1_ratio")
+        selected = regression_result.fit_statistics.get("selected_coefficient_count")
+        zero = regression_result.fit_statistics.get("zero_coefficient_count")
+        rmse = regression_result.fit_statistics.get("root_mean_squared_error")
+        if penalty is not None:
+            sentences.append(
+                f"Regularized regression used {penalty} penalty "
+                f"(alpha={float(alpha):.3f}, l1_ratio={float(l1_ratio):.2f})."
+            )
+        if selected is not None and zero is not None:
+            sentences.append(
+                f"The penalty retained {int(selected)} coefficients and shrank {int(zero)} to zero."
+            )
+        if rmse is not None:
+            sentences.append(f"Regularized prediction RMSE was {float(rmse):.3f}.")
 
     elif regression_result.model_type == "robust_regression":
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
@@ -764,7 +789,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -820,6 +845,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "robust_regression":
         notes.append("Robust regression uses M-estimation weights to reduce sensitivity to outlying residuals.")
 
+    if regression_result.model_type == "regularized_regression":
+        notes.append("Regularized regression reports penalized coefficients; standard errors and p-values are not inferential.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -853,6 +881,11 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "precision": regression_result.fit_statistics.get("precision"),
+            "regularized_penalty": regression_result.fit_statistics.get("penalty"),
+            "regularized_alpha": regression_result.fit_statistics.get("alpha"),
+            "regularized_l1_ratio": regression_result.fit_statistics.get("l1_ratio"),
+            "selected_coefficient_count": regression_result.fit_statistics.get("selected_coefficient_count"),
+            "zero_coefficient_count": regression_result.fit_statistics.get("zero_coefficient_count"),
             "robust_norm": regression_result.metadata.get("norm"),
             "downweighted_count": regression_result.fit_statistics.get("downweighted_count"),
             "heavily_downweighted_count": regression_result.fit_statistics.get("heavily_downweighted_count"),

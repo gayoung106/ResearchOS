@@ -513,6 +513,7 @@ def build_regression_visualizations(
     if regression_result.model_type in {
         "ols",
         "quantile_regression",
+        "regularized_regression",
         "robust_regression",
         "tobit_regression",
         "panel_fixed_effects",

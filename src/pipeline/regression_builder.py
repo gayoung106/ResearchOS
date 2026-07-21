@@ -259,6 +259,21 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    regularized_requested = requested_estimator in {
+        "regularized",
+        "regularized_regression",
+        "ridge",
+        "lasso",
+        "elastic_net",
+        "elasticnet",
+    } or requested_model_type in {
+        "regularized",
+        "regularized_regression",
+        "ridge",
+        "lasso",
+        "elastic_net",
+        "elasticnet",
+    }
     robust_requested = requested_estimator in {"robust", "rlm", "robust_regression"} or requested_model_type in {
         "robust",
         "rlm",
@@ -297,7 +312,30 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if robust_requested:
+    if regularized_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Regularized regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        penalty = regression_options.get("penalty", regression_options.get("regularization", requested_estimator or requested_model_type or "elastic_net"))
+        if str(penalty).lower() in {"regularized", "regularized_regression"}:
+            penalty = "elastic_net"
+        model_type = "regularized_regression"
+        multilevel_options = {
+            "penalty": penalty,
+            "alpha": regression_options.get("alpha", regression_options.get("lambda", 0.1)),
+            "l1_ratio": regression_options.get("l1_ratio", 0.5),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "standardize": regression_options.get("standardize", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 1000)
+            ),
+        }
+    elif robust_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Robust regression supports continuous dependent variables.",
@@ -860,6 +898,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "regularized_regression",
         "robust_regression",
         "tobit_regression",
         "panel_fixed_effects",

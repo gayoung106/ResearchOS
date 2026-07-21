@@ -331,6 +331,59 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_regularized_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted regularized regression result is required.")
+    endog = np.asarray(fitted.model.endog, dtype=float)
+    standardized = result.metadata.get("standardized_coefficients", {})
+    outcome_sd = float(np.std(endog, ddof=1)) if endog.size > 1 else np.nan
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Regularized standardized effects could not be computed because outcome SD is zero.")
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        estimate = None
+        if coefficient.term in standardized and np.isfinite(outcome_sd) and not np.isclose(outcome_sd, 0.0):
+            estimate = float(standardized[coefficient.term] / outcome_sd)
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="regularized_standardized_beta",
+                estimate=estimate,
+                standard_error=None,
+                statistic=None,
+                p_value=None,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized coefficient from penalized least-squares estimation.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "penalty": result.fit_statistics.get("penalty"),
+            "alpha": result.fit_statistics.get("alpha"),
+            "l1_ratio": result.fit_statistics.get("l1_ratio"),
+            "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
+            "selected_coefficient_count": result.fit_statistics.get("selected_coefficient_count"),
+            "zero_coefficient_count": result.fit_statistics.get("zero_coefficient_count"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "selected_terms": result.metadata.get("selected_terms"),
+            "zero_terms": result.metadata.get("zero_terms"),
+        },
+    )
+
+
 def _build_robust_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -942,6 +995,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)
+
+    if result.model_type == "regularized_regression":
+        return _build_regularized_effects(result)
 
     if result.model_type == "robust_regression":
         return _build_robust_effects(result)

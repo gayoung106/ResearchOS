@@ -214,6 +214,26 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "regularized_regression":
+        penalty = result.fit_statistics.get("penalty", "unknown")
+        alpha = result.fit_statistics.get("alpha", "unknown")
+        selected = result.fit_statistics.get("selected_coefficient_count", "unknown")
+        zero = result.fit_statistics.get("zero_coefficient_count", "unknown")
+        evidence = (
+            f"Regularized linear regression, N={result.sample_size}, "
+            f"penalty={penalty}, alpha={alpha}, selected={selected}, zero={zero}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the penalty type, alpha/l1_ratio, selected coefficients, and tuning rationale.",
+        )
+
     if result.model_type == "robust_regression":
         downweighted = result.fit_statistics.get("downweighted_count", "unknown")
         heavy = result.fit_statistics.get("heavily_downweighted_count", "unknown")
@@ -378,6 +398,25 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "regularized_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Regularized diagnostics, selected={summary.get('selected_coefficient_count', 'unknown')}, "
+            f"zero={summary.get('zero_coefficient_count', 'unknown')}, "
+            f"RMSE={summary.get('root_mean_squared_error', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report coefficient selection, prediction diagnostics, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "robust_regression":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -604,7 +643,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "robust_regression":
+    if getattr(report, "model_type", None) == "regularized_regression":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Regularized standardized effects {len(report.effects)} generated; "
+            f"selected={model_effects.get('selected_coefficient_count', 'unknown')}"
+        )
+        recommendation = "Interpret penalized standardized coefficients with tuning and selection diagnostics."
+    elif getattr(report, "model_type", None) == "robust_regression":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Robust standardized effects {len(report.effects)} generated; "
@@ -826,6 +872,17 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "regularized_regression":
+            metadata.update(
+                {
+                    "penalty": regression_result.fit_statistics.get("penalty"),
+                    "alpha": regression_result.fit_statistics.get("alpha"),
+                    "l1_ratio": regression_result.fit_statistics.get("l1_ratio"),
+                    "selected_coefficient_count": regression_result.fit_statistics.get("selected_coefficient_count"),
+                    "zero_coefficient_count": regression_result.fit_statistics.get("zero_coefficient_count"),
+                    "root_mean_squared_error": regression_result.fit_statistics.get("root_mean_squared_error"),
                 }
             )
         elif regression_result.model_type == "robust_regression":
