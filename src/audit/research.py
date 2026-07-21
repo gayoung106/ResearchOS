@@ -214,6 +214,30 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "panel_fixed_effects":
+        entity_variable = result.metadata.get("entity_variable", "unknown")
+        time_variable = result.metadata.get("time_variable")
+        entity_count = result.fit_statistics.get("entity_count", "unknown")
+        time_count = result.fit_statistics.get("time_period_count")
+        within_r_squared = result.fit_statistics.get("within_r_squared")
+        evidence = (
+            f"Panel fixed-effects model, N={result.sample_size}, "
+            f"entity={entity_variable}({entity_count}), converged={result.converged}"
+        )
+        if time_variable is not None:
+            evidence += f", time={time_variable}({time_count})"
+        if within_r_squared is not None:
+            evidence += f", within R-squared={float(within_r_squared):.3f}"
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report absorbed entity/time effects, within-panel estimates, and clustered or robust standard errors.",
+        )
+
     if result.model_type in {
         "mixed_random_intercept",
         "mixed_random_slope",
@@ -315,6 +339,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "panel_fixed_effects":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Panel diagnostics, entities={summary.get('entity_count', 'unknown')}, "
+            f"within R-squared={summary.get('within_r_squared', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report within-panel VIF checks and entity-level residual diagnostics.",
+        )
+
     if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -487,7 +529,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) in {
+    if getattr(report, "model_type", None) == "panel_fixed_effects":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Within-panel effect sizes {len(report.effects)} generated; "
+            f"within R-squared={model_effects.get('within_r_squared', 'unknown')}"
+        )
+        recommendation = "Interpret within-standardized coefficients with absorbed fixed effects."
+    elif getattr(report, "model_type", None) in {
         "mixed_random_intercept",
         "mixed_random_slope",
         "mixed_three_level",
@@ -688,6 +737,16 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "panel_fixed_effects":
+            metadata.update(
+                {
+                    "entity_variable": regression_result.metadata.get("entity_variable"),
+                    "time_variable": regression_result.metadata.get("time_variable"),
+                    "entity_count": regression_result.fit_statistics.get("entity_count"),
+                    "time_period_count": regression_result.fit_statistics.get("time_period_count"),
+                    "within_r_squared": regression_result.fit_statistics.get("within_r_squared"),
                 }
             )
         elif _is_mixed_effects_model(runtime, model_id):

@@ -83,6 +83,13 @@ from src.statistics.diagnostics.ordered_logit import (
     ordered_predictions_to_dataframe,
     ordered_thresholds_to_dataframe,
 )
+from src.statistics.diagnostics.panel import (
+    build_panel_diagnostics,
+    panel_diagnostic_summary_to_dataframe,
+    panel_entity_residuals_to_dataframe,
+    panel_multicollinearity_to_dataframe,
+    panel_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.quantile import (
     build_quantile_diagnostics,
     quantile_diagnostic_summary_to_dataframe,
@@ -128,6 +135,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "panel_fixed_effects":
+            return self._run_panel_fixed_effects(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "beta_regression":
             return self._run_beta_regression(
@@ -235,6 +248,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_panel_fixed_effects(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_panel_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "entity_residuals": output_dir / "entity_residuals.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        panel_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        panel_entity_residuals_to_dataframe(report).to_excel(paths["entity_residuals"], index=False)
+        panel_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        panel_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_beta_regression(
         self,

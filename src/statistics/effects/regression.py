@@ -331,6 +331,60 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
+    within_outcome = np.asarray(result.metadata.get("within_outcome", []), dtype=float)
+    within_predictors = np.asarray(result.metadata.get("within_predictors", []), dtype=float)
+    predictor_names = [str(name) for name in result.metadata.get("within_predictor_names", [])]
+    outcome_sd = float(np.std(within_outcome, ddof=1)) if within_outcome.size > 1 else np.nan
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Panel standardized effects could not be computed because within-outcome SD is zero.")
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    for index, term in enumerate(predictor_names):
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None or within_predictors.ndim != 2:
+            continue
+        predictor_sd = float(np.std(within_predictors[:, index], ddof=1))
+        if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+            estimate = None
+        else:
+            estimate = float(coefficient.estimate * predictor_sd / outcome_sd)
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="within_standardized_beta",
+                estimate=estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized within-panel coefficient after absorbing fixed effects.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "within_r_squared": result.fit_statistics.get("within_r_squared"),
+            "adjusted_within_r_squared": result.fit_statistics.get("adjusted_within_r_squared"),
+            "entity_count": result.fit_statistics.get("entity_count"),
+            "time_period_count": result.fit_statistics.get("time_period_count"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "entity_variable": result.metadata.get("entity_variable"),
+            "time_variable": result.metadata.get("time_variable"),
+            "absorbed_effects": result.metadata.get("absorbed_effects"),
+        },
+    )
+
+
 def _build_binary_logit_effects(
     result: RegressionResult,
 ) -> EffectSizeReport:
@@ -761,6 +815,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)
+
+    if result.model_type == "panel_fixed_effects":
+        return _build_panel_fixed_effects(result)
 
     if result.model_type in {
         "binary_logit",

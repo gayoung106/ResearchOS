@@ -323,16 +323,25 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "quantile_regression", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
-            beta = effect_lookup.get(
-                (
-                    coefficient.term,
-                    "standardized_beta",
+        if regression_result.model_type in {"ols", "quantile_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+            beta = (
+                effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "standardized_beta",
+                    )
                 )
-            ) or effect_lookup.get(
-                (
-                    coefficient.term,
-                    "standardized_quantile_beta",
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "standardized_quantile_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "within_standardized_beta",
+                    )
                 )
             )
 
@@ -455,6 +464,26 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "panel_fixed_effects":
+        entity_variable = regression_result.metadata.get("entity_variable")
+        time_variable = regression_result.metadata.get("time_variable")
+        entity_count = regression_result.fit_statistics.get("entity_count")
+        time_count = regression_result.fit_statistics.get("time_period_count")
+        within_r_squared = regression_result.fit_statistics.get("within_r_squared")
+        absorbed = regression_result.metadata.get("absorbed_effects") or []
+        if entity_count is not None and entity_variable is not None:
+            sentences.append(
+                f"Panel fixed effects absorbed {int(entity_count)} entities defined by {entity_variable}."
+            )
+        if time_count is not None and time_variable is not None:
+            sentences.append(
+                f"Time fixed effects covered {int(time_count)} periods defined by {time_variable}."
+            )
+        if within_r_squared is not None:
+            sentences.append(f"Within R-squared was {float(within_r_squared):.3f}.")
+        if absorbed:
+            sentences.append("Absorbed fixed effects were " + ", ".join(str(item) for item in absorbed) + ".")
 
     elif regression_result.model_type == "beta_regression":
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
@@ -685,7 +714,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "quantile_regression"}:
+    if regression_result.model_type in {"ols", "quantile_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -732,6 +761,9 @@ def build_regression_publication_report(
     if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
         notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
 
+    if regression_result.model_type == "panel_fixed_effects":
+        notes.append("Panel fixed-effects models report within-panel coefficients after absorbing entity and optional time effects.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -765,6 +797,11 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "precision": regression_result.fit_statistics.get("precision"),
+            "entity_variable": regression_result.metadata.get("entity_variable"),
+            "time_variable": regression_result.metadata.get("time_variable"),
+            "entity_count": regression_result.fit_statistics.get("entity_count"),
+            "time_period_count": regression_result.fit_statistics.get("time_period_count"),
+            "within_r_squared": regression_result.fit_statistics.get("within_r_squared"),
         },
     )
 

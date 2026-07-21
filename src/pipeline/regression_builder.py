@@ -259,6 +259,11 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    panel_fe_requested = requested_estimator in {"panel_fe", "fixed_effects", "panel_fixed_effects"} or requested_model_type in {
+        "panel_fe",
+        "fixed_effects",
+        "panel_fixed_effects",
+    }
     beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
         "beta",
         "beta_regression",
@@ -282,7 +287,52 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if beta_requested:
+    if panel_fe_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Panel fixed effects supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        panel_options = analysis_plan.analyses.panel.options
+        panel_options = panel_options if isinstance(panel_options, dict) else {}
+        entity_variable = str(
+            regression_options.get(
+                "entity_variable",
+                regression_options.get("id_variable", panel_options.get("entity_variable", panel_options.get("id_variable", ""))),
+            )
+        ).strip()
+        time_variable = str(
+            regression_options.get("time_variable", panel_options.get("time_variable", ""))
+        ).strip()
+        if not entity_variable:
+            return not_registered(
+                "Panel fixed effects requires entity_variable or id_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        missing_panel_variables = [
+            variable for variable in [entity_variable, time_variable] if variable and variable not in variable_map.variables
+        ]
+        if missing_panel_variables:
+            return not_registered(
+                "Panel variable is missing from variable_map: " + ", ".join(missing_panel_variables),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "panel_fixed_effects"
+        multilevel_options = {
+            "entity_variable": entity_variable,
+            "time_variable": time_variable,
+            "covariance_type": regression_options.get("covariance_type", "cluster_entity"),
+        }
+    elif beta_requested:
         if measurement_level != "proportion":
             return not_registered(
                 "Beta regression supports proportion dependent variables strictly inside (0, 1).",
@@ -755,6 +805,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "panel_fixed_effects",
         "quantile_regression",
         "cox_proportional_hazards",
         "fractional_logit",
