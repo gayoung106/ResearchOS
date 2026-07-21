@@ -327,6 +327,15 @@ def write_korean_results_narrative(
         f"{model_name}을 실시한 결과, 분석에 사용된 표본은 {regression_result.sample_size}개였다."
     )
 
+    selected_survival_model = regression_result.metadata.get("selected_survival_model")
+    candidate_survival_models = regression_result.metadata.get("candidate_survival_models") or []
+    if selected_survival_model and candidate_survival_models:
+        criterion = regression_result.metadata.get("survival_selection_criterion", "aic")
+        sentences.append(
+            f"Parametric survival selection compared {len(candidate_survival_models)} AFT candidates "
+            f"by {str(criterion).upper()} and selected {selected_survival_model}."
+        )
+
     for coefficient in substantive:
         significant = coefficient.p_value < 0.05
         direction = _direction_text(coefficient.estimate)
@@ -1167,6 +1176,10 @@ def build_regression_publication_report(
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
             "survival_distribution": regression_result.metadata.get("distribution"),
+            "selected_survival_model": regression_result.metadata.get("selected_survival_model"),
+            "survival_selection_criterion": regression_result.metadata.get("survival_selection_criterion"),
+            "candidate_survival_model_count": regression_result.metadata.get("candidate_survival_model_count"),
+            "candidate_survival_models": regression_result.metadata.get("candidate_survival_models"),
             "weibull_shape": regression_result.fit_statistics.get("shape"),
             "loglogistic_shape": regression_result.fit_statistics.get("shape") if regression_result.model_type == "loglogistic_aft" else None,
             "lognormal_sigma": regression_result.fit_statistics.get("sigma"),

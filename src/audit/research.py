@@ -213,6 +213,13 @@ def _regression_item(
     result = runtime.artifacts[key]
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
+    selected = result.metadata.get("selected_survival_model")
+    selection_suffix = ""
+    if selected:
+        selection_suffix = (
+            f", selected survival model={selected}, "
+            f"criterion={result.metadata.get('survival_selection_criterion', 'aic')}"
+        )
 
 
 
@@ -224,7 +231,7 @@ def _regression_item(
             f"events={result.fit_statistics.get('event_count', 'unknown')}, "
             f"censored={result.fit_statistics.get('censored_count', 'unknown')}, "
             f"constant hazard={result.fit_statistics.get('constant_hazard', 'unknown')}, "
-            f"converged={result.converged}"
+            f"converged={result.converged}{selection_suffix}"
         )
         return AuditItem(
             category="?? ??",
@@ -1369,6 +1376,10 @@ def build_research_audit_report(
     }
     if regression_result is not None:
         metadata["model_type"] = regression_result.model_type
+        metadata["selected_survival_model"] = regression_result.metadata.get("selected_survival_model")
+        metadata["survival_selection_criterion"] = regression_result.metadata.get("survival_selection_criterion")
+        metadata["candidate_survival_model_count"] = regression_result.metadata.get("candidate_survival_model_count")
+        metadata["candidate_survival_models"] = regression_result.metadata.get("candidate_survival_models")
         if regression_result.model_type in _THREE_LEVEL_MIXED_MODELS:
             metadata.update(
                 {

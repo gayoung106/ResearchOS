@@ -380,6 +380,17 @@ def register_regression_pipeline(
         "cox_ph",
         "cox_proportional_hazards",
     }
+    parametric_survival_requested = requested_estimator in {
+        "parametric_survival",
+        "parametric_survival_auto",
+        "aft_auto",
+        "survival_aft_auto",
+    } or requested_model_type in {
+        "parametric_survival",
+        "parametric_survival_auto",
+        "aft_auto",
+        "survival_aft_auto",
+    }
     aft_requested = requested_estimator in {"aft", "weibull_aft", "weibull-aft"} or requested_model_type in {
         "aft",
         "weibull_aft",
@@ -816,6 +827,49 @@ def register_regression_pipeline(
 
 
 
+
+    elif parametric_survival_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Parametric survival selection supports positive continuous duration outcomes.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Parametric survival selection requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Parametric survival event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        raw_candidates = regression_options.get("candidate_models", regression_options.get("survival_candidate_models"))
+        candidate_models = (
+            [str(value) for value in raw_candidates]
+            if isinstance(raw_candidates, (list, tuple))
+            else None
+        )
+        model_type = "parametric_survival_auto"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "candidate_models": candidate_models,
+            "selection_criterion": regression_options.get("selection_criterion", "aic"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 500)
+            ),
+        }
     elif exponential_aft_requested:
         if measurement_level != "continuous":
             return not_registered(
@@ -1384,6 +1438,7 @@ def register_regression_pipeline(
         "robust_regression",
         "tobit_regression",
         "panel_fixed_effects",
+        "parametric_survival_auto",
         "quantile_regression",
         "cox_proportional_hazards",
         "exponential_aft",

@@ -47,6 +47,7 @@ from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import fit_panel_fixed_effects
+from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
 from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
@@ -285,6 +286,31 @@ def fit_regression_by_level(
 
 
 
+
+
+    if model_type == "parametric_survival_auto":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Parametric survival model selection requires event_variable.")
+        candidates = options.get("candidate_models", options.get("survival_candidate_models"))
+        candidate_models = (
+            [str(value) for value in candidates]
+            if isinstance(candidates, (list, tuple))
+            else None
+        )
+        return fit_parametric_survival_regression(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            candidate_models=candidate_models,
+            selection_criterion=str(options.get("selection_criterion", "aic")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
 
     if model_type == "exponential_aft":
         options = mixed_effects_options or {}
