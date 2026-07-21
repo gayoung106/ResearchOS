@@ -1153,6 +1153,14 @@ def _effect_size_item(
             f"shape={model_effects.get('shape', 'unknown')}"
         )
         recommendation = "Interpret time ratios as acceleration or deceleration of survival time."
+    elif getattr(report, "model_type", None) == "stratified_cox":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Stratified Cox hazard-ratio effects {len(report.effects)} generated; "
+            f"strata={metadata.get('strata_count', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios conditional on strata-specific baseline hazards."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1417,7 +1425,7 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type == "cox_proportional_hazards":
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
@@ -1425,6 +1433,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "strata_variable": regression_result.metadata.get("strata_variable"),
+                    "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                 }
             )
 
@@ -1439,6 +1449,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "strata_variable": regression_result.metadata.get("strata_variable"),
+                    "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                     "constant_hazard": regression_result.fit_statistics.get("constant_hazard"),
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
@@ -1451,6 +1463,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "strata_variable": regression_result.metadata.get("strata_variable"),
+                    "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                     "loglogistic_shape": regression_result.fit_statistics.get("shape"),
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
@@ -1463,6 +1477,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "strata_variable": regression_result.metadata.get("strata_variable"),
+                    "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                     "lognormal_sigma": regression_result.fit_statistics.get("sigma"),
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
@@ -1475,6 +1491,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "strata_variable": regression_result.metadata.get("strata_variable"),
+                    "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                     "weibull_shape": regression_result.fit_statistics.get("shape"),
                     "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }

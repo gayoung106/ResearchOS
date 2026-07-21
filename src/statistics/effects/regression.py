@@ -151,6 +151,8 @@ def _build_ols_effects(
         },
         metadata={
             "sample_size": result.sample_size,
+            "strata_variable": result.metadata.get("strata_variable"),
+            "strata_count": result.metadata.get("strata_count"),
             "residual_degrees_of_freedom": residual_df,
         },
     )
@@ -275,6 +277,8 @@ def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
             "sample_size": result.sample_size,
             "duration_variable": result.metadata.get("duration_variable"),
             "event_variable": result.metadata.get("event_variable"),
+            "strata_variable": result.metadata.get("strata_variable"),
+            "strata_count": result.metadata.get("strata_count"),
         },
     )
 
@@ -1587,7 +1591,7 @@ def build_regression_effect_size_report(
     if result.model_type in {"ols", "weighted_least_squares"}:
         return _build_ols_effects(result)
 
-    if result.model_type == "cox_proportional_hazards":
+    if result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
         return _build_cox_effects(result)
 
     if result.model_type == "fractional_logit":

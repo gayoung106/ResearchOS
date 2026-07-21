@@ -434,7 +434,7 @@ def write_korean_results_narrative(
                 if fractional_or is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type == "cox_proportional_hazards":
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
             hazard_ratio = effect_lookup.get(
                 (
                     coefficient.term,
@@ -734,7 +734,7 @@ def write_korean_results_narrative(
         if boundary_count is not None:
             sentences.append(f"Boundary observations at 0 or 1 numbered {int(boundary_count)}.")
 
-    elif regression_result.model_type == "cox_proportional_hazards":
+    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
         event_count = regression_result.fit_statistics.get("event_count")
         censored_count = regression_result.fit_statistics.get("censored_count")
         events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
@@ -745,6 +745,12 @@ def write_korean_results_narrative(
             )
         if event_variable is not None:
             sentences.append(f"Event status was defined by {event_variable}.")
+        strata_variable = regression_result.metadata.get("strata_variable")
+        strata_count = regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count"))
+        if regression_result.model_type == "stratified_cox" and strata_variable is not None:
+            sentences.append(
+                f"The Cox baseline hazard was stratified by {strata_variable} across {int(strata_count)} strata."
+            )
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
@@ -1086,8 +1092,10 @@ def build_regression_publication_report(
     if regression_result.model_type == "inverse_gaussian_regression":
         notes.append("Inverse Gaussian regression uses a log link and reports multiplicative mean ratios.")
 
-    if regression_result.model_type == "cox_proportional_hazards":
+    if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
+    if regression_result.model_type == "stratified_cox":
+        notes.append("Stratified Cox models allow separate baseline hazards across strata.")
 
     if regression_result.model_type == "exponential_aft":
         notes.append("Exponential AFT models report time ratios under a constant-hazard survival model.")
@@ -1175,6 +1183,8 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "strata_variable": regression_result.metadata.get("strata_variable"),
+            "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
             "survival_distribution": regression_result.metadata.get("distribution"),
             "selected_survival_model": regression_result.metadata.get("selected_survival_model"),
             "survival_selection_criterion": regression_result.metadata.get("survival_selection_criterion"),

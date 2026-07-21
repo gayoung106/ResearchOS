@@ -380,6 +380,15 @@ def register_regression_pipeline(
         "cox_ph",
         "cox_proportional_hazards",
     }
+    stratified_cox_requested = requested_estimator in {
+        "stratified_cox",
+        "cox_stratified",
+        "stratified_cox_ph",
+    } or requested_model_type in {
+        "stratified_cox",
+        "cox_stratified",
+        "stratified_cox_ph",
+    }
     parametric_survival_requested = requested_estimator in {
         "parametric_survival",
         "parametric_survival_auto",
@@ -785,6 +794,58 @@ def register_regression_pipeline(
         model_type = "beta_regression"
         multilevel_options = {
             "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif stratified_cox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Stratified Cox regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        strata_variable = str(regression_options.get("strata_variable", regression_options.get("strata", ""))).strip()
+        if not event_variable:
+            return not_registered(
+                "Stratified Cox regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if not strata_variable:
+            return not_registered(
+                "Stratified Cox regression requires regression.options.strata_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Stratified Cox event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if strata_variable not in variable_map.variables:
+            return not_registered(
+                "Stratified Cox strata variable is missing from variable_map: " + strata_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "stratified_cox"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "strata_variable": strata_variable,
+            "ties": regression_options.get("ties", "breslow"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
             ),
@@ -1441,6 +1502,7 @@ def register_regression_pipeline(
         "parametric_survival_auto",
         "quantile_regression",
         "cox_proportional_hazards",
+        "stratified_cox",
         "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",

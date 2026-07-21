@@ -274,7 +274,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type == "cox_proportional_hazards":
+        if result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
             return self._run_cox(
                 result,
                 output_dir,

@@ -10,7 +10,7 @@ from src.statistics.regression.binary_cloglog import fit_binary_cloglog
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
-from src.statistics.regression.cox import fit_cox_proportional_hazards
+from src.statistics.regression.cox import fit_cox_proportional_hazards, fit_stratified_cox
 from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
@@ -385,6 +385,26 @@ def fit_regression_by_level(
             dataframe,
             duration_variable=dependent_variable,
             event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            ties=str(options.get("ties", "breslow")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+    if model_type == "stratified_cox":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        strata_variable = str(options.get("strata_variable", options.get("strata", ""))).strip()
+        if not event_variable:
+            raise ValueError("Stratified Cox regression requires event_variable.")
+        if not strata_variable:
+            raise ValueError("Stratified Cox regression requires strata_variable.")
+        return fit_stratified_cox(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            strata_variable=strata_variable,
             independent_variables=independent_variables,
             fixed_effects=fixed_effects,
             model_id=model_id,
