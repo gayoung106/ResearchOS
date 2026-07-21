@@ -380,6 +380,11 @@ def register_regression_pipeline(
         "cox_ph",
         "cox_proportional_hazards",
     }
+    aft_requested = requested_estimator in {"aft", "weibull_aft", "weibull-aft"} or requested_model_type in {
+        "aft",
+        "weibull_aft",
+        "weibull-aft",
+    }
     quantile_requested = requested_estimator in {"quantile", "quantile_regression"} or requested_model_type in {
         "quantile",
         "quantile_regression",
@@ -774,6 +779,41 @@ def register_regression_pipeline(
             "ties": regression_options.get("ties", "breslow"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+
+    elif aft_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Weibull AFT regression supports positive continuous duration outcomes.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Weibull AFT regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Weibull AFT event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "weibull_aft"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 500)
             ),
         }
     elif quantile_requested:
@@ -1210,6 +1250,7 @@ def register_regression_pipeline(
         "panel_fixed_effects",
         "quantile_regression",
         "cox_proportional_hazards",
+        "weibull_aft",
         "fractional_logit",
         "beta_regression",
         "binary_logit",

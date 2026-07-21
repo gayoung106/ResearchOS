@@ -251,6 +251,27 @@ def _plot_baseline_survival(
     _save_figure(figure, output_path)
 
 
+
+def _plot_weibull_aft_survival(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    shape = float(regression_result.fit_statistics["shape"])
+    scale = float(np.median(fitted.predict(kind="scale")))
+    durations = np.asarray(fitted.model.endog, dtype=float)
+    grid = np.linspace(float(np.min(durations)), float(np.max(durations)), 120)
+    survival = np.exp(-((grid / scale) ** shape))
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    axis.plot(grid, survival)
+    axis.set_ylim(0.0, 1.02)
+    axis.set_xlabel("Time")
+    axis.set_ylabel("Predicted survival")
+    axis.set_title("Weibull AFT Survival Curve")
+    _save_figure(figure, output_path)
+
+
 def _plot_coefficient_forest(
     regression_result: RegressionResult,
     output_path: Path,
@@ -592,6 +613,10 @@ def build_regression_visualizations(
         baseline_path = output_directory / "cox_baseline_survival.png"
         _plot_baseline_survival(regression_result, baseline_path)
         output_files.append(str(baseline_path))
+    elif regression_result.model_type == "weibull_aft":
+        survival_path = output_directory / "weibull_aft_survival_curve.png"
+        _plot_weibull_aft_survival(regression_result, survival_path)
+        output_files.append(str(survival_path))
     elif regression_result.model_type in {
         "mixed_random_intercept",
         "mixed_random_slope",

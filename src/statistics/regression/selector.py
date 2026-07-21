@@ -48,6 +48,7 @@ from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
 
 
@@ -276,6 +277,23 @@ def fit_regression_by_level(
             covariance_type=str(options.get("covariance_type", "HC3")),
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+
+    if model_type == "weibull_aft":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Weibull AFT regression requires event_variable.")
+        return fit_weibull_aft(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
         )
 
     if model_type == "cox_proportional_hazards":

@@ -147,6 +147,13 @@ from src.statistics.diagnostics.tobit import (
     tobit_observations_to_dataframe,
     tobit_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.weibull_aft import (
+    build_weibull_aft_diagnostics,
+    weibull_aft_diagnostic_summary_to_dataframe,
+    weibull_aft_multicollinearity_to_dataframe,
+    weibull_aft_prediction_metrics_to_dataframe,
+    weibull_aft_residuals_to_dataframe,
+)
 
 
 class RegressionDiagnosticsStep(PipelineStep):
@@ -248,6 +255,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type == "cox_proportional_hazards":
             return self._run_cox(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "weibull_aft":
+            return self._run_weibull_aft(
                 result,
                 output_dir,
             )
@@ -646,6 +659,34 @@ class RegressionDiagnosticsStep(PipelineStep):
         cox_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
         cox_baseline_survival_to_dataframe(report).to_excel(paths["baseline"], index=False)
         cox_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
+
+
+    def _run_weibull_aft(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_weibull_aft_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        weibull_aft_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        weibull_aft_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        weibull_aft_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        weibull_aft_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
 
         return StepResult(
             stage_name=self.name,

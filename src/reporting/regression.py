@@ -293,6 +293,7 @@ def write_korean_results_narrative(
         "weighted_least_squares": "Weighted least squares regression",
         "binary_logit": "이항 로지스틱 회귀분석",
         "log_binomial": "Log-binomial regression",
+        "weibull_aft": "Weibull AFT regression",
         "binary_cloglog": "Binary complementary log-log regression",
         "binary_probit": "Binary probit regression",
         "multinomial_logit": "Multinomial logistic regression",
@@ -431,6 +432,13 @@ def write_korean_results_narrative(
             effect_text = (
                 f"HR={hazard_ratio:.3f}"
                 if hazard_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
+        elif regression_result.model_type == "weibull_aft":
+            time_ratio = effect_lookup.get((coefficient.term, "time_ratio"))
+            effect_text = (
+                f"TR={time_ratio:.3f}"
+                if time_ratio is not None
                 else f"B={coefficient.estimate:.3f}"
             )
         elif regression_result.model_type == "log_binomial":
@@ -728,6 +736,29 @@ def write_korean_results_narrative(
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
 
+    elif regression_result.model_type == "weibull_aft":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
+        shape = regression_result.fit_statistics.get("shape")
+        median_time = regression_result.fit_statistics.get("median_predicted_time")
+        event_variable = regression_result.metadata.get("event_variable")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The Weibull AFT model included {int(event_count)} events and "
+                f"{int(censored_count)} censored observations."
+            )
+        if event_variable is not None:
+            sentences.append(f"Event status was defined by {event_variable}.")
+        if shape is not None:
+            sentences.append(f"The Weibull shape parameter was {float(shape):.3f}.")
+        if median_time is not None:
+            sentences.append(f"Median predicted survival time was {float(median_time):.3f}.")
+        if events_per_parameter is not None:
+            sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
+
+
+
     elif regression_result.model_type in {
         "mixed_random_intercept",
         "mixed_random_slope",
@@ -955,6 +986,8 @@ def build_regression_publication_report(
             "mixed_negative_binomial_three_level",
     }:
         notes.append("계수형 회귀모형은 발생률비(IRR)를 함께 제시한다.")
+
+
     elif regression_result.model_type in {
         "mixed_random_intercept",
         "mixed_random_slope",
@@ -982,6 +1015,9 @@ def build_regression_publication_report(
 
     if regression_result.model_type == "cox_proportional_hazards":
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
+
+    if regression_result.model_type == "weibull_aft":
+        notes.append("Weibull AFT models report time ratios; values above 1 indicate longer survival time.")
 
     if regression_result.model_type == "log_binomial":
         notes.append("Log-binomial models report risk ratios and average marginal effects.")
@@ -1057,6 +1093,9 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "survival_distribution": regression_result.metadata.get("distribution"),
+            "weibull_shape": regression_result.fit_statistics.get("shape"),
+            "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "gamma_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "gamma_regression" else None,
             "inverse_gaussian_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "inverse_gaussian_regression" else None,

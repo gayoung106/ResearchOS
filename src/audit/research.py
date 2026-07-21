@@ -214,6 +214,25 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+
+    if result.model_type == "weibull_aft":
+        evidence = (
+            f"Weibull AFT regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"censored={result.fit_statistics.get('censored_count', 'unknown')}, "
+            f"shape={result.fit_statistics.get('shape', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report duration/event coding, Weibull distribution, censoring, time ratios, and convergence.",
+        )
+
     if result.model_type == "log_binomial":
         evidence = (
             f"Log-binomial regression, N={result.sample_size}, "
@@ -562,6 +581,25 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+
+    if result is not None and getattr(result, "model_type", None) == "weibull_aft":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Weibull AFT diagnostics, C-index={summary.get('concordance_index', 'unknown')}, "
+            f"events per parameter={summary.get('events_per_parameter', 'unknown')}, "
+            f"warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report AFT residuals, concordance, VIF screening, censoring, and events per parameter.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "log_binomial":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -962,7 +1000,15 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "log_binomial":
+
+    if getattr(report, "model_type", None) == "weibull_aft":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Weibull AFT time-ratio effects {len(report.effects)} generated; "
+            f"shape={model_effects.get('shape', 'unknown')}"
+        )
+        recommendation = "Interpret time ratios as acceleration or deceleration of survival time."
+    elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Log-binomial risk-ratio effects {len(report.effects)} generated; "
@@ -1230,6 +1276,19 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                }
+            )
+
+        elif regression_result.model_type == "weibull_aft":
+            metadata.update(
+                {
+                    "duration_variable": regression_result.metadata.get("duration_variable"),
+                    "event_variable": regression_result.metadata.get("event_variable"),
+                    "event_count": regression_result.fit_statistics.get("event_count"),
+                    "censored_count": regression_result.fit_statistics.get("censored_count"),
+                    "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "weibull_shape": regression_result.fit_statistics.get("shape"),
+                    "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
                 }
             )
         elif regression_result.model_type == "quantile_regression":
