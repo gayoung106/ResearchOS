@@ -323,7 +323,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "quantile_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -341,6 +341,12 @@ def write_korean_results_narrative(
                     (
                         coefficient.term,
                         "within_standardized_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "latent_standardized_beta",
                     )
                 )
             )
@@ -464,6 +470,29 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "tobit_regression":
+        lower_limit = regression_result.metadata.get("lower_limit")
+        upper_limit = regression_result.metadata.get("upper_limit")
+        left_count = regression_result.fit_statistics.get("left_censored_count")
+        right_count = regression_result.fit_statistics.get("right_censored_count")
+        censoring_rate = regression_result.fit_statistics.get("censoring_rate")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
+        sigma = regression_result.fit_statistics.get("sigma")
+        if lower_limit is not None or upper_limit is not None:
+            sentences.append(
+                f"Tobit censoring limits were lower={lower_limit} and upper={upper_limit}."
+            )
+        if left_count is not None and right_count is not None and censoring_rate is not None:
+            sentences.append(
+                f"Censored observations included {int(left_count)} left-censored and "
+                f"{int(right_count)} right-censored cases "
+                f"({float(censoring_rate):.1%} of the analytic sample)."
+            )
+        if pseudo is not None:
+            sentences.append(f"Observed-scale pseudo R-squared was {float(pseudo):.3f}.")
+        if sigma is not None:
+            sentences.append(f"Estimated latent residual sigma was {float(sigma):.3f}.")
 
     elif regression_result.model_type == "panel_fixed_effects":
         entity_variable = regression_result.metadata.get("entity_variable")
@@ -714,7 +743,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "quantile_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -764,6 +793,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "panel_fixed_effects":
         notes.append("Panel fixed-effects models report within-panel coefficients after absorbing entity and optional time effects.")
 
+    if regression_result.model_type == "tobit_regression":
+        notes.append("Tobit models estimate latent-scale coefficients for censored continuous outcomes.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -797,6 +829,9 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "precision": regression_result.fit_statistics.get("precision"),
+            "lower_limit": regression_result.metadata.get("lower_limit"),
+            "upper_limit": regression_result.metadata.get("upper_limit"),
+            "censoring_rate": regression_result.fit_statistics.get("censoring_rate"),
             "entity_variable": regression_result.metadata.get("entity_variable"),
             "time_variable": regression_result.metadata.get("time_variable"),
             "entity_count": regression_result.fit_statistics.get("entity_count"),

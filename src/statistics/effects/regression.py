@@ -331,6 +331,77 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted Tobit result is required.")
+    endog = np.asarray(fitted.model.endog, dtype=float)
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    outcome_sd = float(np.std(endog, ddof=1)) if endog.size > 1 else np.nan
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Tobit standardized effects could not be computed because outcome SD is zero.")
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    uncensored_probability = 1.0 - float(result.fit_statistics.get("censoring_rate", 0.0) or 0.0)
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept"}:
+            continue
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None:
+            continue
+        predictor_sd = float(np.std(exog[:, index], ddof=1))
+        standardized = None
+        if np.isfinite(outcome_sd) and not np.isclose(outcome_sd, 0.0):
+            standardized = float(coefficient.estimate * predictor_sd / outcome_sd)
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="latent_standardized_beta",
+                estimate=standardized,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized coefficient on the Tobit latent outcome scale.",
+            )
+        )
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="observed_scale_marginal_effect",
+                estimate=float(coefficient.estimate * uncensored_probability),
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Approximate marginal effect on the observed censored outcome scale.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
+            "censoring_rate": result.fit_statistics.get("censoring_rate"),
+            "sigma": result.fit_statistics.get("sigma"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "lower_limit": result.metadata.get("lower_limit"),
+            "upper_limit": result.metadata.get("upper_limit"),
+        },
+    )
+
+
 def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
     within_outcome = np.asarray(result.metadata.get("within_outcome", []), dtype=float)
     within_predictors = np.asarray(result.metadata.get("within_predictors", []), dtype=float)
@@ -815,6 +886,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)
+
+    if result.model_type == "tobit_regression":
+        return _build_tobit_effects(result)
 
     if result.model_type == "panel_fixed_effects":
         return _build_panel_fixed_effects(result)

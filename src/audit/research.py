@@ -214,6 +214,27 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "tobit_regression":
+        left_count = result.fit_statistics.get("left_censored_count", "unknown")
+        right_count = result.fit_statistics.get("right_censored_count", "unknown")
+        censoring_rate = result.fit_statistics.get("censoring_rate")
+        evidence = (
+            f"Tobit censored regression, N={result.sample_size}, "
+            f"left-censored={left_count}, right-censored={right_count}, "
+            f"converged={result.converged}"
+        )
+        if censoring_rate is not None:
+            evidence += f", censoring rate={float(censoring_rate):.3f}"
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report Tobit censoring limits, censored counts, and latent-scale estimation method.",
+        )
+
     if result.model_type == "panel_fixed_effects":
         entity_variable = result.metadata.get("entity_variable", "unknown")
         time_variable = result.metadata.get("time_variable")
@@ -339,6 +360,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "tobit_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Tobit diagnostics, censoring rate={summary.get('censoring_rate', 'unknown')}, "
+            f"RMSE={summary.get('root_mean_squared_error', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report Tobit residual checks, censoring diagnostics, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "panel_fixed_effects":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -529,7 +568,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "panel_fixed_effects":
+    if getattr(report, "model_type", None) == "tobit_regression":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Tobit effect sizes {len(report.effects)} generated; "
+            f"censoring rate={model_effects.get('censoring_rate', 'unknown')}"
+        )
+        recommendation = "Interpret latent standardized coefficients and observed-scale marginal effects."
+    elif getattr(report, "model_type", None) == "panel_fixed_effects":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Within-panel effect sizes {len(report.effects)} generated; "
@@ -737,6 +783,17 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "tobit_regression":
+            metadata.update(
+                {
+                    "lower_limit": regression_result.metadata.get("lower_limit"),
+                    "upper_limit": regression_result.metadata.get("upper_limit"),
+                    "left_censored_count": regression_result.fit_statistics.get("left_censored_count"),
+                    "right_censored_count": regression_result.fit_statistics.get("right_censored_count"),
+                    "censoring_rate": regression_result.fit_statistics.get("censoring_rate"),
+                    "sigma": regression_result.fit_statistics.get("sigma"),
                 }
             )
         elif regression_result.model_type == "panel_fixed_effects":

@@ -259,6 +259,11 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    tobit_requested = requested_estimator in {"tobit", "censored", "tobit_regression"} or requested_model_type in {
+        "tobit",
+        "censored",
+        "tobit_regression",
+    }
     panel_fe_requested = requested_estimator in {"panel_fe", "fixed_effects", "panel_fixed_effects"} or requested_model_type in {
         "panel_fe",
         "fixed_effects",
@@ -287,7 +292,35 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if panel_fe_requested:
+    if tobit_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Tobit regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        lower_limit = regression_options.get("lower_limit")
+        upper_limit = regression_options.get("upper_limit")
+        if lower_limit is None and upper_limit is None:
+            return not_registered(
+                "Tobit regression requires lower_limit, upper_limit, or both.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "tobit_regression"
+        multilevel_options = {
+            "lower_limit": lower_limit,
+            "upper_limit": upper_limit,
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 300)
+            ),
+        }
+    elif panel_fe_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -805,6 +838,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "tobit_regression",
         "panel_fixed_effects",
         "quantile_regression",
         "cox_proportional_hazards",

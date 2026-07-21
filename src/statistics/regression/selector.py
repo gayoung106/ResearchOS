@@ -37,6 +37,7 @@ from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.panel import fit_panel_fixed_effects
 from src.statistics.regression.quantile import fit_quantile_regression
+from src.statistics.regression.tobit import fit_tobit_regression
 
 
 def fit_regression_by_level(
@@ -52,6 +53,22 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "tobit_regression":
+        options = mixed_effects_options or {}
+        lower_limit = options.get("lower_limit")
+        upper_limit = options.get("upper_limit")
+        return fit_tobit_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            lower_limit=float(lower_limit) if lower_limit is not None else None,
+            upper_limit=float(upper_limit) if upper_limit is not None else None,
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 300))),
+        )
+
     if model_type == "panel_fixed_effects":
         options = mixed_effects_options or {}
         entity_variable = str(options.get("entity_variable", options.get("id_variable", ""))).strip()

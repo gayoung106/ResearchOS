@@ -97,6 +97,13 @@ from src.statistics.diagnostics.quantile import (
     quantile_residual_summary_to_dataframe,
     quantile_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.tobit import (
+    build_tobit_diagnostics,
+    tobit_diagnostic_summary_to_dataframe,
+    tobit_multicollinearity_to_dataframe,
+    tobit_observations_to_dataframe,
+    tobit_prediction_metrics_to_dataframe,
+)
 
 
 class RegressionDiagnosticsStep(PipelineStep):
@@ -135,6 +142,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "tobit_regression":
+            return self._run_tobit_regression(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "panel_fixed_effects":
             return self._run_panel_fixed_effects(
@@ -248,6 +261,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_tobit_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_tobit_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "observations": output_dir / "observations.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        tobit_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        tobit_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        tobit_observations_to_dataframe(report).to_excel(paths["observations"], index=False)
+        tobit_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_panel_fixed_effects(
         self,
