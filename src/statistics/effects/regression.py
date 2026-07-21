@@ -277,6 +277,9 @@ def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
             "sample_size": result.sample_size,
             "duration_variable": result.metadata.get("duration_variable"),
             "event_variable": result.metadata.get("event_variable"),
+            "cause_variable": result.metadata.get("cause_variable"),
+            "target_event_code": result.metadata.get("target_event_code"),
+            "competing_event_count": result.fit_statistics.get("competing_event_count"),
             "entry_variable": result.metadata.get("entry_variable"),
             "left_truncated_count": result.fit_statistics.get("left_truncated_count"),
             "strata_variable": result.metadata.get("strata_variable"),
@@ -1593,7 +1596,7 @@ def build_regression_effect_size_report(
     if result.model_type in {"ols", "weighted_least_squares"}:
         return _build_ols_effects(result)
 
-    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
+    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
         return _build_cox_effects(result)
 
     if result.model_type == "fractional_logit":

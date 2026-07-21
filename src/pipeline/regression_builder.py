@@ -398,6 +398,15 @@ def register_regression_pipeline(
         "delayed_entry_cox",
         "cox_left_truncated",
     }
+    cause_specific_cox_requested = requested_estimator in {
+        "cause_specific_cox",
+        "competing_risks_cox",
+        "cause_specific_hazard",
+    } or requested_model_type in {
+        "cause_specific_cox",
+        "competing_risks_cox",
+        "cause_specific_hazard",
+    }
     parametric_survival_requested = requested_estimator in {
         "parametric_survival",
         "parametric_survival_auto",
@@ -906,6 +915,54 @@ def register_regression_pipeline(
         multilevel_options = {
             "event_variable": event_variable,
             "entry_variable": entry_variable,
+            "ties": regression_options.get("ties", "breslow"),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif cause_specific_cox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Cause-specific Cox regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        cause_variable = str(regression_options.get("cause_variable", regression_options.get("event_variable", ""))).strip()
+        target_event_code = regression_options.get(
+            "target_event_code",
+            regression_options.get("event_code", regression_options.get("target_cause")),
+        )
+        if not cause_variable:
+            return not_registered(
+                "Cause-specific Cox regression requires regression.options.cause_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if target_event_code is None:
+            return not_registered(
+                "Cause-specific Cox regression requires regression.options.target_event_code.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if cause_variable not in variable_map.variables:
+            return not_registered(
+                "Cause-specific Cox cause variable is missing from variable_map: " + cause_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "cause_specific_cox"
+        multilevel_options = {
+            "cause_variable": cause_variable,
+            "target_event_code": target_event_code,
+            "censor_codes": regression_options.get("censor_codes"),
             "ties": regression_options.get("ties", "breslow"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
@@ -1565,6 +1622,7 @@ def register_regression_pipeline(
         "cox_proportional_hazards",
         "stratified_cox",
         "left_truncated_cox",
+        "cause_specific_cox",
         "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",

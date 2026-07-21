@@ -11,6 +11,7 @@ from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import (
+    fit_cause_specific_cox,
     fit_cox_proportional_hazards,
     fit_left_truncated_cox,
     fit_stratified_cox,
@@ -99,6 +100,7 @@ __all__ = [
     "fit_zero_inflated_poisson",
     "fit_zero_inflated_negative_binomial",
     "fit_count_regression",
+    "fit_cause_specific_cox",
     "fit_cox_proportional_hazards",
     "fit_left_truncated_cox",
     "fit_stratified_cox",

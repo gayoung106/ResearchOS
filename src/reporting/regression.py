@@ -434,7 +434,7 @@ def write_korean_results_narrative(
                 if fractional_or is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
             hazard_ratio = effect_lookup.get(
                 (
                     coefficient.term,
@@ -734,7 +734,7 @@ def write_korean_results_narrative(
         if boundary_count is not None:
             sentences.append(f"Boundary observations at 0 or 1 numbered {int(boundary_count)}.")
 
-    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
+    elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
         event_count = regression_result.fit_statistics.get("event_count")
         censored_count = regression_result.fit_statistics.get("censored_count")
         events_per_parameter = regression_result.fit_statistics.get("events_per_parameter")
@@ -756,6 +756,14 @@ def write_korean_results_narrative(
         if regression_result.model_type == "left_truncated_cox" and entry_variable is not None:
             sentences.append(
                 f"Risk sets used delayed entry from {entry_variable}; {int(left_truncated_count)} observations were left-truncated."
+            )
+        if regression_result.model_type == "cause_specific_cox":
+            cause_variable = regression_result.metadata.get("cause_variable")
+            target_event_code = regression_result.metadata.get("target_event_code")
+            competing_event_count = regression_result.fit_statistics.get("competing_event_count")
+            sentences.append(
+                f"Cause-specific Cox treated {cause_variable}={target_event_code} as the target event; "
+                f"{int(competing_event_count)} competing events were censored."
             )
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
@@ -1098,12 +1106,14 @@ def build_regression_publication_report(
     if regression_result.model_type == "inverse_gaussian_regression":
         notes.append("Inverse Gaussian regression uses a log link and reports multiplicative mean ratios.")
 
-    if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
+    if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
     if regression_result.model_type == "stratified_cox":
         notes.append("Stratified Cox models allow separate baseline hazards across strata.")
     if regression_result.model_type == "left_truncated_cox":
         notes.append("Left-truncated Cox models construct risk sets using delayed entry times.")
+    if regression_result.model_type == "cause_specific_cox":
+        notes.append("Cause-specific Cox models estimate cause-specific hazards by censoring competing events.")
 
     if regression_result.model_type == "exponential_aft":
         notes.append("Exponential AFT models report time ratios under a constant-hazard survival model.")
@@ -1191,6 +1201,9 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "cause_variable": regression_result.metadata.get("cause_variable"),
+            "target_event_code": regression_result.metadata.get("target_event_code"),
+            "competing_event_count": regression_result.fit_statistics.get("competing_event_count"),
             "entry_variable": regression_result.metadata.get("entry_variable"),
             "left_truncated_count": regression_result.fit_statistics.get("left_truncated_count"),
             "strata_variable": regression_result.metadata.get("strata_variable"),

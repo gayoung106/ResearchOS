@@ -11,6 +11,7 @@ from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import (
+    fit_cause_specific_cox,
     fit_cox_proportional_hazards,
     fit_left_truncated_cox,
     fit_stratified_cox,
@@ -430,6 +431,27 @@ def fit_regression_by_level(
             event_variable=event_variable,
             entry_variable=entry_variable,
             independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            ties=str(options.get("ties", "breslow")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+    if model_type == "cause_specific_cox":
+        options = mixed_effects_options or {}
+        cause_variable = str(options.get("cause_variable", options.get("event_variable", ""))).strip()
+        target_event_code = options.get("target_event_code", options.get("event_code", options.get("target_cause")))
+        if not cause_variable:
+            raise ValueError("Cause-specific Cox regression requires cause_variable.")
+        if target_event_code is None:
+            raise ValueError("Cause-specific Cox regression requires target_event_code.")
+        return fit_cause_specific_cox(
+            dataframe,
+            duration_variable=dependent_variable,
+            cause_variable=cause_variable,
+            target_event_code=target_event_code,
+            independent_variables=independent_variables,
+            censor_codes=options.get("censor_codes"),
             fixed_effects=fixed_effects,
             model_id=model_id,
             ties=str(options.get("ties", "breslow")),

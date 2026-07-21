@@ -407,3 +407,99 @@ def fit_left_truncated_cox(
         ties=ties,
         maximum_iterations=maximum_iterations,
     )
+
+
+def _as_comparable_labels(series: pd.Series) -> pd.Series:
+    return series.astype(str)
+
+
+def fit_cause_specific_cox(
+    dataframe: pd.DataFrame,
+    *,
+    duration_variable: str,
+    cause_variable: str,
+    target_event_code: str | int | float,
+    independent_variables: list[str],
+    censor_codes: list[str | int | float] | None = None,
+    fixed_effects: list[str] | None = None,
+    model_id: str = "cause_specific_cox_1",
+    ties: str = "breslow",
+    maximum_iterations: int = 100,
+) -> RegressionResult:
+    """Fit a cause-specific Cox model for competing-risks event data."""
+    if ties not in {"breslow", "efron"}:
+        raise ValueError("Cox regression ties must be 'breslow' or 'efron'.")
+    cause_variable = str(cause_variable).strip()
+    if not cause_variable:
+        raise ValueError("Cause-specific Cox regression requires cause_variable.")
+    if cause_variable not in dataframe.columns:
+        raise KeyError("Cause variable is missing from dataframe: " + cause_variable)
+    if cause_variable == duration_variable or cause_variable in independent_variables:
+        raise ValueError("Cause variable cannot duplicate the duration or predictor variables.")
+
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+    censor_codes = [0] if censor_codes is None else list(censor_codes)
+    target_label = str(target_event_code)
+    censor_labels = {str(code) for code in censor_codes}
+
+    event_indicator_variable = "__cause_specific_event__"
+    while event_indicator_variable in dataframe.columns:
+        event_indicator_variable = "_" + event_indicator_variable
+
+    working = dataframe.copy()
+    cause_labels = _as_comparable_labels(working[cause_variable])
+    working[event_indicator_variable] = np.where(
+        cause_labels == target_label,
+        1.0,
+        0.0,
+    )
+    working.loc[working[cause_variable].isna(), event_indicator_variable] = np.nan
+
+    duration, event, predictors, metadata = _prepare_cox_design(
+        working,
+        duration_variable=duration_variable,
+        event_variable=event_indicator_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+    )
+    cause_complete = _as_comparable_labels(working.loc[duration.index, cause_variable])
+    competing_mask = (event == 0) & ~cause_complete.isin(censor_labels)
+    censor_mask = (event == 0) & cause_complete.isin(censor_labels)
+    metadata.update(
+        {
+            "event_variable": cause_variable,
+            "event_indicator_variable": event_indicator_variable,
+            "cause_variable": cause_variable,
+            "target_event_code": target_event_code,
+            "censor_codes": censor_codes,
+            "competing_event_count": int(competing_mask.sum()),
+            "cause_specific_event_count": int(event.sum()),
+            "original_censored_count": int(censor_mask.sum()),
+        }
+    )
+
+    fitted = PHReg(duration, predictors, status=event, ties=ties).fit(maxiter=maximum_iterations)
+    result = _finalize_cox_result(
+        fitted=fitted,
+        model_id=model_id,
+        model_type="cause_specific_cox",
+        duration_variable=duration_variable,
+        independent_variables=independent_variables,
+        duration=duration,
+        event=event,
+        metadata=metadata,
+        ties=ties,
+        maximum_iterations=maximum_iterations,
+    )
+    result.fit_statistics.update(
+        {
+            "cause_specific_event_count": int(event.sum()),
+            "competing_event_count": int(competing_mask.sum()),
+            "original_censored_count": int(censor_mask.sum()),
+            "target_event_rate": float(event.sum() / len(event)),
+        }
+    )
+    if int(competing_mask.sum()) == 0:
+        result.warnings.append("No competing events were observed for the cause-specific Cox model.")
+    return result

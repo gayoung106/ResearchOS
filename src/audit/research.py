@@ -1169,6 +1169,14 @@ def _effect_size_item(
             f"entry variable={metadata.get('entry_variable', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios with delayed-entry risk sets."
+    elif getattr(report, "model_type", None) == "cause_specific_cox":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Cause-specific Cox hazard-ratio effects {len(report.effects)} generated; "
+            f"target={metadata.get('target_event_code', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios for the target event while competing events are censored."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1433,11 +1441,14 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
                     "event_variable": regression_result.metadata.get("event_variable"),
+                    "cause_variable": regression_result.metadata.get("cause_variable"),
+                    "target_event_code": regression_result.metadata.get("target_event_code"),
+                    "competing_event_count": regression_result.fit_statistics.get("competing_event_count"),
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
