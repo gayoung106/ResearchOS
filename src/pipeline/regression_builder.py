@@ -389,6 +389,15 @@ def register_regression_pipeline(
         "cox_stratified",
         "stratified_cox_ph",
     }
+    left_truncated_cox_requested = requested_estimator in {
+        "left_truncated_cox",
+        "delayed_entry_cox",
+        "cox_left_truncated",
+    } or requested_model_type in {
+        "left_truncated_cox",
+        "delayed_entry_cox",
+        "cox_left_truncated",
+    }
     parametric_survival_requested = requested_estimator in {
         "parametric_survival",
         "parametric_survival_auto",
@@ -845,6 +854,58 @@ def register_regression_pipeline(
         multilevel_options = {
             "event_variable": event_variable,
             "strata_variable": strata_variable,
+            "ties": regression_options.get("ties", "breslow"),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif left_truncated_cox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Left-truncated Cox regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        entry_variable = str(regression_options.get("entry_variable", regression_options.get("entry", ""))).strip()
+        if not event_variable:
+            return not_registered(
+                "Left-truncated Cox regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if not entry_variable:
+            return not_registered(
+                "Left-truncated Cox regression requires regression.options.entry_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Left-truncated Cox event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if entry_variable not in variable_map.variables:
+            return not_registered(
+                "Left-truncated Cox entry variable is missing from variable_map: " + entry_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "left_truncated_cox"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "entry_variable": entry_variable,
             "ties": regression_options.get("ties", "breslow"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
@@ -1503,6 +1564,7 @@ def register_regression_pipeline(
         "quantile_regression",
         "cox_proportional_hazards",
         "stratified_cox",
+        "left_truncated_cox",
         "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",

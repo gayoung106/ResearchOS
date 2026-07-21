@@ -32,6 +32,7 @@ def _prepare_cox_design(
     independent_variables: list[str],
     fixed_effects: list[str],
     strata_variable: str | None = None,
+    entry_variable: str | None = None,
 ) -> tuple[pd.Series, pd.Series, pd.DataFrame, dict[str, Any]]:
     validate_model_variables(dataframe, duration_variable, independent_variables)
     if event_variable not in dataframe.columns:
@@ -43,6 +44,13 @@ def _prepare_cox_design(
             raise KeyError("Strata variable is missing from dataframe: " + strata_variable)
         if strata_variable == duration_variable or strata_variable == event_variable or strata_variable in independent_variables:
             raise ValueError("Strata variable cannot duplicate the duration, event, or predictor variables.")
+    if entry_variable is not None:
+        if entry_variable not in dataframe.columns:
+            raise KeyError("Entry variable is missing from dataframe: " + entry_variable)
+        if entry_variable == duration_variable or entry_variable == event_variable or entry_variable in independent_variables:
+            raise ValueError("Entry variable cannot duplicate the duration, event, or predictor variables.")
+        if entry_variable == strata_variable:
+            raise ValueError("Entry variable cannot duplicate the strata variable.")
     _validate_fixed_effects(
         dataframe,
         independent_variables=independent_variables,
@@ -52,9 +60,13 @@ def _prepare_cox_design(
     selected_columns = [duration_variable, event_variable, *independent_variables, *fixed_effects]
     if strata_variable is not None:
         selected_columns.append(strata_variable)
+    if entry_variable is not None:
+        selected_columns.append(entry_variable)
     selected = dataframe[selected_columns].copy()
     selected[duration_variable] = pd.to_numeric(selected[duration_variable], errors="coerce")
     selected[event_variable] = pd.to_numeric(selected[event_variable], errors="coerce")
+    if entry_variable is not None:
+        selected[entry_variable] = pd.to_numeric(selected[entry_variable], errors="coerce")
     for variable in independent_variables:
         selected[variable] = pd.to_numeric(selected[variable], errors="coerce")
     complete = selected.dropna()
@@ -62,6 +74,11 @@ def _prepare_cox_design(
         raise ValueError("Cox regression has no complete observations to estimate.")
     if (complete[duration_variable] <= 0).any():
         raise ValueError("Cox regression duration values must be positive.")
+    if entry_variable is not None:
+        if (complete[entry_variable] < 0).any():
+            raise ValueError("Cox regression entry values must be non-negative.")
+        if (complete[entry_variable] >= complete[duration_variable]).any():
+            raise ValueError("Cox regression entry values must be less than duration values.")
 
     event_values = sorted(complete[event_variable].unique().tolist())
     if event_values != [0.0, 1.0]:
@@ -92,6 +109,17 @@ def _prepare_cox_design(
         "dropped_case_count": len(dataframe) - len(complete),
         "row_labels": [str(index) for index in complete.index],
     }
+    if entry_variable is not None:
+        entry_values = complete[entry_variable].astype(float)
+        metadata.update(
+            {
+                "entry_variable": entry_variable,
+                "entry_values": entry_values.to_numpy(),
+                "left_truncated_count": int((entry_values > 0).sum()),
+                "minimum_entry_time": float(entry_values.min()),
+                "maximum_entry_time": float(entry_values.max()),
+            }
+        )
     if strata_variable is not None:
         strata_series = complete[strata_variable].astype(str)
         strata_labels = _ordered_categories(strata_series)
@@ -200,6 +228,7 @@ def _finalize_cox_result(
     baseline = _baseline_survival_frame(fitted)
     result_metadata = dict(metadata)
     result_metadata.pop("strata_values", None)
+    result_metadata.pop("entry_values", None)
     result_metadata.update(
         {
             "duration_variable": duration_variable,
@@ -220,6 +249,10 @@ def _finalize_cox_result(
     }
     if "strata_count" in metadata:
         fit_statistics["strata_count"] = metadata["strata_count"]
+    if "left_truncated_count" in metadata:
+        fit_statistics["left_truncated_count"] = metadata["left_truncated_count"]
+        fit_statistics["minimum_entry_time"] = metadata["minimum_entry_time"]
+        fit_statistics["maximum_entry_time"] = metadata["maximum_entry_time"]
 
     return RegressionResult(
         model_id=model_id,
@@ -317,6 +350,55 @@ def fit_stratified_cox(
         fitted=fitted,
         model_id=model_id,
         model_type="stratified_cox",
+        duration_variable=duration_variable,
+        independent_variables=independent_variables,
+        duration=duration,
+        event=event,
+        metadata=metadata,
+        ties=ties,
+        maximum_iterations=maximum_iterations,
+    )
+
+
+def fit_left_truncated_cox(
+    dataframe: pd.DataFrame,
+    *,
+    duration_variable: str,
+    event_variable: str,
+    entry_variable: str,
+    independent_variables: list[str],
+    fixed_effects: list[str] | None = None,
+    model_id: str = "left_truncated_cox_1",
+    ties: str = "breslow",
+    maximum_iterations: int = 100,
+) -> RegressionResult:
+    """Fit a Cox proportional hazards model with delayed entry/left truncation."""
+    if ties not in {"breslow", "efron"}:
+        raise ValueError("Cox regression ties must be 'breslow' or 'efron'.")
+    entry_variable = str(entry_variable).strip()
+    if not entry_variable:
+        raise ValueError("Left-truncated Cox regression requires entry_variable.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+    duration, event, predictors, metadata = _prepare_cox_design(
+        dataframe,
+        duration_variable=duration_variable,
+        event_variable=event_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+        entry_variable=entry_variable,
+    )
+    fitted = PHReg(
+        duration,
+        predictors,
+        status=event,
+        entry=metadata["entry_values"],
+        ties=ties,
+    ).fit(maxiter=maximum_iterations)
+    return _finalize_cox_result(
+        fitted=fitted,
+        model_id=model_id,
+        model_type="left_truncated_cox",
         duration_variable=duration_variable,
         independent_variables=independent_variables,
         duration=duration,

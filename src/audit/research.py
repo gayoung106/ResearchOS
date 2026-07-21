@@ -1161,6 +1161,14 @@ def _effect_size_item(
             f"strata={metadata.get('strata_count', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios conditional on strata-specific baseline hazards."
+    elif getattr(report, "model_type", None) == "left_truncated_cox":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Left-truncated Cox hazard-ratio effects {len(report.effects)} generated; "
+            f"entry variable={metadata.get('entry_variable', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios with delayed-entry risk sets."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1425,7 +1433,7 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
@@ -1433,6 +1441,8 @@ def build_research_audit_report(
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "entry_variable": regression_result.metadata.get("entry_variable"),
+                    "left_truncated_count": regression_result.fit_statistics.get("left_truncated_count"),
                     "strata_variable": regression_result.metadata.get("strata_variable"),
                     "strata_count": regression_result.fit_statistics.get("strata_count", regression_result.metadata.get("strata_count")),
                 }
