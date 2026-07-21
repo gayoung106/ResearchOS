@@ -33,6 +33,7 @@ def _prepare_cox_design(
     fixed_effects: list[str],
     strata_variable: str | None = None,
     entry_variable: str | None = None,
+    cluster_variable: str | None = None,
 ) -> tuple[pd.Series, pd.Series, pd.DataFrame, dict[str, Any]]:
     validate_model_variables(dataframe, duration_variable, independent_variables)
     if event_variable not in dataframe.columns:
@@ -51,6 +52,13 @@ def _prepare_cox_design(
             raise ValueError("Entry variable cannot duplicate the duration, event, or predictor variables.")
         if entry_variable == strata_variable:
             raise ValueError("Entry variable cannot duplicate the strata variable.")
+    if cluster_variable is not None:
+        if cluster_variable not in dataframe.columns:
+            raise KeyError("Cluster variable is missing from dataframe: " + cluster_variable)
+        if cluster_variable == duration_variable or cluster_variable == event_variable or cluster_variable in independent_variables:
+            raise ValueError("Cluster variable cannot duplicate the duration, event, or predictor variables.")
+        if cluster_variable in {strata_variable, entry_variable}:
+            raise ValueError("Cluster variable cannot duplicate the strata or entry variable.")
     _validate_fixed_effects(
         dataframe,
         independent_variables=independent_variables,
@@ -62,6 +70,8 @@ def _prepare_cox_design(
         selected_columns.append(strata_variable)
     if entry_variable is not None:
         selected_columns.append(entry_variable)
+    if cluster_variable is not None:
+        selected_columns.append(cluster_variable)
     selected = dataframe[selected_columns].copy()
     selected[duration_variable] = pd.to_numeric(selected[duration_variable], errors="coerce")
     selected[event_variable] = pd.to_numeric(selected[event_variable], errors="coerce")
@@ -118,6 +128,20 @@ def _prepare_cox_design(
                 "left_truncated_count": int((entry_values > 0).sum()),
                 "minimum_entry_time": float(entry_values.min()),
                 "maximum_entry_time": float(entry_values.max()),
+            }
+        )
+    if cluster_variable is not None:
+        cluster_series = complete[cluster_variable].astype(str)
+        cluster_counts = cluster_series.value_counts().sort_index()
+        cluster_events = complete.groupby(cluster_series, sort=True)[event_variable].sum()
+        metadata.update(
+            {
+                "cluster_variable": cluster_variable,
+                "cluster_values": cluster_series.to_numpy(),
+                "cluster_labels": [str(index) for index in cluster_counts.index],
+                "cluster_counts": {str(index): int(value) for index, value in cluster_counts.items()},
+                "cluster_event_counts": {str(index): int(value) for index, value in cluster_events.items()},
+                "cluster_count": int(cluster_counts.shape[0]),
             }
         )
     if strata_variable is not None:
@@ -229,6 +253,7 @@ def _finalize_cox_result(
     result_metadata = dict(metadata)
     result_metadata.pop("strata_values", None)
     result_metadata.pop("entry_values", None)
+    result_metadata.pop("cluster_values", None)
     result_metadata.update(
         {
             "duration_variable": duration_variable,
@@ -253,6 +278,10 @@ def _finalize_cox_result(
         fit_statistics["left_truncated_count"] = metadata["left_truncated_count"]
         fit_statistics["minimum_entry_time"] = metadata["minimum_entry_time"]
         fit_statistics["maximum_entry_time"] = metadata["maximum_entry_time"]
+    if "cluster_count" in metadata:
+        fit_statistics["cluster_count"] = metadata["cluster_count"]
+
+    standard_error_type = "cluster_robust_partial_likelihood" if "cluster_count" in metadata else "partial_likelihood"
 
     return RegressionResult(
         model_id=model_id,
@@ -263,7 +292,7 @@ def _finalize_cox_result(
         coefficients=coefficients,
         fit_statistics=fit_statistics,
         converged=True,
-        standard_error_type="partial_likelihood",
+        standard_error_type=standard_error_type,
         warnings=_cox_fit_warnings(
             event_count=event_count,
             censored_count=censored_count,
@@ -503,3 +532,51 @@ def fit_cause_specific_cox(
     if int(competing_mask.sum()) == 0:
         result.warnings.append("No competing events were observed for the cause-specific Cox model.")
     return result
+
+
+def fit_clustered_cox(
+    dataframe: pd.DataFrame,
+    *,
+    duration_variable: str,
+    event_variable: str,
+    cluster_variable: str,
+    independent_variables: list[str],
+    fixed_effects: list[str] | None = None,
+    model_id: str = "clustered_cox_1",
+    ties: str = "breslow",
+    maximum_iterations: int = 100,
+) -> RegressionResult:
+    """Fit a Cox model with cluster-robust standard errors."""
+    if ties not in {"breslow", "efron"}:
+        raise ValueError("Cox regression ties must be 'breslow' or 'efron'.")
+    cluster_variable = str(cluster_variable).strip()
+    if not cluster_variable:
+        raise ValueError("Clustered Cox regression requires cluster_variable.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    fixed_effects = list(dict.fromkeys(fixed_effects or []))
+    duration, event, predictors, metadata = _prepare_cox_design(
+        dataframe,
+        duration_variable=duration_variable,
+        event_variable=event_variable,
+        independent_variables=independent_variables,
+        fixed_effects=fixed_effects,
+        cluster_variable=cluster_variable,
+    )
+    if int(metadata["cluster_count"]) < 2:
+        raise ValueError("Clustered Cox regression requires at least two clusters.")
+    fitted = PHReg(duration, predictors, status=event, ties=ties).fit(
+        groups=metadata["cluster_values"],
+        maxiter=maximum_iterations,
+    )
+    return _finalize_cox_result(
+        fitted=fitted,
+        model_id=model_id,
+        model_type="clustered_cox",
+        duration_variable=duration_variable,
+        independent_variables=independent_variables,
+        duration=duration,
+        event=event,
+        metadata=metadata,
+        ties=ties,
+        maximum_iterations=maximum_iterations,
+    )

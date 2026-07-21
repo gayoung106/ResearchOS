@@ -1177,6 +1177,14 @@ def _effect_size_item(
             f"target={metadata.get('target_event_code', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios for the target event while competing events are censored."
+    elif getattr(report, "model_type", None) == "clustered_cox":
+        model_effects = getattr(report, "model_effects", {})
+        metadata = getattr(report, "metadata", {})
+        evidence = (
+            f"Clustered Cox hazard-ratio effects {len(report.effects)} generated; "
+            f"clusters={metadata.get('cluster_count', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios with cluster-robust standard errors."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1441,7 +1449,7 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
@@ -1449,6 +1457,8 @@ def build_research_audit_report(
                     "cause_variable": regression_result.metadata.get("cause_variable"),
                     "target_event_code": regression_result.metadata.get("target_event_code"),
                     "competing_event_count": regression_result.fit_statistics.get("competing_event_count"),
+                    "cluster_variable": regression_result.metadata.get("cluster_variable"),
+                    "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "event_count": regression_result.fit_statistics.get("event_count"),
                     "censored_count": regression_result.fit_statistics.get("censored_count"),
                     "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),

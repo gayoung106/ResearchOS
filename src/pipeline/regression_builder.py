@@ -407,6 +407,15 @@ def register_regression_pipeline(
         "competing_risks_cox",
         "cause_specific_hazard",
     }
+    clustered_cox_requested = requested_estimator in {
+        "clustered_cox",
+        "cluster_robust_cox",
+        "cox_clustered",
+    } or requested_model_type in {
+        "clustered_cox",
+        "cluster_robust_cox",
+        "cox_clustered",
+    }
     parametric_survival_requested = requested_estimator in {
         "parametric_survival",
         "parametric_survival_auto",
@@ -963,6 +972,58 @@ def register_regression_pipeline(
             "cause_variable": cause_variable,
             "target_event_code": target_event_code,
             "censor_codes": regression_options.get("censor_codes"),
+            "ties": regression_options.get("ties", "breslow"),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif clustered_cox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Clustered Cox regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        cluster_variable = str(regression_options.get("cluster_variable", regression_options.get("cluster", ""))).strip()
+        if not event_variable:
+            return not_registered(
+                "Clustered Cox regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if not cluster_variable:
+            return not_registered(
+                "Clustered Cox regression requires regression.options.cluster_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Clustered Cox event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if cluster_variable not in variable_map.variables:
+            return not_registered(
+                "Clustered Cox cluster variable is missing from variable_map: " + cluster_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "clustered_cox"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "cluster_variable": cluster_variable,
             "ties": regression_options.get("ties", "breslow"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
@@ -1623,6 +1684,7 @@ def register_regression_pipeline(
         "stratified_cox",
         "left_truncated_cox",
         "cause_specific_cox",
+        "clustered_cox",
         "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",

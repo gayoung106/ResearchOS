@@ -12,6 +12,7 @@ from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import (
     fit_cause_specific_cox,
+    fit_clustered_cox,
     fit_cox_proportional_hazards,
     fit_left_truncated_cox,
     fit_stratified_cox,
@@ -452,6 +453,26 @@ def fit_regression_by_level(
             target_event_code=target_event_code,
             independent_variables=independent_variables,
             censor_codes=options.get("censor_codes"),
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            ties=str(options.get("ties", "breslow")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+        )
+
+    if model_type == "clustered_cox":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        cluster_variable = str(options.get("cluster_variable", options.get("cluster", ""))).strip()
+        if not event_variable:
+            raise ValueError("Clustered Cox regression requires event_variable.")
+        if not cluster_variable:
+            raise ValueError("Clustered Cox regression requires cluster_variable.")
+        return fit_clustered_cox(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            cluster_variable=cluster_variable,
+            independent_variables=independent_variables,
             fixed_effects=fixed_effects,
             model_id=model_id,
             ties=str(options.get("ties", "breslow")),
