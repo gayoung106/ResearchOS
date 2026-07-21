@@ -427,6 +427,15 @@ def register_regression_pipeline(
         "aft_auto",
         "survival_aft_auto",
     }
+    piecewise_exponential_requested = requested_estimator in {
+        "piecewise_exponential",
+        "piecewise_exponential_regression",
+        "piecewise_exponential_survival",
+    } or requested_model_type in {
+        "piecewise_exponential",
+        "piecewise_exponential_regression",
+        "piecewise_exponential_survival",
+    }
     aft_requested = requested_estimator in {"aft", "weibull_aft", "weibull-aft"} or requested_model_type in {
         "aft",
         "weibull_aft",
@@ -821,6 +830,41 @@ def register_regression_pipeline(
         model_type = "beta_regression"
         multilevel_options = {
             "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif piecewise_exponential_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Piecewise exponential regression supports continuous duration variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Piecewise exponential regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Piecewise exponential event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "piecewise_exponential"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "breakpoints": regression_options.get("breakpoints", regression_options.get("interval_breakpoints")),
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
             ),
@@ -1679,6 +1723,7 @@ def register_regression_pipeline(
         "tobit_regression",
         "panel_fixed_effects",
         "parametric_survival_auto",
+        "piecewise_exponential",
         "quantile_regression",
         "cox_proportional_hazards",
         "stratified_cox",

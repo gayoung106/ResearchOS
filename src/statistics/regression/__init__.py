@@ -52,6 +52,7 @@ from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import fit_panel_fixed_effects
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
+from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.poisson import fit_poisson
 from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
@@ -89,6 +90,7 @@ __all__ = [
     "fit_ordered_probit",
     "fit_panel_fixed_effects",
     "fit_parametric_survival_regression",
+    "fit_piecewise_exponential_regression",
     "fit_multinomial_logit",
     "fit_poisson",
     "fit_quantile_regression",

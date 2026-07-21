@@ -195,7 +195,7 @@ def _build_fractional_logit_effects(result: RegressionResult) -> EffectSizeRepor
     warnings: list[str] = []
     fitted = result.raw_result
     for coefficient in result.coefficients:
-        if coefficient.term.lower() in {"const", "intercept"}:
+        if coefficient.term.lower() in {"const", "intercept"} or coefficient.term.startswith("baseline_interval_"):
             continue
         effects.append(
             EffectSizeResult(
@@ -248,7 +248,7 @@ def _build_fractional_logit_effects(result: RegressionResult) -> EffectSizeRepor
 def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     for coefficient in result.coefficients:
-        if coefficient.term.lower() in {"const", "intercept"}:
+        if coefficient.term.lower() in {"const", "intercept"} or coefficient.term.startswith("baseline_interval_"):
             continue
         effects.append(
             EffectSizeResult(
@@ -272,11 +272,14 @@ def _build_cox_effects(result: RegressionResult) -> EffectSizeReport:
             "event_count": result.fit_statistics.get("event_count"),
             "censored_count": result.fit_statistics.get("censored_count"),
             "events_per_parameter": result.fit_statistics.get("events_per_parameter"),
+            "interval_count": result.fit_statistics.get("interval_count"),
+            "total_exposure": result.fit_statistics.get("total_exposure"),
         },
         metadata={
             "sample_size": result.sample_size,
             "duration_variable": result.metadata.get("duration_variable"),
             "event_variable": result.metadata.get("event_variable"),
+            "interval_count": result.fit_statistics.get("interval_count"),
             "cause_variable": result.metadata.get("cause_variable"),
             "target_event_code": result.metadata.get("target_event_code"),
             "competing_event_count": result.fit_statistics.get("competing_event_count"),
@@ -1598,7 +1601,7 @@ def build_regression_effect_size_report(
     if result.model_type in {"ols", "weighted_least_squares"}:
         return _build_ols_effects(result)
 
-    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+    if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
         return _build_cox_effects(result)
 
     if result.model_type == "fractional_logit":

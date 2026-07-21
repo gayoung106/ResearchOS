@@ -297,6 +297,24 @@ def _regression_item(
             recommendation="Report duration/event coding, Weibull distribution, censoring, time ratios, and convergence.",
         )
 
+    if result.model_type == "piecewise_exponential":
+        evidence = (
+            f"Piecewise exponential regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"intervals={result.fit_statistics.get('interval_count', 'unknown')}, "
+            f"total exposure={result.fit_statistics.get('total_exposure', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report interval cut points, duration/event coding, exposure offset, baseline hazards, and hazard ratios.",
+        )
+
     if result.model_type == "log_binomial":
         evidence = (
             f"Log-binomial regression, N={result.sample_size}, "
@@ -1185,6 +1203,13 @@ def _effect_size_item(
             f"clusters={metadata.get('cluster_count', 'unknown')}"
         )
         recommendation = "Interpret hazard ratios with cluster-robust standard errors."
+    elif getattr(report, "model_type", None) == "piecewise_exponential":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Piecewise exponential hazard-ratio effects {len(report.effects)} generated; "
+            f"intervals={model_effects.get('interval_count', 'unknown')}"
+        )
+        recommendation = "Interpret hazard ratios with interval-specific baseline hazards and log-exposure offsets."
     elif getattr(report, "model_type", None) == "log_binomial":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
@@ -1449,11 +1474,14 @@ def build_research_audit_report(
                     "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
                 }
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
             metadata.update(
                 {
                     "duration_variable": regression_result.metadata.get("duration_variable"),
                     "event_variable": regression_result.metadata.get("event_variable"),
+                    "interval_count": regression_result.fit_statistics.get("interval_count"),
+                    "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
+                    "total_exposure": regression_result.fit_statistics.get("total_exposure"),
                     "cause_variable": regression_result.metadata.get("cause_variable"),
                     "target_event_code": regression_result.metadata.get("target_event_code"),
                     "competing_event_count": regression_result.fit_statistics.get("competing_event_count"),

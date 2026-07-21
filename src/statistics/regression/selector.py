@@ -54,6 +54,7 @@ from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import fit_panel_fixed_effects
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
+from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
@@ -380,6 +381,23 @@ def fit_regression_by_level(
             model_id=model_id,
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
+
+    if model_type == "piecewise_exponential":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Piecewise exponential regression requires event_variable.")
+        return fit_piecewise_exponential_regression(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            breakpoints=options.get("breakpoints", options.get("interval_breakpoints")),
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
     if model_type == "cox_proportional_hazards":

@@ -293,6 +293,7 @@ def write_korean_results_narrative(
         "weighted_least_squares": "Weighted least squares regression",
         "binary_logit": "이항 로지스틱 회귀분석",
         "log_binomial": "Log-binomial regression",
+        "piecewise_exponential": "Piecewise exponential regression",
         "exponential_aft": "Exponential AFT regression",
         "loglogistic_aft": "Log-logistic AFT regression",
         "lognormal_aft": "Log-normal AFT regression",
@@ -434,7 +435,7 @@ def write_korean_results_narrative(
                 if fractional_or is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
+        elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "piecewise_exponential"}:
             hazard_ratio = effect_lookup.get(
                 (
                     coefficient.term,
@@ -773,6 +774,24 @@ def write_korean_results_narrative(
             )
         if events_per_parameter is not None:
             sentences.append(f"Events per parameter was {float(events_per_parameter):.2f}.")
+
+    elif regression_result.model_type == "piecewise_exponential":
+        event_count = regression_result.fit_statistics.get("event_count")
+        censored_count = regression_result.fit_statistics.get("censored_count")
+        interval_count = regression_result.fit_statistics.get("interval_count")
+        total_exposure = regression_result.fit_statistics.get("total_exposure")
+        dispersion = regression_result.fit_statistics.get("dispersion_ratio")
+        if event_count is not None and censored_count is not None:
+            sentences.append(
+                f"The piecewise exponential model included {int(event_count)} events and "
+                f"{int(censored_count)} censored observations."
+            )
+        if interval_count is not None:
+            sentences.append(f"The baseline hazard was estimated across {int(interval_count)} time intervals.")
+        if total_exposure is not None:
+            sentences.append(f"Total person-time exposure was {float(total_exposure):.3f}.")
+        if dispersion is not None:
+            sentences.append(f"Poisson dispersion ratio was {float(dispersion):.3f}.")
 
     elif regression_result.model_type == "exponential_aft":
         event_count = regression_result.fit_statistics.get("event_count")
@@ -1114,6 +1133,8 @@ def build_regression_publication_report(
 
     if regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
+    if regression_result.model_type == "piecewise_exponential":
+        notes.append("Piecewise exponential models report hazard ratios from a Poisson model with log-exposure offsets.")
     if regression_result.model_type == "stratified_cox":
         notes.append("Stratified Cox models allow separate baseline hazards across strata.")
     if regression_result.model_type == "left_truncated_cox":
@@ -1209,6 +1230,9 @@ def build_regression_publication_report(
             "quantile": regression_result.fit_statistics.get("quantile"),
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
+            "interval_count": regression_result.fit_statistics.get("interval_count"),
+            "interval_breakpoints": regression_result.metadata.get("interval_breakpoints"),
+            "total_exposure": regression_result.fit_statistics.get("total_exposure"),
             "cause_variable": regression_result.metadata.get("cause_variable"),
             "target_event_code": regression_result.metadata.get("target_event_code"),
             "competing_event_count": regression_result.fit_statistics.get("competing_event_count"),

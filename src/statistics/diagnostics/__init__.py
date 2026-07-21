@@ -50,6 +50,13 @@ from src.statistics.diagnostics.ordered_logit import (
     ordered_predictions_to_dataframe,
     ordered_thresholds_to_dataframe,
 )
+from src.statistics.diagnostics.piecewise_exponential import (
+    PiecewiseExponentialDiagnosticsReport,
+    build_piecewise_exponential_diagnostics,
+    piecewise_diagnostic_summary_to_dataframe,
+    piecewise_interval_hazards_to_dataframe,
+    piecewise_residuals_to_dataframe,
+)
 
 __all__ = [
     "BinaryClassificationMetrics",
@@ -69,6 +76,7 @@ __all__ = [
     "build_mixed_effects_diagnostics",
     "MixedEffectsDiagnosticsReport",
     "OLSDiagnosticsReport",
+    "PiecewiseExponentialDiagnosticsReport",
     "OrderedClassificationMetrics",
     "OrderedLogitDiagnosticsReport",
     "binary_diagnostic_summary_to_dataframe",
@@ -76,6 +84,7 @@ __all__ = [
     "binary_predictions_to_dataframe",
     "build_binary_logit_diagnostics",
     "build_ols_diagnostics",
+    "build_piecewise_exponential_diagnostics",
     "build_ordered_logit_diagnostics",
     "calculate_binary_classification_metrics",
     "calculate_binary_multicollinearity",
@@ -92,6 +101,9 @@ __all__ = [
     "ordered_multicollinearity_to_dataframe",
     "ordered_predictions_to_dataframe",
     "ordered_thresholds_to_dataframe",
+    "piecewise_diagnostic_summary_to_dataframe",
+    "piecewise_interval_hazards_to_dataframe",
+    "piecewise_residuals_to_dataframe",
     "residuals_to_dataframe",
     "tests_to_dataframe",
 ]

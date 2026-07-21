@@ -139,6 +139,12 @@ from src.statistics.diagnostics.panel import (
     panel_multicollinearity_to_dataframe,
     panel_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.piecewise_exponential import (
+    build_piecewise_exponential_diagnostics,
+    piecewise_diagnostic_summary_to_dataframe,
+    piecewise_interval_hazards_to_dataframe,
+    piecewise_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.quantile import (
     build_quantile_diagnostics,
     quantile_diagnostic_summary_to_dataframe,
@@ -276,6 +282,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox"}:
             return self._run_cox(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "piecewise_exponential":
+            return self._run_piecewise_exponential(
                 result,
                 output_dir,
             )
@@ -708,7 +720,30 @@ class RegressionDiagnosticsStep(PipelineStep):
         )
 
 
+    def _run_piecewise_exponential(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_piecewise_exponential_diagnostics(result)
+        self._store_report(report)
 
+        paths = {
+            "interval_hazards": output_dir / "interval_hazards.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        piecewise_interval_hazards_to_dataframe(report).to_excel(paths["interval_hazards"], index=False)
+        piecewise_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        piecewise_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
 
     def _run_exponential_aft(
