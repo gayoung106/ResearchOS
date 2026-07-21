@@ -8,6 +8,13 @@ from typing import Any
 from src.pipeline.context import ResearchContext
 from src.pipeline.runtime import PipelineRuntime
 from src.pipeline.step import PipelineStep, StepResult
+from src.statistics.diagnostics.beta import (
+    beta_diagnostic_summary_to_dataframe,
+    beta_multicollinearity_to_dataframe,
+    beta_observations_to_dataframe,
+    beta_prediction_metrics_to_dataframe,
+    build_beta_diagnostics,
+)
 from src.statistics.diagnostics.binary_logit import (
     binary_diagnostic_summary_to_dataframe,
     binary_multicollinearity_to_dataframe,
@@ -122,6 +129,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             exist_ok=True,
         )
 
+        if result.model_type == "beta_regression":
+            return self._run_beta_regression(
+                result,
+                output_dir,
+            )
+
         if result.model_type == "fractional_logit":
             return self._run_fractional_logit(
                 result,
@@ -222,6 +235,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_beta_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_beta_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "observations": output_dir / "observations.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        beta_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        beta_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        beta_observations_to_dataframe(report).to_excel(paths["observations"], index=False)
+        beta_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_fractional_logit(
         self,

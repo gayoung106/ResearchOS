@@ -640,6 +640,14 @@ def build_research_audit_report(
                     ),
                 }
             )
+        elif regression_result.model_type == "beta_regression":
+            metadata.update(
+                {
+                    "precision": regression_result.fit_statistics.get("precision"),
+                    "pseudo_r_squared": regression_result.fit_statistics.get("pseudo_r_squared"),
+                    "mean_absolute_error": regression_result.fit_statistics.get("mean_absolute_error"),
+                }
+            )
         elif regression_result.model_type == "fractional_logit":
             metadata.update(
                 {

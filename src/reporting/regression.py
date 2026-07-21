@@ -103,6 +103,8 @@ def build_publication_table(
     for coefficient in regression_result.coefficients:
         if "/" in coefficient.term:
             term_type = "threshold"
+        elif regression_result.model_type == "beta_regression" and coefficient.term == "precision":
+            term_type = "ancillary"
         elif coefficient.term.startswith("inflate_"):
             term_type = "inflation"
         elif _is_intercept_term(coefficient.term):
@@ -279,6 +281,7 @@ def write_korean_results_narrative(
         if not _is_intercept_term(coefficient.term)
         and "/" not in coefficient.term
         and not coefficient.term.startswith("inflate_")
+        and not (regression_result.model_type == "beta_regression" and coefficient.term == "precision")
     ]
 
     sentences: list[str] = []
@@ -338,6 +341,18 @@ def write_korean_results_narrative(
             else:
                 effect_text = f"B={coefficient.estimate:.3f}"
 
+        elif regression_result.model_type == "beta_regression":
+            mean_or = effect_lookup.get(
+                (
+                    coefficient.term,
+                    "mean_odds_ratio",
+                )
+            )
+            effect_text = (
+                f"MOR={mean_or:.3f}"
+                if mean_or is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
         elif regression_result.model_type == "fractional_logit":
             fractional_or = effect_lookup.get(
                 (
@@ -440,6 +455,17 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "beta_regression":
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
+        precision = regression_result.fit_statistics.get("precision")
+        rmse = regression_result.fit_statistics.get("root_mean_squared_error")
+        if pseudo is not None:
+            sentences.append(f"Beta regression pseudo R-squared was {float(pseudo):.3f}.")
+        if precision is not None:
+            sentences.append(f"Estimated precision was {float(precision):.3f}.")
+        if rmse is not None:
+            sentences.append(f"Prediction RMSE was {float(rmse):.3f}.")
 
     elif regression_result.model_type == "fractional_logit":
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -694,6 +720,9 @@ def build_regression_publication_report(
             ]
         )
 
+    if regression_result.model_type == "beta_regression":
+        notes.append("Beta regression models require outcomes strictly inside (0, 1) and report mean odds ratios.")
+
     if regression_result.model_type == "fractional_logit":
         notes.append("Fractional logit models report fractional odds ratios and average marginal effects when available.")
 
@@ -735,6 +764,7 @@ def build_regression_publication_report(
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
+            "precision": regression_result.fit_statistics.get("precision"),
         },
     )
 

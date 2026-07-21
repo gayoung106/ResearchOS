@@ -156,6 +156,38 @@ def _build_ols_effects(
     )
 
 
+def _build_beta_regression_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept", "precision"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="mean_odds_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Odds-scale effect on the beta-regression conditional mean.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
+            "precision": result.fit_statistics.get("precision"),
+            "mean_absolute_error": result.fit_statistics.get("mean_absolute_error"),
+        },
+        metadata={"sample_size": result.sample_size},
+    )
+
+
 def _build_fractional_logit_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     warnings: list[str] = []
@@ -723,6 +755,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "fractional_logit":
         return _build_fractional_logit_effects(result)
+
+    if result.model_type == "beta_regression":
+        return _build_beta_regression_effects(result)
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)

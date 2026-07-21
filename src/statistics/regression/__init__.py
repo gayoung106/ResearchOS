@@ -5,6 +5,7 @@ from src.statistics.regression.base import (
     RegressionResult,
     prepare_model_data,
 )
+from src.statistics.regression.beta import fit_beta_regression
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import fit_cox_proportional_hazards
@@ -57,6 +58,7 @@ __all__ = [
     "fit_mixed_negative_binomial_random_slope",
     "fit_mixed_negative_binomial_three_level",
     "fit_binary_logit",
+    "fit_beta_regression",
     "fit_ordered_logit",
     "fit_multinomial_logit",
     "fit_poisson",

@@ -259,6 +259,10 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
+        "beta",
+        "beta_regression",
+    }
     cox_requested = requested_estimator in {"cox", "cox_ph", "cox_proportional_hazards"} or requested_model_type in {
         "cox",
         "cox_ph",
@@ -278,7 +282,23 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if cox_requested:
+    if beta_requested:
+        if measurement_level != "proportion":
+            return not_registered(
+                "Beta regression supports proportion dependent variables strictly inside (0, 1).",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "beta_regression"
+        multilevel_options = {
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif cox_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Cox proportional hazards supports continuous duration variables.",
@@ -738,6 +758,7 @@ def register_regression_pipeline(
         "quantile_regression",
         "cox_proportional_hazards",
         "fractional_logit",
+        "beta_regression",
         "binary_logit",
         "ordered_logit",
         "multinomial_logit",
