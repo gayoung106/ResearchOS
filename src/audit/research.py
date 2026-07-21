@@ -214,6 +214,26 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "heckman_selection":
+        selection_variable = result.metadata.get("selection_variable", "unknown")
+        selection_rate = result.fit_statistics.get("selection_rate", "unknown")
+        imr_p = result.fit_statistics.get("inverse_mills_p_value", "unknown")
+        exclusions = result.metadata.get("exclusion_restrictions", [])
+        evidence = (
+            f"Heckman selection regression, N={result.sample_size}, "
+            f"selection variable={selection_variable}, selection rate={selection_rate}, "
+            f"exclusions={exclusions}, inverse Mills p={imr_p}, converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the selection equation, exclusion restrictions, selection rate, and inverse Mills ratio test.",
+        )
+
     if result.model_type == "iv_2sls_regression":
         endogenous = result.metadata.get("endogenous_variables", [])
         instruments = result.metadata.get("instrument_variables", [])
@@ -453,6 +473,25 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "heckman_selection":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Heckman diagnostics, selection rate={summary.get('selection_rate', 'unknown')}, "
+            f"inverse Mills p={summary.get('inverse_mills_p_value', 'unknown')}, "
+            f"exclusions={summary.get('exclusion_restriction_count', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report the first-stage selection diagnostics, inverse Mills ratio, residual checks, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "iv_2sls_regression":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -752,7 +791,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "iv_2sls_regression":
+    if getattr(report, "model_type", None) == "heckman_selection":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Heckman standardized effects {len(report.effects)} generated; "
+            f"inverse Mills p={model_effects.get('inverse_mills_p_value', 'unknown')}"
+        )
+        recommendation = "Interpret outcome-equation standardized coefficients with the selection correction."
+    elif getattr(report, "model_type", None) == "iv_2sls_regression":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"IV standardized effects {len(report.effects)} generated; "
@@ -1002,6 +1048,18 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "heckman_selection":
+            metadata.update(
+                {
+                    "selection_variable": regression_result.metadata.get("selection_variable"),
+                    "selection_variables": regression_result.metadata.get("selection_variables"),
+                    "exclusion_restrictions": regression_result.metadata.get("exclusion_restrictions"),
+                    "selection_rate": regression_result.fit_statistics.get("selection_rate"),
+                    "inverse_mills_coefficient": regression_result.fit_statistics.get("inverse_mills_coefficient"),
+                    "inverse_mills_p_value": regression_result.fit_statistics.get("inverse_mills_p_value"),
+                    "rho": regression_result.fit_statistics.get("rho"),
                 }
             )
         elif regression_result.model_type == "iv_2sls_regression":

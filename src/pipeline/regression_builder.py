@@ -259,6 +259,15 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    heckman_requested = requested_estimator in {
+        "heckman",
+        "heckman_selection",
+        "sample_selection",
+    } or requested_model_type in {
+        "heckman",
+        "heckman_selection",
+        "sample_selection",
+    }
     iv_requested = requested_estimator in {
         "iv",
         "2sls",
@@ -336,7 +345,54 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if iv_requested:
+    if heckman_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Heckman selection supports continuous observed outcomes.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        selection_variable = str(
+            regression_options.get("selection_variable", regression_options.get("selected_variable", ""))
+        ).strip()
+        raw_selection_variables = regression_options.get(
+            "selection_variables", regression_options.get("selection_predictors", [])
+        )
+        selection_variables = [str(value) for value in raw_selection_variables] if isinstance(raw_selection_variables, (list, tuple)) else [str(raw_selection_variables)] if raw_selection_variables else []
+        if not selection_variable or not selection_variables:
+            return not_registered(
+                "Heckman selection requires selection_variable and selection_variables options.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        missing_selection_variables = [
+            variable
+            for variable in [selection_variable, *selection_variables]
+            if variable not in variable_map.variables
+        ]
+        if missing_selection_variables:
+            return not_registered(
+                "Heckman variable is missing from variable_map: " + ", ".join(missing_selection_variables),
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "heckman_selection"
+        multilevel_options = {
+            "selection_variable": selection_variable,
+            "selection_variables": selection_variables,
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif iv_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "IV 2SLS regression supports continuous dependent variables.",
@@ -996,6 +1052,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "heckman_selection",
         "iv_2sls_regression",
         "inverse_gaussian_regression",
         "gamma_regression",

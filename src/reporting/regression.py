@@ -323,7 +323,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -359,6 +359,12 @@ def write_korean_results_narrative(
                     (
                         coefficient.term,
                         "regularized_standardized_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "heckman_standardized_beta",
                     )
                 )
                 or effect_lookup.get(
@@ -500,6 +506,28 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "heckman_selection":
+        selection_variable = regression_result.metadata.get("selection_variable")
+        selection_rate = regression_result.fit_statistics.get("selection_rate")
+        inverse_mills = regression_result.fit_statistics.get("inverse_mills_coefficient")
+        inverse_mills_p = regression_result.fit_statistics.get("inverse_mills_p_value")
+        exclusions = regression_result.metadata.get("exclusion_restrictions") or []
+        if selection_variable is not None:
+            sentences.append(f"Heckman selection modeled observation through {selection_variable}.")
+        if selection_rate is not None:
+            sentences.append(f"The observed outcome selection rate was {float(selection_rate):.3f}.")
+        if exclusions:
+            sentences.append(
+                "Selection exclusion restrictions were "
+                + ", ".join(str(value) for value in exclusions)
+                + "."
+            )
+        if inverse_mills is not None and inverse_mills_p is not None:
+            sentences.append(
+                f"The inverse Mills ratio was {float(inverse_mills):.3f} "
+                f"({_format_p_value(float(inverse_mills_p))})."
+            )
 
     elif regression_result.model_type == "iv_2sls_regression":
         endogenous = regression_result.metadata.get("endogenous_variables") or []
@@ -846,7 +874,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -914,6 +942,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "iv_2sls_regression":
         notes.append("IV 2SLS reports second-stage coefficients and first-stage instrument strength diagnostics.")
 
+    if regression_result.model_type == "heckman_selection":
+        notes.append("Heckman selection reports outcome-equation coefficients with inverse Mills correction and a first-stage selection equation.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -952,6 +983,10 @@ def build_regression_publication_report(
             "iv_endogenous_variables": regression_result.metadata.get("endogenous_variables"),
             "iv_instrument_variables": regression_result.metadata.get("instrument_variables"),
             "minimum_first_stage_f_statistic": regression_result.fit_statistics.get("minimum_first_stage_f_statistic"),
+            "selection_variable": regression_result.metadata.get("selection_variable"),
+            "selection_rate": regression_result.fit_statistics.get("selection_rate"),
+            "inverse_mills_p_value": regression_result.fit_statistics.get("inverse_mills_p_value"),
+            "exclusion_restrictions": regression_result.metadata.get("exclusion_restrictions"),
             "regularized_penalty": regression_result.fit_statistics.get("penalty"),
             "regularized_alpha": regression_result.fit_statistics.get("alpha"),
             "regularized_l1_ratio": regression_result.fit_statistics.get("l1_ratio"),

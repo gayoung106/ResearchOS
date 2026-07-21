@@ -331,6 +331,62 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_heckman_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted Heckman result is required.")
+    endog = np.asarray(fitted.outcome_result.model.endog, dtype=float)
+    exog = np.asarray(fitted.outcome_result.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.outcome_result.model.exog_names]
+    outcome_sd = float(np.std(endog, ddof=1)) if endog.size > 1 else np.nan
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Heckman standardized effects could not be computed because outcome SD is zero.")
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept", "inverse_mills_ratio"}:
+            continue
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None:
+            continue
+        predictor_sd = float(np.std(exog[:, index], ddof=1))
+        estimate = None
+        if np.isfinite(outcome_sd) and not np.isclose(outcome_sd, 0.0):
+            estimate = float(coefficient.estimate * predictor_sd / outcome_sd)
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="heckman_standardized_beta",
+                estimate=estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized outcome-equation coefficient from Heckman two-step estimation.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "outcome_r_squared": result.fit_statistics.get("outcome_r_squared"),
+            "inverse_mills_coefficient": result.fit_statistics.get("inverse_mills_coefficient"),
+            "inverse_mills_p_value": result.fit_statistics.get("inverse_mills_p_value"),
+            "selection_rate": result.fit_statistics.get("selection_rate"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "selection_variable": result.metadata.get("selection_variable"),
+            "exclusion_restrictions": result.metadata.get("exclusion_restrictions"),
+        },
+    )
+
+
 def _build_iv_2sls_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -1129,6 +1185,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "iv_2sls_regression":
         return _build_iv_2sls_effects(result)
+
+    if result.model_type == "heckman_selection":
+        return _build_heckman_effects(result)
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)

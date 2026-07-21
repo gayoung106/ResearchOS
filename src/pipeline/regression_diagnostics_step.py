@@ -57,6 +57,13 @@ from src.statistics.diagnostics.gee import (
     gee_diagnostic_summary_to_dataframe,
     gee_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.heckman import (
+    build_heckman_diagnostics,
+    heckman_diagnostic_summary_to_dataframe,
+    heckman_multicollinearity_to_dataframe,
+    heckman_residuals_to_dataframe,
+    heckman_selection_coefficients_to_dataframe,
+)
 from src.statistics.diagnostics.inverse_gaussian import (
     build_inverse_gaussian_diagnostics,
     inverse_gaussian_diagnostic_summary_to_dataframe,
@@ -178,6 +185,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "heckman_selection":
+            return self._run_heckman_selection(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "iv_2sls_regression":
             return self._run_iv_2sls_regression(
@@ -327,6 +340,35 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_heckman_selection(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_heckman_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "selection": output_dir / "selection_equation.xlsx",
+            "vif": output_dir / "multicollinearity.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        heckman_selection_coefficients_to_dataframe(report).to_excel(
+            paths["selection"], index=False
+        )
+        heckman_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        heckman_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        heckman_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_iv_2sls_regression(
         self,
