@@ -217,6 +217,25 @@ def _regression_item(
 
 
 
+
+    if result.model_type == "exponential_aft":
+        evidence = (
+            f"Exponential AFT regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"censored={result.fit_statistics.get('censored_count', 'unknown')}, "
+            f"constant hazard={result.fit_statistics.get('constant_hazard', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report duration/event coding, exponential distribution, censoring, constant-hazard assumption, and time ratios.",
+        )
+
     if result.model_type == "loglogistic_aft":
         evidence = (
             f"Log-logistic AFT regression, N={result.sample_size}, "
@@ -621,6 +640,25 @@ def _diagnostics_item(
     result = _regression_result(runtime, model_id)
 
 
+
+
+    if result is not None and getattr(result, "model_type", None) == "exponential_aft":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Exponential AFT diagnostics, C-index={summary.get('concordance_index', 'unknown')}, "
+            f"events per parameter={summary.get('events_per_parameter', 'unknown')}, "
+            f"warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report AFT residuals, concordance, VIF screening, censoring, and constant-hazard assumption.",
+        )
 
     if result is not None and getattr(result, "model_type", None) == "loglogistic_aft":
         summary = getattr(report, "summary", {})
@@ -1079,7 +1117,15 @@ def _effect_size_item(
 
 
 
-    if getattr(report, "model_type", None) == "loglogistic_aft":
+
+    if getattr(report, "model_type", None) == "exponential_aft":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Exponential AFT time-ratio effects {len(report.effects)} generated; "
+            f"constant hazard={model_effects.get('constant_hazard', 'unknown')}"
+        )
+        recommendation = "Interpret time ratios under the constant-hazard exponential AFT model."
+    elif getattr(report, "model_type", None) == "loglogistic_aft":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Log-logistic AFT time-ratio effects {len(report.effects)} generated; "
@@ -1373,6 +1419,19 @@ def build_research_audit_report(
 
 
 
+
+        elif regression_result.model_type == "exponential_aft":
+            metadata.update(
+                {
+                    "duration_variable": regression_result.metadata.get("duration_variable"),
+                    "event_variable": regression_result.metadata.get("event_variable"),
+                    "event_count": regression_result.fit_statistics.get("event_count"),
+                    "censored_count": regression_result.fit_statistics.get("censored_count"),
+                    "events_per_parameter": regression_result.fit_statistics.get("events_per_parameter"),
+                    "constant_hazard": regression_result.fit_statistics.get("constant_hazard"),
+                    "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
+                }
+            )
         elif regression_result.model_type == "loglogistic_aft":
             metadata.update(
                 {

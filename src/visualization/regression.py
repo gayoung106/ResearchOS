@@ -254,6 +254,26 @@ def _plot_baseline_survival(
 
 
 
+
+def _plot_exponential_aft_survival(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    scale = float(np.median(fitted.predict(kind="scale")))
+    durations = np.asarray(fitted.model.endog, dtype=float)
+    grid = np.linspace(float(np.min(durations)), float(np.max(durations)), 120)
+    survival = np.exp(-grid / scale)
+    figure, axis = plt.subplots(figsize=(7, 4.5))
+    axis.plot(grid, survival)
+    axis.set_ylim(0.0, 1.02)
+    axis.set_xlabel("Time")
+    axis.set_ylabel("Predicted survival")
+    axis.set_title("Exponential AFT Survival Curve")
+    _save_figure(figure, output_path)
+
+
 def _plot_loglogistic_aft_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -655,6 +675,10 @@ def build_regression_visualizations(
         baseline_path = output_directory / "cox_baseline_survival.png"
         _plot_baseline_survival(regression_result, baseline_path)
         output_files.append(str(baseline_path))
+    elif regression_result.model_type == "exponential_aft":
+        survival_path = output_directory / "exponential_aft_survival_curve.png"
+        _plot_exponential_aft_survival(regression_result, survival_path)
+        output_files.append(str(survival_path))
     elif regression_result.model_type == "loglogistic_aft":
         survival_path = output_directory / "loglogistic_aft_survival_curve.png"
         _plot_loglogistic_aft_survival(regression_result, survival_path)

@@ -11,6 +11,7 @@ from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import fit_cox_proportional_hazards
+from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
@@ -93,6 +94,7 @@ __all__ = [
     "fit_zero_inflated_negative_binomial",
     "fit_count_regression",
     "fit_cox_proportional_hazards",
+    "fit_exponential_aft",
     "fit_fractional_logit",
     "fit_gamma_regression",
     "fit_heckman_selection",

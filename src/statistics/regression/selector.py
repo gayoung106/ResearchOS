@@ -11,6 +11,7 @@ from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import fit_cox_proportional_hazards
+from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
@@ -283,6 +284,23 @@ def fit_regression_by_level(
 
 
 
+
+
+    if model_type == "exponential_aft":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Exponential AFT regression requires event_variable.")
+        return fit_exponential_aft(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
 
     if model_type == "loglogistic_aft":
         options = mixed_effects_options or {}

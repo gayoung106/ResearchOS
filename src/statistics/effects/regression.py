@@ -893,6 +893,58 @@ def _build_log_binomial_effects(result: RegressionResult) -> EffectSizeReport:
 
 
 
+
+def _build_exponential_aft_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="time_ratio",
+                estimate=coefficient.exponentiated_estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=float(np.exp(coefficient.confidence_interval_lower)),
+                confidence_interval_upper=float(np.exp(coefficient.confidence_interval_upper)),
+                magnitude=None,
+                interpretation="Survival time ratio from an exponential AFT model.",
+            )
+        )
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="log_time_coefficient",
+                estimate=coefficient.estimate,
+                standard_error=coefficient.standard_error,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=coefficient.confidence_interval_lower,
+                confidence_interval_upper=coefficient.confidence_interval_upper,
+                magnitude=None,
+                interpretation="Coefficient on log survival time in the AFT parameterization.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "median_predicted_time": result.fit_statistics.get("median_predicted_time"),
+            "events_per_parameter": result.fit_statistics.get("events_per_parameter"),
+            "constant_hazard": result.fit_statistics.get("constant_hazard"),
+        },
+        metadata={
+            "sample_size": result.sample_size,
+            "duration_variable": result.metadata.get("duration_variable"),
+            "event_variable": result.metadata.get("event_variable"),
+            "distribution": result.metadata.get("distribution"),
+        },
+    )
+
+
 def _build_loglogistic_aft_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     for coefficient in result.coefficients:
@@ -1573,6 +1625,8 @@ def build_regression_effect_size_report(
 
     if result.model_type == "log_binomial":
         return _build_log_binomial_effects(result)
+    if result.model_type == "exponential_aft":
+        return _build_exponential_aft_effects(result)
     if result.model_type == "loglogistic_aft":
         return _build_loglogistic_aft_effects(result)
     if result.model_type == "lognormal_aft":

@@ -385,6 +385,15 @@ def register_regression_pipeline(
         "weibull_aft",
         "weibull-aft",
     }
+    exponential_aft_requested = requested_estimator in {
+        "exponential",
+        "exponential_aft",
+        "exponential-aft",
+    } or requested_model_type in {
+        "exponential",
+        "exponential_aft",
+        "exponential-aft",
+    }
     lognormal_aft_requested = requested_estimator in {
         "lognormal_aft",
         "lognormal-aft",
@@ -806,6 +815,41 @@ def register_regression_pipeline(
 
 
 
+
+    elif exponential_aft_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Exponential AFT regression supports positive continuous duration outcomes.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        event_variable = str(regression_options.get("event_variable", "")).strip()
+        if not event_variable:
+            return not_registered(
+                "Exponential AFT regression requires regression.options.event_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        if event_variable not in variable_map.variables:
+            return not_registered(
+                "Exponential AFT event variable is missing from variable_map: " + event_variable,
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "exponential_aft"
+        multilevel_options = {
+            "event_variable": event_variable,
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 500)
+            ),
+        }
     elif loglogistic_aft_requested:
         if measurement_level != "continuous":
             return not_registered(
@@ -1342,6 +1386,7 @@ def register_regression_pipeline(
         "panel_fixed_effects",
         "quantile_regression",
         "cox_proportional_hazards",
+        "exponential_aft",
         "loglogistic_aft",
         "lognormal_aft",
         "weibull_aft",
