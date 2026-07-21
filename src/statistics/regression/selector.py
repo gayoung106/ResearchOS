@@ -18,6 +18,7 @@ from src.statistics.regression.heckman import fit_heckman_selection
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
 from src.statistics.regression.iv import fit_iv_2sls_regression
 from src.statistics.regression.log_binomial import fit_log_binomial
+from src.statistics.regression.lognormal_aft import fit_lognormal_aft
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
     fit_mixed_binary_logit_random_slope,
@@ -279,6 +280,23 @@ def fit_regression_by_level(
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
+
+
+    if model_type == "lognormal_aft":
+        options = mixed_effects_options or {}
+        event_variable = str(options.get("event_variable", "")).strip()
+        if not event_variable:
+            raise ValueError("Log-normal AFT regression requires event_variable.")
+        return fit_lognormal_aft(
+            dataframe,
+            duration_variable=dependent_variable,
+            event_variable=event_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
 
     if model_type == "weibull_aft":
         options = mixed_effects_options or {}
