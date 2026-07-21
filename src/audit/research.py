@@ -214,6 +214,24 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "binary_cloglog":
+        evidence = (
+            f"Binary cloglog regression, N={result.sample_size}, "
+            f"events={result.fit_statistics.get('event_count', 'unknown')}, "
+            f"non-events={result.fit_statistics.get('non_event_count', 'unknown')}, "
+            f"Brier={result.fit_statistics.get('brier_score', 'unknown')}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the complementary log-log link, event coding, classification diagnostics, and marginal effects.",
+        )
+
     if result.model_type == "ordered_probit":
         evidence = (
             f"Ordered probit regression, N={result.sample_size}, "
@@ -507,6 +525,23 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "binary_cloglog":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Binary cloglog diagnostics, ROC-AUC={summary.get('roc_auc', 'unknown')}, "
+            f"Brier={summary.get('brier_score', 'unknown')}, warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report ROC-AUC, Brier score, calibration, and VIF screening for the binary cloglog model.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "ordered_probit":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -860,7 +895,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "ordered_probit":
+    if getattr(report, "model_type", None) == "binary_cloglog":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Binary cloglog effects {len(report.effects)} generated; "
+            f"Brier={model_effects.get('brier_score', 'unknown')}"
+        )
+        recommendation = "Interpret exponentiated cloglog coefficients and average marginal effects on event probability."
+    elif getattr(report, "model_type", None) == "ordered_probit":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Ordered probit latent effects {len(report.effects)} generated; "
@@ -1131,6 +1173,16 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "binary_cloglog":
+            metadata.update(
+                {
+                    "link": regression_result.metadata.get("link"),
+                    "event_count": regression_result.fit_statistics.get("event_count"),
+                    "non_event_count": regression_result.fit_statistics.get("non_event_count"),
+                    "pseudo_r_squared_mcfadden": regression_result.fit_statistics.get("pseudo_r_squared_mcfadden"),
+                    "brier_score": regression_result.fit_statistics.get("brier_score"),
                 }
             )
         elif regression_result.model_type == "ordered_probit":

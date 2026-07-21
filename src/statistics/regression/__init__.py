@@ -6,6 +6,7 @@ from src.statistics.regression.base import (
     prepare_model_data,
 )
 from src.statistics.regression.beta import fit_beta_regression
+from src.statistics.regression.binary_cloglog import fit_binary_cloglog
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
 from src.statistics.regression.count import fit_count_regression
@@ -67,6 +68,7 @@ __all__ = [
     "fit_mixed_negative_binomial_random_intercept",
     "fit_mixed_negative_binomial_random_slope",
     "fit_mixed_negative_binomial_three_level",
+    "fit_binary_cloglog",
     "fit_binary_logit",
     "fit_binary_probit",
     "fit_beta_regression",
