@@ -214,6 +214,24 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "gamma_regression":
+        dispersion = result.fit_statistics.get("dispersion_ratio", "unknown")
+        pseudo = result.fit_statistics.get("pseudo_r_squared_deviance", "unknown")
+        evidence = (
+            f"Gamma regression, N={result.sample_size}, "
+            f"dispersion={dispersion}, deviance pseudo R-squared={pseudo}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report Gamma log-link rationale, positive outcome support, dispersion, and mean ratios.",
+        )
+
     if result.model_type == "regularized_regression":
         penalty = result.fit_statistics.get("penalty", "unknown")
         alpha = result.fit_statistics.get("alpha", "unknown")
@@ -398,6 +416,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "gamma_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Gamma diagnostics, dispersion={summary.get('dispersion_ratio', 'unknown')}, "
+            f"RMSE={summary.get('root_mean_squared_error', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report Gamma prediction diagnostics, dispersion, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "regularized_regression":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -643,7 +679,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "regularized_regression":
+    if getattr(report, "model_type", None) == "gamma_regression":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Gamma mean-ratio effects {len(report.effects)} generated; "
+            f"dispersion={model_effects.get('dispersion_ratio', 'unknown')}"
+        )
+        recommendation = "Interpret multiplicative mean ratios from the Gamma log-link model."
+    elif getattr(report, "model_type", None) == "regularized_regression":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Regularized standardized effects {len(report.effects)} generated; "
@@ -872,6 +915,16 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "gamma_regression":
+            metadata.update(
+                {
+                    "dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio"),
+                    "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
+                    "root_mean_squared_error": regression_result.fit_statistics.get("root_mean_squared_error"),
+                    "minimum_observed": regression_result.fit_statistics.get("minimum_observed"),
+                    "maximum_observed": regression_result.fit_statistics.get("maximum_observed"),
                 }
             )
         elif regression_result.model_type == "regularized_regression":

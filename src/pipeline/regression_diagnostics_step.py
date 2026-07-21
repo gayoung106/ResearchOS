@@ -44,6 +44,13 @@ from src.statistics.diagnostics.fractional_logit import (
     fractional_observations_to_dataframe,
     fractional_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.gamma import (
+    build_gamma_diagnostics,
+    gamma_diagnostic_summary_to_dataframe,
+    gamma_multicollinearity_to_dataframe,
+    gamma_observations_to_dataframe,
+    gamma_prediction_metrics_to_dataframe,
+)
 from src.statistics.diagnostics.gee import (
     build_gee_diagnostics,
     gee_cluster_diagnostics_to_dataframe,
@@ -157,6 +164,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "gamma_regression":
+            return self._run_gamma_regression(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "regularized_regression":
             return self._run_regularized_regression(
@@ -288,6 +301,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_gamma_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_gamma_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "observations": output_dir / "observations.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        gamma_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        gamma_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        gamma_observations_to_dataframe(report).to_excel(paths["observations"], index=False)
+        gamma_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_regularized_regression(
         self,

@@ -10,6 +10,7 @@ from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import fit_cox_proportional_hazards
 from src.statistics.regression.fractional_logit import fit_fractional_logit
+from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.mixed_binary_logit import (
     fit_mixed_binary_logit_random_intercept,
@@ -77,5 +78,6 @@ __all__ = [
     "fit_count_regression",
     "fit_cox_proportional_hazards",
     "fit_fractional_logit",
+    "fit_gamma_regression",
     "fit_gee",
 ]

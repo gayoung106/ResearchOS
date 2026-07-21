@@ -380,6 +380,18 @@ def write_korean_results_narrative(
                 if mean_or is not None
                 else f"B={coefficient.estimate:.3f}"
             )
+        elif regression_result.model_type == "gamma_regression":
+            mean_ratio = effect_lookup.get(
+                (
+                    coefficient.term,
+                    "mean_ratio",
+                )
+            )
+            effect_text = (
+                f"MR={mean_ratio:.3f}"
+                if mean_ratio is not None
+                else f"B={coefficient.estimate:.3f}"
+            )
         elif regression_result.model_type == "fractional_logit":
             fractional_or = effect_lookup.get(
                 (
@@ -570,6 +582,17 @@ def write_korean_results_narrative(
             sentences.append(f"Estimated precision was {float(precision):.3f}.")
         if rmse is not None:
             sentences.append(f"Prediction RMSE was {float(rmse):.3f}.")
+
+    elif regression_result.model_type == "gamma_regression":
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
+        dispersion = regression_result.fit_statistics.get("dispersion_ratio")
+        rmse = regression_result.fit_statistics.get("root_mean_squared_error")
+        if pseudo is not None:
+            sentences.append(f"Gamma deviance pseudo R-squared was {float(pseudo):.3f}.")
+        if dispersion is not None:
+            sentences.append(f"Gamma Pearson dispersion ratio was {float(dispersion):.3f}.")
+        if rmse is not None:
+            sentences.append(f"Gamma prediction RMSE was {float(rmse):.3f}.")
 
     elif regression_result.model_type == "fractional_logit":
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -830,6 +853,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "fractional_logit":
         notes.append("Fractional logit models report fractional odds ratios and average marginal effects when available.")
 
+    if regression_result.model_type == "gamma_regression":
+        notes.append("Gamma regression uses a log link and reports multiplicative mean ratios.")
+
     if regression_result.model_type == "cox_proportional_hazards":
         notes.append("Cox models report hazard ratios from partial likelihood estimates.")
 
@@ -880,6 +906,7 @@ def build_regression_publication_report(
             "duration_variable": regression_result.metadata.get("duration_variable"),
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
+            "gamma_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "gamma_regression" else None,
             "precision": regression_result.fit_statistics.get("precision"),
             "regularized_penalty": regression_result.fit_statistics.get("penalty"),
             "regularized_alpha": regression_result.fit_statistics.get("alpha"),

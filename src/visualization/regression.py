@@ -208,6 +208,28 @@ def _plot_observed_vs_predicted(
     _save_figure(figure, output_path)
 
 
+def _plot_observed_vs_predicted_continuous(
+    regression_result: RegressionResult,
+    output_path: Path,
+) -> None:
+    _configure_matplotlib_font()
+    fitted = regression_result.raw_result
+    observed = np.asarray(fitted.model.endog, dtype=float)
+    predicted = np.asarray(fitted.fittedvalues, dtype=float)
+    lower = float(min(np.min(observed), np.min(predicted)))
+    upper = float(max(np.max(observed), np.max(predicted)))
+    padding = max((upper - lower) * 0.05, 1e-6)
+    figure, axis = plt.subplots(figsize=(5.5, 5.0))
+    axis.scatter(predicted, observed, alpha=0.75)
+    axis.plot([lower - padding, upper + padding], [lower - padding, upper + padding], linestyle="--")
+    axis.set_xlim(lower - padding, upper + padding)
+    axis.set_ylim(lower - padding, upper + padding)
+    axis.set_xlabel("Predicted")
+    axis.set_ylabel("Observed")
+    axis.set_title("Observed vs Predicted")
+    _save_figure(figure, output_path)
+
+
 def _plot_baseline_survival(
     regression_result: RegressionResult,
     output_path: Path,
@@ -547,6 +569,10 @@ def build_regression_visualizations(
             influence_path,
         )
         output_files.append(str(influence_path))
+    elif regression_result.model_type == "gamma_regression":
+        observed_path = output_directory / "gamma_observed_vs_predicted.png"
+        _plot_observed_vs_predicted_continuous(regression_result, observed_path)
+        output_files.append(str(observed_path))
     elif regression_result.model_type == "fractional_logit":
         observed_path = output_directory / "fractional_observed_vs_predicted.png"
         _plot_observed_vs_predicted(regression_result, observed_path)
