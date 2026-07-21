@@ -259,6 +259,11 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    robust_requested = requested_estimator in {"robust", "rlm", "robust_regression"} or requested_model_type in {
+        "robust",
+        "rlm",
+        "robust_regression",
+    }
     tobit_requested = requested_estimator in {"tobit", "censored", "tobit_regression"} or requested_model_type in {
         "tobit",
         "censored",
@@ -292,7 +297,24 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if tobit_requested:
+    if robust_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Robust regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "robust_regression"
+        multilevel_options = {
+            "norm": regression_options.get("norm", regression_options.get("robust_norm", "huber")),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif tobit_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Tobit regression supports continuous dependent variables.",
@@ -838,6 +860,7 @@ def register_regression_pipeline(
 
     if model_type in {
         "ols",
+        "robust_regression",
         "tobit_regression",
         "panel_fixed_effects",
         "quantile_regression",

@@ -97,6 +97,13 @@ from src.statistics.diagnostics.quantile import (
     quantile_residual_summary_to_dataframe,
     quantile_residuals_to_dataframe,
 )
+from src.statistics.diagnostics.robust import (
+    build_robust_diagnostics,
+    robust_diagnostic_summary_to_dataframe,
+    robust_multicollinearity_to_dataframe,
+    robust_residuals_to_dataframe,
+    robust_weight_summary_to_dataframe,
+)
 from src.statistics.diagnostics.tobit import (
     build_tobit_diagnostics,
     tobit_diagnostic_summary_to_dataframe,
@@ -142,6 +149,12 @@ class RegressionDiagnosticsStep(PipelineStep):
             parents=True,
             exist_ok=True,
         )
+
+        if result.model_type == "robust_regression":
+            return self._run_robust_regression(
+                result,
+                output_dir,
+            )
 
         if result.model_type == "tobit_regression":
             return self._run_tobit_regression(
@@ -261,6 +274,33 @@ class RegressionDiagnosticsStep(PipelineStep):
             report,
         )
 
+
+    def _run_robust_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_robust_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "weights": output_dir / "weight_summary.xlsx",
+            "residuals": output_dir / "residuals.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        robust_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        robust_weight_summary_to_dataframe(report).to_excel(paths["weights"], index=False)
+        robust_residuals_to_dataframe(report).to_excel(paths["residuals"], index=False)
+        robust_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
 
     def _run_tobit_regression(
         self,

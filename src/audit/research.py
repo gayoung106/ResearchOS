@@ -214,6 +214,24 @@ def _regression_item(
     status = "PASS" if result.converged else "FAIL"
     score = 15 if result.converged else 5
 
+    if result.model_type == "robust_regression":
+        downweighted = result.fit_statistics.get("downweighted_count", "unknown")
+        heavy = result.fit_statistics.get("heavily_downweighted_count", "unknown")
+        evidence = (
+            f"Robust linear regression, N={result.sample_size}, "
+            f"downweighted={downweighted}, heavily downweighted={heavy}, "
+            f"converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report the robust norm, downweighted cases, and why robust estimation was selected.",
+        )
+
     if result.model_type == "tobit_regression":
         left_count = result.fit_statistics.get("left_censored_count", "unknown")
         right_count = result.fit_statistics.get("right_censored_count", "unknown")
@@ -360,6 +378,24 @@ def _diagnostics_item(
     warning_count = len(report.warnings)
 
     result = _regression_result(runtime, model_id)
+    if result is not None and getattr(result, "model_type", None) == "robust_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Robust diagnostics, downweighted={summary.get('downweighted_count', 'unknown')}, "
+            f"minimum weight={summary.get('minimum_weight', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report robust weights, residual checks, and VIF screening.",
+        )
+
     if result is not None and getattr(result, "model_type", None) == "tobit_regression":
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
@@ -568,7 +604,14 @@ def _effect_size_item(
 
     report = runtime.artifacts[key]
 
-    if getattr(report, "model_type", None) == "tobit_regression":
+    if getattr(report, "model_type", None) == "robust_regression":
+        model_effects = getattr(report, "model_effects", {})
+        evidence = (
+            f"Robust standardized effects {len(report.effects)} generated; "
+            f"downweighted={model_effects.get('downweighted_count', 'unknown')}"
+        )
+        recommendation = "Interpret robust standardized coefficients with the weight diagnostics."
+    elif getattr(report, "model_type", None) == "tobit_regression":
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Tobit effect sizes {len(report.effects)} generated; "
@@ -783,6 +826,16 @@ def build_research_audit_report(
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
+                }
+            )
+        elif regression_result.model_type == "robust_regression":
+            metadata.update(
+                {
+                    "robust_norm": regression_result.metadata.get("norm"),
+                    "downweighted_count": regression_result.fit_statistics.get("downweighted_count"),
+                    "heavily_downweighted_count": regression_result.fit_statistics.get("heavily_downweighted_count"),
+                    "downweighted_rate": regression_result.fit_statistics.get("downweighted_rate"),
+                    "pseudo_r_squared": regression_result.fit_statistics.get("pseudo_r_squared"),
                 }
             )
         elif regression_result.model_type == "tobit_regression":

@@ -331,6 +331,62 @@ def _build_quantile_effects(result: RegressionResult) -> EffectSizeReport:
     )
 
 
+def _build_robust_effects(result: RegressionResult) -> EffectSizeReport:
+    fitted = result.raw_result
+    if fitted is None:
+        raise ValueError("A fitted robust regression result is required.")
+    endog = np.asarray(fitted.model.endog, dtype=float)
+    exog = np.asarray(fitted.model.exog, dtype=float)
+    exog_names = [str(name) for name in fitted.model.exog_names]
+    outcome_sd = float(np.std(endog, ddof=1)) if endog.size > 1 else np.nan
+    effects: list[EffectSizeResult] = []
+    warnings: list[str] = []
+    if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
+        warnings.append("Robust standardized effects could not be computed because outcome SD is zero.")
+    coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
+    for index, term in enumerate(exog_names):
+        if term.lower() in {"const", "intercept"}:
+            continue
+        coefficient = coefficient_lookup.get(term)
+        if coefficient is None:
+            continue
+        predictor_sd = float(np.std(exog[:, index], ddof=1))
+        estimate = None
+        if np.isfinite(outcome_sd) and not np.isclose(outcome_sd, 0.0):
+            estimate = float(coefficient.estimate * predictor_sd / outcome_sd)
+        effects.append(
+            EffectSizeResult(
+                term=term,
+                effect_type="robust_standardized_beta",
+                estimate=estimate,
+                standard_error=None,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=None,
+                confidence_interval_upper=None,
+                magnitude=None,
+                interpretation="Standardized coefficient from robust M-estimation.",
+            )
+        )
+
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
+            "scale": result.fit_statistics.get("scale"),
+            "downweighted_count": result.fit_statistics.get("downweighted_count"),
+            "heavily_downweighted_count": result.fit_statistics.get("heavily_downweighted_count"),
+        },
+        warnings=warnings,
+        metadata={
+            "sample_size": result.sample_size,
+            "norm": result.metadata.get("norm"),
+        },
+    )
+
+
 def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -886,6 +942,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "quantile_regression":
         return _build_quantile_effects(result)
+
+    if result.model_type == "robust_regression":
+        return _build_robust_effects(result)
 
     if result.model_type == "tobit_regression":
         return _build_tobit_effects(result)

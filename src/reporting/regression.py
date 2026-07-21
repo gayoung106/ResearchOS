@@ -323,7 +323,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -347,6 +347,12 @@ def write_korean_results_narrative(
                     (
                         coefficient.term,
                         "latent_standardized_beta",
+                    )
+                )
+                or effect_lookup.get(
+                    (
+                        coefficient.term,
+                        "robust_standardized_beta",
                     )
                 )
             )
@@ -470,6 +476,21 @@ def write_korean_results_narrative(
             sentences.append(f"Quantile pseudo R-squared was {float(pseudo):.3f}.")
         if pinball is not None:
             sentences.append(f"Mean pinball loss was {float(pinball):.3f}.")
+
+    elif regression_result.model_type == "robust_regression":
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared")
+        downweighted = regression_result.fit_statistics.get("downweighted_count")
+        heavy = regression_result.fit_statistics.get("heavily_downweighted_count")
+        norm = regression_result.metadata.get("norm")
+        if norm is not None:
+            sentences.append(f"Robust regression used {norm} M-estimation weights.")
+        if pseudo is not None:
+            sentences.append(f"Robust observed-scale pseudo R-squared was {float(pseudo):.3f}.")
+        if downweighted is not None and heavy is not None:
+            sentences.append(
+                f"The robust fit downweighted {int(downweighted)} observations; "
+                f"{int(heavy)} received weights below 0.5."
+            )
 
     elif regression_result.model_type == "tobit_regression":
         lower_limit = regression_result.metadata.get("lower_limit")
@@ -743,7 +764,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
+    if regression_result.model_type in {"ols", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -796,6 +817,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "tobit_regression":
         notes.append("Tobit models estimate latent-scale coefficients for censored continuous outcomes.")
 
+    if regression_result.model_type == "robust_regression":
+        notes.append("Robust regression uses M-estimation weights to reduce sensitivity to outlying residuals.")
+
     if regression_result.model_type in _GLMM_MODELS:
         notes.append(
             "GLMM notes include group structure, variance components, and convergence status."
@@ -829,6 +853,9 @@ def build_regression_publication_report(
             "event_variable": regression_result.metadata.get("event_variable"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "precision": regression_result.fit_statistics.get("precision"),
+            "robust_norm": regression_result.metadata.get("norm"),
+            "downweighted_count": regression_result.fit_statistics.get("downweighted_count"),
+            "heavily_downweighted_count": regression_result.fit_statistics.get("heavily_downweighted_count"),
             "lower_limit": regression_result.metadata.get("lower_limit"),
             "upper_limit": regression_result.metadata.get("upper_limit"),
             "censoring_rate": regression_result.fit_statistics.get("censoring_rate"),

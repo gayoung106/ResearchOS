@@ -36,6 +36,7 @@ from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.panel import fit_panel_fixed_effects
 from src.statistics.regression.poisson import fit_poisson
 from src.statistics.regression.quantile import fit_quantile_regression
+from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
 from src.statistics.regression.zero_inflated_negative_binomial import (
     fit_zero_inflated_negative_binomial,
@@ -66,6 +67,7 @@ __all__ = [
     "fit_multinomial_logit",
     "fit_poisson",
     "fit_quantile_regression",
+    "fit_robust_regression",
     "fit_tobit_regression",
     "fit_negative_binomial",
     "fit_zero_inflated_poisson",
