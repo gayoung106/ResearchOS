@@ -9,6 +9,7 @@ from src.auto.analysis_plan import (
     build_auto_analysis_plan,
 )
 from src.auto.variable_inference import build_auto_variable_map
+from src.common.config_loader import load_analysis_plan, load_variable_map
 from src.pipeline.context import ResearchContext
 from src.pipeline.orchestrator import ResearchOrchestrator
 from src.pipeline.regression_builder import register_regression_pipeline
@@ -121,7 +122,13 @@ def test_auto_analysis_plan_step_populates_runtime_and_outputs(tmp_path: Path) -
     assert {Path(path).name for path in step_result.output_files} == {
         "analysis_plan_summary.xlsx",
         "analysis_plan_decisions.xlsx",
+        "auto_analysis_plan.yaml",
+        "auto_variable_map.yaml",
     }
+    loaded_plan = load_analysis_plan(step_result.metadata["analysis_plan_path"])
+    loaded_variable_map = load_variable_map(step_result.metadata["variable_map_path"])
+    assert loaded_plan.variables.dependent == ["outcome_score"]
+    assert loaded_variable_map.variables["outcome_score"].role == "dependent"
 
 
 def test_auto_analysis_plan_step_requires_variable_map_artifact(tmp_path: Path) -> None:

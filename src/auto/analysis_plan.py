@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
 
 from src.common.config_models import AnalysisPlan, VariableDefinition, VariableMap
 from src.pipeline.context import ResearchContext
@@ -270,6 +271,33 @@ def auto_analysis_plan_decisions_to_dataframe(
     return pd.DataFrame([asdict(decision) for decision in decisions])
 
 
+def write_auto_analysis_config_files(
+    result: AutoAnalysisPlanResult,
+    variable_map: VariableMap,
+    output_directory: str | Path,
+) -> tuple[Path, Path]:
+    output_dir = Path(output_directory)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    analysis_plan_path = output_dir / "auto_analysis_plan.yaml"
+    variable_map_path = output_dir / "auto_variable_map.yaml"
+
+    with analysis_plan_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(
+            result.analysis_plan.model_dump(mode="json"),
+            file,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+    with variable_map_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(
+            variable_map.model_dump(mode="json"),
+            file,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+    return analysis_plan_path, variable_map_path
+
+
 class AutoAnalysisPlanStep(PipelineStep):
     """Create an AnalysisPlan from the auto-inferred VariableMap artifact."""
 
@@ -309,12 +337,17 @@ class AutoAnalysisPlanStep(PipelineStep):
         decisions_path = output_dir / "analysis_plan_decisions.xlsx"
         auto_analysis_plan_summary_to_dataframe(result).to_excel(summary_path, index=False)
         auto_analysis_plan_decisions_to_dataframe(result.decisions).to_excel(decisions_path, index=False)
+        analysis_plan_path, variable_map_path = write_auto_analysis_config_files(
+            result,
+            variable_map,
+            output_dir,
+        )
 
         plan = result.analysis_plan
         return StepResult(
             stage_name=self.name,
             success=True,
-            output_files=[str(summary_path), str(decisions_path)],
+            output_files=[str(summary_path), str(decisions_path), str(analysis_plan_path), str(variable_map_path)],
             warnings=result.warnings,
             metadata={
                 "dependent_variable": plan.variables.dependent[0] if len(plan.variables.dependent) == 1 else None,
@@ -324,5 +357,7 @@ class AutoAnalysisPlanStep(PipelineStep):
                 "regression_estimator": plan.analyses.regression.options.get("estimator"),
                 "panel_enabled": plan.analyses.panel.enabled,
                 "robustness_enabled": plan.analyses.robustness.enabled,
+                "analysis_plan_path": str(analysis_plan_path),
+                "variable_map_path": str(variable_map_path),
             },
         )

@@ -7,6 +7,7 @@ from src.auto.analysis_plan import (
     auto_analysis_plan_decisions_to_dataframe,
     auto_analysis_plan_summary_to_dataframe,
     build_auto_analysis_plan,
+    write_auto_analysis_config_files,
 )
 from src.auto.pipeline import (
     AutoRegressionPipelineBuildResult,
@@ -58,4 +59,5 @@ __all__ = [
     "role_inferences_to_dataframe",
     "run_auto_rawdata_analysis",
     "variable_map_to_dataframe",
+    "write_auto_analysis_config_files",
 ]

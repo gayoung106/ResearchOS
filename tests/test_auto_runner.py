@@ -43,6 +43,8 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
         "analysis_base.parquet",
         "variable_role_inference.xlsx",
         "analysis_plan_summary.xlsx",
+        "auto_analysis_plan.yaml",
+        "auto_variable_map.yaml",
         "auto_run_summary.xlsx",
     }
 
