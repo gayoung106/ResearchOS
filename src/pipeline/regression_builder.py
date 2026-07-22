@@ -415,6 +415,11 @@ def register_regression_pipeline(
         "random_effects",
         "panel_random_effects",
     }
+    panel_be_requested = requested_estimator in {"panel_be", "between_effects", "panel_between_effects"} or requested_model_type in {
+        "panel_be",
+        "between_effects",
+        "panel_between_effects",
+    }
     beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
         "beta",
         "beta_regression",
@@ -1023,7 +1028,7 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
-    elif panel_fe_requested or panel_re_requested:
+    elif panel_fe_requested or panel_re_requested or panel_be_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -1062,7 +1067,13 @@ def register_regression_pipeline(
                 fixed_effects=fixed_effects,
                 measurement_level=measurement_level,
             )
-        model_type = "panel_random_effects" if panel_re_requested else "panel_fixed_effects"
+        model_type = (
+            "panel_between_effects"
+            if panel_be_requested
+            else "panel_random_effects"
+            if panel_re_requested
+            else "panel_fixed_effects"
+        )
         multilevel_options = {
             "entity_variable": entity_variable,
             "time_variable": time_variable,
@@ -2224,6 +2235,7 @@ def register_regression_pipeline(
         "regularized_regression",
         "robust_regression",
         "tobit_regression",
+        "panel_between_effects",
         "panel_fixed_effects",
         "panel_random_effects",
         "parametric_survival_auto",

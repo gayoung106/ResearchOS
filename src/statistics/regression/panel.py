@@ -303,3 +303,120 @@ def fit_panel_random_effects(
         },
         raw_result=fitted,
     )
+
+
+def fit_panel_between_effects(
+    dataframe: pd.DataFrame,
+    *,
+    dependent_variable: str,
+    independent_variables: list[str],
+    entity_variable: str,
+    time_variable: str | None = None,
+    model_id: str = "panel_between_effects_1",
+    covariance_type: str = "HC3",
+) -> RegressionResult:
+    """Fit a between-effects panel regression on entity-level means."""
+    if covariance_type not in {"nonrobust", "HC3"}:
+        raise ValueError("Panel between effects covariance_type must be nonrobust or HC3.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    validate_model_variables(dataframe, dependent_variable, independent_variables)
+    if entity_variable not in dataframe.columns:
+        raise KeyError("Panel entity variable is missing from dataframe: " + entity_variable)
+    if entity_variable == dependent_variable or entity_variable in independent_variables:
+        raise ValueError("Panel entity variable cannot duplicate the outcome or predictors.")
+    if time_variable is not None:
+        if time_variable not in dataframe.columns:
+            raise KeyError("Panel time variable is missing from dataframe: " + time_variable)
+        if time_variable == dependent_variable or time_variable in independent_variables:
+            raise ValueError("Panel time variable cannot duplicate the outcome or predictors.")
+
+    requested = [dependent_variable, *independent_variables, entity_variable]
+    if time_variable is not None:
+        requested.append(time_variable)
+    work = dataframe[requested].copy()
+    work[dependent_variable] = pd.to_numeric(work[dependent_variable], errors="coerce")
+    for variable in independent_variables:
+        work[variable] = pd.to_numeric(work[variable], errors="coerce")
+    work = work.dropna()
+    if work.empty:
+        raise ValueError("Panel between effects has no complete observations to estimate.")
+
+    entity_counts = work.groupby(entity_variable).size()
+    if len(entity_counts) <= 1:
+        raise ValueError("Panel between effects requires at least two entities.")
+    entity_means = work.groupby(entity_variable, sort=False)[[dependent_variable, *independent_variables]].mean()
+    if entity_means[dependent_variable].nunique() <= 1:
+        raise ValueError("Between-entity dependent variable means have no variation.")
+    constant_predictors = [variable for variable in independent_variables if entity_means[variable].nunique() <= 1]
+    if constant_predictors:
+        raise ValueError("Predictors with no between-entity variation cannot be estimated: " + ", ".join(constant_predictors))
+
+    outcome = entity_means[dependent_variable].to_numpy(dtype=float)
+    predictors = sm.add_constant(entity_means[independent_variables], has_constant="add")
+    model = sm.OLS(outcome, predictors)
+    fitted = model.fit(cov_type="HC3") if covariance_type == "HC3" else model.fit()
+    confidence_intervals = fitted.conf_int()
+
+    coefficients: list[ModelCoefficient] = []
+    for term in fitted.params.index:
+        coefficients.append(
+            ModelCoefficient(
+                term=str(term),
+                estimate=float(fitted.params[term]),
+                standard_error=float(fitted.bse[term]),
+                statistic=float(fitted.tvalues[term]),
+                p_value=float(fitted.pvalues[term]),
+                confidence_interval_lower=float(confidence_intervals.loc[term, 0]),
+                confidence_interval_upper=float(confidence_intervals.loc[term, 1]),
+            )
+        )
+
+    fitted_values = np.asarray(fitted.fittedvalues, dtype=float)
+    residuals = np.asarray(fitted.resid, dtype=float)
+    time_count = int(work[time_variable].nunique()) if time_variable is not None else None
+    singleton_count = int((entity_counts == 1).sum())
+    warnings: list[str] = []
+    if singleton_count:
+        warnings.append(f"{singleton_count} entities have only one observation.")
+    if len(entity_means) <= len(independent_variables) + 1:
+        warnings.append("The number of entities is small relative to the number of predictors.")
+
+    entity_labels = [str(value) for value in entity_means.index.tolist()]
+    return RegressionResult(
+        model_id=model_id,
+        model_type="panel_between_effects",
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        sample_size=int(len(entity_means)),
+        coefficients=coefficients,
+        fit_statistics={
+            "between_r_squared": float(fitted.rsquared),
+            "adjusted_between_r_squared": float(fitted.rsquared_adj),
+            "entity_count": int(len(entity_counts)),
+            "time_period_count": time_count,
+            "singleton_entity_count": singleton_count,
+            "average_observations_per_entity": float(entity_counts.mean()),
+            "overall_observation_count": int(len(work)),
+            "residual_degrees_of_freedom": float(fitted.df_resid),
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+        },
+        converged=True,
+        standard_error_type=covariance_type,
+        warnings=warnings,
+        metadata={
+            "entity_variable": entity_variable,
+            "time_variable": time_variable,
+            "row_labels": entity_labels,
+            "entity_labels": entity_labels,
+            "time_labels": None,
+            "within_outcome": outcome.tolist(),
+            "within_predictors": entity_means[independent_variables].to_numpy(dtype=float).tolist(),
+            "within_predictor_names": independent_variables,
+            "within_fitted_values": fitted_values.tolist(),
+            "within_residuals": residuals.tolist(),
+            "between_entity_means": entity_means.reset_index().to_dict(orient="list"),
+            "dropped_case_count": len(dataframe) - len(work),
+        },
+        raw_result=fitted,
+    )

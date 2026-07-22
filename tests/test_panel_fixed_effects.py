@@ -18,7 +18,11 @@ from src.statistics.diagnostics.panel import (
     panel_residuals_to_dataframe,
 )
 from src.statistics.effects.regression import build_regression_effect_size_report
-from src.statistics.regression.panel import fit_panel_fixed_effects, fit_panel_random_effects
+from src.statistics.regression.panel import (
+    fit_panel_between_effects,
+    fit_panel_fixed_effects,
+    fit_panel_random_effects,
+)
 from src.statistics.regression.selector import fit_regression_by_level
 from src.visualization.regression import build_regression_visualizations
 
@@ -288,6 +292,134 @@ def test_builder_registers_explicit_panel_random_effects_pipeline(tmp_path: Path
 
     assert registration.registered is True
     assert registration.model_type == "panel_random_effects"
+    assert registration.measurement_level == "continuous"
+    assert registration.diagnostics_registered is True
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
+
+
+def test_fit_panel_between_effects_integrates_reporting_visualization_and_audit(
+    tmp_path: Path,
+) -> None:
+    data = _panel_data()
+    result = fit_panel_between_effects(
+        data,
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        entity_variable="entity",
+        time_variable="time",
+    )
+    effects = build_regression_effect_size_report(result)
+    report = build_regression_publication_report(result, effects)
+    visual = build_regression_visualizations(result, output_directory=tmp_path)
+    runtime = PipelineRuntime(dataframe=data)
+    runtime.set_artifact("regression_result:main_model", result)
+    audit = build_research_audit_report(runtime, model_id="main_model")
+
+    assert result.model_type == "panel_between_effects"
+    assert result.sample_size == 12
+    assert result.fit_statistics["entity_count"] == 12
+    assert result.fit_statistics["time_period_count"] == 6
+    assert result.fit_statistics["overall_observation_count"] == len(data)
+    assert any(effect.effect_type == "between_standardized_beta" for effect in effects.effects)
+    assert "Panel between effects estimated entity-level mean differences for 12 entities defined by entity." in report.narrative
+    assert any("Panel between-effects models report" in note for note in report.notes)
+    assert {Path(path).name for path in visual.output_files} == {
+        "coefficient_forest.png",
+        "residuals_vs_fitted.png",
+        "residual_qq_plot.png",
+    }
+    assert audit.metadata["entity_count"] == 12
+    assert audit.metadata["between_r_squared"] == result.fit_statistics["between_r_squared"]
+
+
+def test_selector_routes_explicit_panel_between_effects() -> None:
+    result = fit_regression_by_level(
+        _panel_data(),
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        measurement_level="continuous",
+        model_type="panel_between_effects",
+        mixed_effects_options={"entity_variable": "entity", "time_variable": "time"},
+    )
+
+    assert result.model_type == "panel_between_effects"
+    assert result.metadata["entity_variable"] == "entity"
+    assert result.metadata["time_variable"] == "time"
+
+
+def test_panel_between_effects_diagnostics_and_pipeline_step(tmp_path: Path) -> None:
+    data = _panel_data()
+    result = fit_panel_between_effects(
+        data,
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        entity_variable="entity",
+        time_variable="time",
+        model_id="main_model",
+    )
+    diagnostics = build_panel_diagnostics(result)
+    runtime = PipelineRuntime(dataframe=data)
+    runtime.set_artifact("regression_result:main_model", result)
+    step_result = RegressionDiagnosticsStep(runtime, model_id="main_model").run(
+        ResearchContext(project_name="panel between effects diagnostics"),
+        tmp_path,
+    )
+
+    assert diagnostics.model_type == "panel_between_effects"
+    assert diagnostics.entity_count == 12
+    assert panel_residuals_to_dataframe(diagnostics).shape[0] == result.sample_size
+    assert "between_r_squared" in set(panel_diagnostic_summary_to_dataframe(diagnostics)["item"])
+    assert step_result.success is True
+    assert len(step_result.output_files) == 4
+    assert runtime.get_artifact("regression_diagnostics:main_model").model_type == "panel_between_effects"
+
+
+def test_builder_registers_explicit_panel_between_effects_pipeline(tmp_path: Path) -> None:
+    plan = AnalysisPlan.model_validate(
+        {
+            "variables": {
+                "dependent": ["y"],
+                "independent": ["x", "z"],
+            },
+            "analyses": {
+                "regression": {
+                    "enabled": True,
+                    "options": {"estimator": "panel_be"},
+                },
+                "panel": {
+                    "enabled": True,
+                    "options": {"entity_variable": "entity", "time_variable": "time"},
+                },
+                "robustness": {"enabled": False},
+            },
+        }
+    )
+    variable_map = VariableMap(
+        variables={
+            "y": VariableDefinition(role="dependent", measurement_level="continuous"),
+            "x": VariableDefinition(role="independent", measurement_level="continuous"),
+            "z": VariableDefinition(role="independent", measurement_level="continuous"),
+            "entity": VariableDefinition(role="id", measurement_level="nominal"),
+            "time": VariableDefinition(role="time", measurement_level="continuous"),
+        }
+    )
+    orchestrator = ResearchOrchestrator(
+        context=ResearchContext(project_name="panel between effects builder"),
+        working_directory=tmp_path,
+    )
+
+    registration = register_regression_pipeline(
+        orchestrator=orchestrator,
+        runtime=PipelineRuntime(),
+        analysis_plan=plan,
+        variable_map=variable_map,
+    )
+
+    assert registration.registered is True
+    assert registration.model_type == "panel_between_effects"
     assert registration.measurement_level == "continuous"
     assert registration.diagnostics_registered is True
     assert registration.effect_size_registered is True

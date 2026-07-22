@@ -288,7 +288,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type in {"panel_fixed_effects", "panel_random_effects"}:
+        if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects"}:
             return self._run_panel_fixed_effects(
                 result,
                 output_dir,

@@ -816,7 +816,13 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
         effects.append(
             EffectSizeResult(
                 term=term,
-                effect_type="within_standardized_beta" if result.model_type == "panel_fixed_effects" else "random_effects_standardized_beta",
+                effect_type=(
+                    "within_standardized_beta"
+                    if result.model_type == "panel_fixed_effects"
+                    else "between_standardized_beta"
+                    if result.model_type == "panel_between_effects"
+                    else "random_effects_standardized_beta"
+                ),
                 estimate=estimate,
                 standard_error=None,
                 statistic=coefficient.statistic,
@@ -827,6 +833,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
                 interpretation=(
                     "Standardized within-panel coefficient after absorbing fixed effects."
                     if result.model_type == "panel_fixed_effects"
+                    else "Standardized between-entity coefficient from entity-level means."
+                    if result.model_type == "panel_between_effects"
                     else "Standardized population coefficient from a random-effects panel model."
                 ),
             )
@@ -842,6 +850,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
             "entity_count": result.fit_statistics.get("entity_count"),
             "time_period_count": result.fit_statistics.get("time_period_count"),
             "marginal_r_squared": result.fit_statistics.get("marginal_r_squared"),
+            "between_r_squared": result.fit_statistics.get("between_r_squared"),
+            "adjusted_between_r_squared": result.fit_statistics.get("adjusted_between_r_squared"),
             "conditional_r_squared": result.fit_statistics.get("conditional_r_squared"),
             "random_intercept_variance": result.fit_statistics.get("random_intercept_variance"),
         },
@@ -1935,7 +1945,7 @@ def build_regression_effect_size_report(
     if result.model_type == "tobit_regression":
         return _build_tobit_effects(result)
 
-    if result.model_type in {"panel_fixed_effects", "panel_random_effects"}:
+    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects"}:
         return _build_panel_fixed_effects(result)
 
     if result.model_type == "log_binomial":
