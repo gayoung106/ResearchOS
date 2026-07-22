@@ -52,6 +52,8 @@ def test_validate_auto_run_outputs_reports_missing_required_file(tmp_path: Path)
 
     assert report.passed is False
     assert any("file:auto_run_report.md" in warning for warning in report.warnings)
+    missing_report = next(item for item in report.items if item.item == "file:auto_run_report.md")
+    assert "result/00_auto_run" in missing_report.suggestion
 
 
 def test_validate_auto_run_outputs_can_require_model_outputs(tmp_path: Path) -> None:
@@ -67,3 +69,5 @@ def test_validate_auto_run_outputs_can_require_model_outputs(tmp_path: Path) -> 
     assert report.passed is False
     assert any("coefficients.xlsx" in warning for warning in report.warnings)
     assert any("fit_statistics.xlsx" in warning for warning in report.warnings)
+    coefficients_item = next(item for item in report.items if item.item == "file:coefficients.xlsx")
+    assert "모델 실행 단계" in coefficients_item.suggestion

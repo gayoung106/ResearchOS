@@ -277,7 +277,7 @@ result/
   16_research_audit/
 ```
 
-가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 경고, 산출물 목록이 정리됩니다.
+가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 실패 항목별 수정 제안, 경고, 산출물 목록이 정리됩니다.
 
 ## 자동 모델 선택 기준
 
