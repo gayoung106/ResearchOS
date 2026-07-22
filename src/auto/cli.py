@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional explicit data file to analyze instead of scanning rawdata-dir.",
     )
     parser.add_argument(
+        "--no-auto-merge",
+        action="store_true",
+        help="Disable conservative ID-based merging across multiple rawdata files.",
+    )
+    parser.add_argument(
         "--codebook-dir",
         default="codebook",
         help="Directory containing codebook files used to enrich variable labels and roles.",
@@ -117,6 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(args.working_directory),
         rawdata_dir=args.rawdata_dir,
         source_file=args.source_file,
+        auto_merge=not args.no_auto_merge,
         codebook_dir=args.codebook_dir,
         questionnaire_dir=args.questionnaire_dir,
         project_name=args.project_name,

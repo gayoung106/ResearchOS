@@ -86,6 +86,33 @@ python-layout/
   --project-name "survey study"
 ```
 
+## 여러 rawdata 파일 자동 병합
+
+`rawdata/` 폴더에 여러 데이터 파일이 있고, 파일들이 같은 ID 변수를 공유하면 안전한 경우에만 자동 병합을 시도합니다. 예를 들어 `outcomes.csv`와 `demographics.csv`가 모두 `person_id`를 가지고 있고 각 파일에서 `person_id`가 중복되지 않으면 main 데이터에 보조 변수를 left join합니다.
+
+```text
+rawdata/
+  outcomes.csv       # person_id, outcome_score
+  demographics.csv   # person_id, age, gender
+```
+
+자동 병합은 아래 조건을 만족할 때만 수행됩니다.
+
+- 공통 ID 변수명이 있습니다. 예: `id`, `person_id`, `respondent_id`, `student_id`
+- 각 파일에서 ID 값이 중복되지 않습니다.
+- base 데이터의 ID 대부분이 보조 파일에 존재합니다.
+- 충돌하는 열 이름은 보조 파일명 suffix를 붙여 보존합니다.
+
+자동 병합을 끄고 한 파일만 선택하게 하려면 `--no-auto-merge`를 사용합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.auto.cli `
+  --working-directory . `
+  --project-name "single file study" `
+  --no-auto-merge
+```
+
+병합 여부와 병합 키는 `result/01_auto_import/rawdata_candidates.xlsx`, `result/00_auto_run/auto_final_report.md`, 그리고 runtime metadata에서 확인할 수 있습니다.
 ## 코드북과 설문지 파일 함께 사용하기
 
 변수명이 `q1`, `q2`처럼 짧거나 의미를 알기 어려운 경우에는 코드북 또는 설문지 파일을 함께 넣는 것이 좋습니다.

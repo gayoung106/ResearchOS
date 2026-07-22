@@ -16,6 +16,7 @@ from src.pipeline.step import PipelineStep, StepResult
 
 _EXCEL_EXTENSIONS = {".xlsx", ".xls"}
 _DATA_EXTENSIONS = {".csv", ".txt", ".xlsx", ".xls", ".sav", ".dta", ".sas7bdat", ".parquet", ".json"}
+_ID_NAME_KEYWORDS = {"id", "caseid", "case_id", "person_id", "participant_id", "respondent_id", "subject_id", "student_id", "user_id", "uid", "pid", "아이디", "식별", "응답자"}
 
 
 @dataclass(slots=True)
@@ -46,6 +47,8 @@ class AutoRawDataLoadResult:
     read_result: ReadResult
     variable_metadata: pd.DataFrame
     metadata_files: list[Path] = field(default_factory=list)
+    merge_key: str | None = None
+    merged_candidate_labels: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -250,6 +253,12 @@ def enrich_variable_metadata_from_files(
         rows.extend(_metadata_rows_from_file(path))
     return _merge_metadata_rows(variable_metadata, rows)
 
+
+
+def _is_metadata_named_file(path: Path) -> bool:
+    lowered = _normalize_metadata_key(path.stem)
+    return any(keyword in lowered for keyword in _METADATA_FILE_NAME_KEYWORDS)
+
 def discover_rawdata_files(
     working_directory: str | Path,
     *,
@@ -259,7 +268,7 @@ def discover_rawdata_files(
     raw_path = Path(rawdata_dir)
     if not raw_path.is_absolute():
         raw_path = root / raw_path
-    return find_data_files(raw_path)
+    return [path for path in find_data_files(raw_path) if not _is_metadata_named_file(path)]
 
 
 def _candidate_score(dataframe: pd.DataFrame) -> float:
@@ -329,11 +338,98 @@ def _rank_candidates(candidates: list[tuple[ReadResult, RawDatasetCandidate]]) -
     )
 
 
+
+
+def _normalized_column_map(dataframe: pd.DataFrame) -> dict[str, str]:
+    return {_normalize_metadata_key(column): str(column) for column in dataframe.columns}
+
+
+def _candidate_merge_keys(dataframe: pd.DataFrame) -> list[str]:
+    keys: list[str] = []
+    for column in dataframe.columns:
+        normalized = _normalize_metadata_key(column)
+        if normalized not in _ID_NAME_KEYWORDS and not normalized.endswith("_id"):
+            continue
+        series = dataframe[column].dropna()
+        if series.empty or series.duplicated().any():
+            continue
+        keys.append(str(column))
+    return keys
+
+
+def _find_shared_merge_key(base: pd.DataFrame, other: pd.DataFrame) -> tuple[str, str] | None:
+    base_keys = _candidate_merge_keys(base)
+    other_map = _normalized_column_map(other)
+    for base_key in base_keys:
+        normalized = _normalize_metadata_key(base_key)
+        other_key = other_map.get(normalized)
+        if other_key is not None and other_key in _candidate_merge_keys(other):
+            return base_key, other_key
+    return None
+
+
+def _merge_read_candidates(
+    selected_read_result: ReadResult,
+    selected_candidate: RawDatasetCandidate,
+    read_candidates: list[tuple[ReadResult, RawDatasetCandidate]],
+) -> tuple[ReadResult, RawDatasetCandidate, str | None, list[str], list[str]]:
+    base = selected_read_result.dataframe.copy()
+    merge_key: str | None = None
+    merged_labels: list[str] = []
+    warnings: list[str] = []
+
+    for read_result, candidate in read_candidates:
+        if candidate.source_label == selected_candidate.source_label:
+            continue
+        shared_key = _find_shared_merge_key(base, read_result.dataframe)
+        if shared_key is None:
+            continue
+        base_key, other_key = shared_key
+        overlap_rate = float(base[base_key].isin(read_result.dataframe[other_key]).mean())
+        if overlap_rate < 0.8:
+            warnings.append(
+                f"Skipped merge candidate {candidate.source_label}: key overlap for {base_key} was {overlap_rate:.2f}."
+            )
+            continue
+        columns_to_add = [column for column in read_result.dataframe.columns if column != other_key]
+        if not columns_to_add:
+            continue
+        suffix = f"_{_normalize_metadata_key(candidate.source_path.stem) or 'merged'}"
+        other = read_result.dataframe[[other_key, *columns_to_add]].copy()
+        rename_map = {
+            column: f"{column}{suffix}"
+            for column in columns_to_add
+            if column in base.columns
+        }
+        other = other.rename(columns=rename_map)
+        base = base.merge(other, how="left", left_on=base_key, right_on=other_key)
+        if other_key != base_key and other_key in base.columns:
+            base = base.drop(columns=[other_key])
+        merge_key = base_key
+        merged_labels.append(candidate.source_label)
+
+    if not merged_labels:
+        return selected_read_result, selected_candidate, None, [], warnings
+
+    merged_read_result = ReadResult(
+        dataframe=base,
+        source_path=selected_read_result.source_path,
+        file_type=selected_read_result.file_type,
+        metadata=selected_read_result.metadata,
+    )
+    merged_candidate = _summarize_candidate(
+        merged_read_result,
+        sheet_name=selected_candidate.sheet_name,
+        warnings=selected_candidate.warnings + warnings,
+    )
+    return merged_read_result, merged_candidate, merge_key, merged_labels, warnings
+
 def load_rawdata_project(
     working_directory: str | Path = ".",
     *,
     rawdata_dir: str | Path = "rawdata",
     source_file: str | Path | None = None,
+    auto_merge: bool = True,
     codebook_dir: str | Path = "codebook",
     questionnaire_dir: str | Path = "questionnaire",
 ) -> AutoRawDataLoadResult:
@@ -365,6 +461,15 @@ def load_rawdata_project(
         raise ValueError("No rawdata files could be read successfully. " + "; ".join(warnings))
 
     selected_read_result, selected_candidate = _rank_candidates(read_candidates)
+    merge_key: str | None = None
+    merged_candidate_labels: list[str] = []
+    if auto_merge and source_file is None:
+        selected_read_result, selected_candidate, merge_key, merged_candidate_labels, merge_warnings = _merge_read_candidates(
+            selected_read_result,
+            selected_candidate,
+            read_candidates,
+        )
+        warnings.extend(merge_warnings)
     variable_metadata = build_variable_metadata(
         selected_read_result.dataframe,
         source_metadata=selected_read_result.metadata,
@@ -382,6 +487,8 @@ def load_rawdata_project(
         read_result=selected_read_result,
         variable_metadata=variable_metadata,
         metadata_files=metadata_files,
+        merge_key=merge_key,
+        merged_candidate_labels=merged_candidate_labels,
         warnings=warnings,
     )
 
@@ -395,6 +502,7 @@ class AutoRawDataLoadingStep(PipelineStep):
         *,
         rawdata_dir: str | Path = "rawdata",
         source_file: str | Path | None = None,
+        auto_merge: bool = True,
         codebook_dir: str | Path = "codebook",
         questionnaire_dir: str | Path = "questionnaire",
         order: int = 10,
@@ -403,6 +511,7 @@ class AutoRawDataLoadingStep(PipelineStep):
         self.runtime = runtime
         self.rawdata_dir = rawdata_dir
         self.source_file = source_file
+        self.auto_merge = auto_merge
         self.codebook_dir = codebook_dir
         self.questionnaire_dir = questionnaire_dir
 
@@ -411,6 +520,7 @@ class AutoRawDataLoadingStep(PipelineStep):
             working_directory,
             rawdata_dir=self.rawdata_dir,
             source_file=self.source_file,
+            auto_merge=self.auto_merge,
             codebook_dir=self.codebook_dir,
             questionnaire_dir=self.questionnaire_dir,
         )
@@ -457,5 +567,7 @@ class AutoRawDataLoadingStep(PipelineStep):
                 "column_count": load_result.selected_candidate.column_count,
                 "candidate_count": len(load_result.candidates),
                 "metadata_file_count": len(load_result.metadata_files),
+                "merge_key": load_result.merge_key,
+                "merged_candidate_count": len(load_result.merged_candidate_labels),
             },
         )

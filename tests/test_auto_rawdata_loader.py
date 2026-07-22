@@ -112,3 +112,52 @@ def test_load_rawdata_project_enriches_metadata_from_codebook(tmp_path: Path) ->
     assert metadata.loc["q1", "question_text"] == "Overall, how satisfied are you with your job?"
     assert metadata.loc["q1", "role_hint"] == "dependent"
     assert "survey_codebook.csv" in metadata.loc["q1", "metadata_source_files"]
+
+
+def test_load_rawdata_project_auto_merges_files_with_unique_shared_id(tmp_path: Path) -> None:
+    rawdata = tmp_path / "rawdata"
+    rawdata.mkdir()
+    pd.DataFrame(
+        {
+            "person_id": [1, 2, 3, 4],
+            "outcome_score": [2.0, 2.4, 3.1, 3.3],
+        }
+    ).to_csv(rawdata / "outcomes.csv", index=False)
+    pd.DataFrame(
+        {
+            "person_id": [1, 2, 3, 4],
+            "age": [21, 35, 44, 51],
+            "gender": [0, 1, 1, 0],
+        }
+    ).to_csv(rawdata / "demographics.csv", index=False)
+
+    result = load_rawdata_project(tmp_path)
+
+    assert result.merge_key == "person_id"
+    assert result.merged_candidate_labels
+    assert result.dataframe.shape == (4, 4)
+    assert set(result.dataframe.columns) == {"person_id", "outcome_score", "age", "gender"}
+    assert result.selected_candidate.column_count == 4
+
+
+def test_load_rawdata_project_can_disable_auto_merge(tmp_path: Path) -> None:
+    rawdata = tmp_path / "rawdata"
+    rawdata.mkdir()
+    pd.DataFrame(
+        {
+            "person_id": [1, 2, 3, 4],
+            "outcome_score": [2.0, 2.4, 3.1, 3.3],
+        }
+    ).to_csv(rawdata / "outcomes.csv", index=False)
+    pd.DataFrame(
+        {
+            "person_id": [1, 2, 3, 4],
+            "age": [21, 35, 44, 51],
+        }
+    ).to_csv(rawdata / "demographics.csv", index=False)
+
+    result = load_rawdata_project(tmp_path, auto_merge=False)
+
+    assert result.merge_key is None
+    assert result.merged_candidate_labels == []
+    assert result.dataframe.shape[1] == 2
