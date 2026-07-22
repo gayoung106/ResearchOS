@@ -53,6 +53,7 @@ from src.statistics.regression.mixed_negative_binomial import (
     fit_mixed_negative_binomial_random_slope,
     fit_mixed_negative_binomial_three_level,
 )
+from src.statistics.regression.modified_poisson import fit_modified_poisson
 from src.statistics.regression.multinomial_logit import fit_multinomial_logit
 from src.statistics.regression.negative_binomial import fit_negative_binomial
 from src.statistics.regression.ols import fit_ols
@@ -193,6 +194,19 @@ def fit_regression_by_level(
             covariance_type=str(options.get("covariance_type", "HC3")),
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
+
+    if model_type == "modified_poisson":
+        options = mixed_effects_options or {}
+        return fit_modified_poisson(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
     if model_type == "log_binomial":

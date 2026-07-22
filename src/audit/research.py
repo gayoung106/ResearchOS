@@ -1682,7 +1682,7 @@ def build_research_audit_report(
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
                 }
             )
-        elif regression_result.model_type == "log_binomial":
+        elif regression_result.model_type in {"log_binomial", "modified_poisson"}:
             metadata.update(
                 {
                     "link": regression_result.metadata.get("link"),
@@ -1691,6 +1691,7 @@ def build_research_audit_report(
                     "pseudo_r_squared_mcfadden": regression_result.fit_statistics.get("pseudo_r_squared_mcfadden"),
                     "brier_score": regression_result.fit_statistics.get("brier_score"),
                     "out_of_bounds_prediction_count": regression_result.fit_statistics.get("out_of_bounds_prediction_count"),
+                    "modified_poisson": regression_result.metadata.get("modified_poisson"),
                 }
             )
         elif regression_result.model_type == "weighted_least_squares":

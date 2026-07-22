@@ -391,6 +391,7 @@ class RegressionDiagnosticsStep(PipelineStep):
         if result.model_type in {
             "binary_logit",
             "log_binomial",
+            "modified_poisson",
             "binary_cloglog",
             "binary_probit",
             "mixed_binary_logit_random_intercept",
