@@ -560,3 +560,129 @@ def fit_panel_first_difference(
         },
         raw_result=fitted,
     )
+
+
+def fit_panel_pooled_ols(
+    dataframe: pd.DataFrame,
+    *,
+    dependent_variable: str,
+    independent_variables: list[str],
+    entity_variable: str,
+    time_variable: str | None = None,
+    model_id: str = "panel_pooled_ols_1",
+    covariance_type: str = "cluster_entity",
+    add_intercept: bool = True,
+) -> RegressionResult:
+    """Fit pooled OLS for panel data with optional entity-clustered covariance."""
+    if covariance_type not in {"nonrobust", "HC3", "cluster_entity"}:
+        raise ValueError("Panel pooled OLS covariance_type must be nonrobust, HC3, or cluster_entity.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    validate_model_variables(dataframe, dependent_variable, independent_variables)
+    if entity_variable not in dataframe.columns:
+        raise KeyError("Panel entity variable is missing from dataframe: " + entity_variable)
+    if entity_variable == dependent_variable or entity_variable in independent_variables:
+        raise ValueError("Panel entity variable cannot duplicate the outcome or predictors.")
+    if time_variable is not None:
+        if time_variable not in dataframe.columns:
+            raise KeyError("Panel time variable is missing from dataframe: " + time_variable)
+        if time_variable == dependent_variable or time_variable in independent_variables:
+            raise ValueError("Panel time variable cannot duplicate the outcome or predictors.")
+
+    requested = [dependent_variable, *independent_variables, entity_variable]
+    if time_variable is not None:
+        requested.append(time_variable)
+    work = dataframe[requested].copy()
+    work[dependent_variable] = pd.to_numeric(work[dependent_variable], errors="coerce")
+    for variable in independent_variables:
+        work[variable] = pd.to_numeric(work[variable], errors="coerce")
+    work = work.dropna()
+    if work.empty:
+        raise ValueError("Panel pooled OLS has no complete observations to estimate.")
+    if work[dependent_variable].nunique() <= 1:
+        raise ValueError("Panel dependent variable has no variation.")
+
+    entity_counts = work.groupby(entity_variable).size()
+    if len(entity_counts) <= 1:
+        raise ValueError("Panel pooled OLS requires at least two entities.")
+    constant_predictors = [variable for variable in independent_variables if work[variable].nunique() <= 1]
+    if constant_predictors:
+        raise ValueError("Constant predictors are not supported: " + ", ".join(constant_predictors))
+
+    outcome = work[dependent_variable].to_numpy(dtype=float)
+    predictors = work[independent_variables].copy()
+    if add_intercept:
+        predictors = sm.add_constant(predictors, has_constant="add")
+    model = sm.OLS(outcome, predictors)
+    if covariance_type == "cluster_entity":
+        fitted = model.fit(cov_type="cluster", cov_kwds={"groups": work[entity_variable].to_numpy()})
+        standard_error_type = "cluster_entity"
+    elif covariance_type == "HC3":
+        fitted = model.fit(cov_type="HC3")
+        standard_error_type = "HC3"
+    else:
+        fitted = model.fit()
+        standard_error_type = "nonrobust"
+    confidence_intervals = fitted.conf_int()
+
+    coefficients: list[ModelCoefficient] = []
+    for term in fitted.params.index:
+        coefficients.append(
+            ModelCoefficient(
+                term=str(term),
+                estimate=float(fitted.params[term]),
+                standard_error=float(fitted.bse[term]),
+                statistic=float(fitted.tvalues[term]),
+                p_value=float(fitted.pvalues[term]),
+                confidence_interval_lower=float(confidence_intervals.loc[term, 0]),
+                confidence_interval_upper=float(confidence_intervals.loc[term, 1]),
+            )
+        )
+
+    fitted_values = np.asarray(fitted.fittedvalues, dtype=float)
+    residuals = np.asarray(fitted.resid, dtype=float)
+    singleton_count = int((entity_counts == 1).sum())
+    time_count = int(work[time_variable].nunique()) if time_variable is not None else None
+    warnings: list[str] = []
+    if singleton_count:
+        warnings.append(f"{singleton_count} entities have only one observation.")
+    if covariance_type == "cluster_entity" and len(entity_counts) < 10:
+        warnings.append("Cluster-robust standard errors can be unstable with fewer than 10 entities.")
+
+    return RegressionResult(
+        model_id=model_id,
+        model_type="panel_pooled_ols",
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        sample_size=int(len(work)),
+        coefficients=coefficients,
+        fit_statistics={
+            "pooled_r_squared": float(fitted.rsquared),
+            "adjusted_pooled_r_squared": float(fitted.rsquared_adj),
+            "entity_count": int(len(entity_counts)),
+            "time_period_count": time_count,
+            "singleton_entity_count": singleton_count,
+            "average_observations_per_entity": float(entity_counts.mean()),
+            "residual_degrees_of_freedom": float(fitted.df_resid),
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+        },
+        converged=True,
+        standard_error_type=standard_error_type,
+        warnings=warnings,
+        metadata={
+            "entity_variable": entity_variable,
+            "time_variable": time_variable,
+            "add_intercept": add_intercept,
+            "row_labels": [str(index) for index in work.index],
+            "entity_labels": work[entity_variable].astype(str).tolist(),
+            "time_labels": work[time_variable].astype(str).tolist() if time_variable is not None else None,
+            "within_outcome": outcome.tolist(),
+            "within_predictors": work[independent_variables].to_numpy(dtype=float).tolist(),
+            "within_predictor_names": independent_variables,
+            "within_fitted_values": fitted_values.tolist(),
+            "within_residuals": residuals.tolist(),
+            "pooled": True,
+            "dropped_case_count": len(dataframe) - len(work),
+        },
+        raw_result=fitted,
+    )

@@ -425,6 +425,11 @@ def register_regression_pipeline(
         "first_difference",
         "panel_first_difference",
     }
+    panel_pooled_requested = requested_estimator in {"panel_pooled", "pooled_ols", "panel_pooled_ols"} or requested_model_type in {
+        "panel_pooled",
+        "pooled_ols",
+        "panel_pooled_ols",
+    }
     beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
         "beta",
         "beta_regression",
@@ -1033,7 +1038,7 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
-    elif panel_fe_requested or panel_re_requested or panel_be_requested or panel_fd_requested:
+    elif panel_fe_requested or panel_re_requested or panel_be_requested or panel_fd_requested or panel_pooled_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -1081,7 +1086,9 @@ def register_regression_pipeline(
                 measurement_level=measurement_level,
             )
         model_type = (
-            "panel_first_difference"
+            "panel_pooled_ols"
+            if panel_pooled_requested
+            else "panel_first_difference"
             if panel_fd_requested
             else "panel_between_effects"
             if panel_be_requested
@@ -1089,7 +1096,7 @@ def register_regression_pipeline(
             if panel_re_requested
             else "panel_fixed_effects"
         )
-        default_covariance = "cluster_entity" if model_type == "panel_fixed_effects" else "HC3"
+        default_covariance = "cluster_entity" if model_type in {"panel_fixed_effects", "panel_pooled_ols"} else "HC3"
         multilevel_options = {
             "entity_variable": entity_variable,
             "time_variable": time_variable,
@@ -2255,6 +2262,7 @@ def register_regression_pipeline(
         "panel_between_effects",
         "panel_first_difference",
         "panel_fixed_effects",
+        "panel_pooled_ols",
         "panel_random_effects",
         "parametric_survival_auto",
         "piecewise_exponential",

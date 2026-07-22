@@ -61,6 +61,7 @@ from src.statistics.regression.panel import (
     fit_panel_between_effects,
     fit_panel_first_difference,
     fit_panel_fixed_effects,
+    fit_panel_pooled_ols,
     fit_panel_random_effects,
 )
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
@@ -108,6 +109,7 @@ __all__ = [
     "fit_panel_between_effects",
     "fit_panel_first_difference",
     "fit_panel_fixed_effects",
+    "fit_panel_pooled_ols",
     "fit_panel_random_effects",
     "fit_parametric_survival_regression",
     "fit_piecewise_exponential_regression",

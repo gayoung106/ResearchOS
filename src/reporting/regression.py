@@ -293,6 +293,7 @@ def write_korean_results_narrative(
         "weighted_least_squares": "Weighted least squares regression",
         "panel_between_effects": "Panel between-effects regression",
         "panel_first_difference": "Panel first-difference regression",
+        "panel_pooled_ols": "Panel pooled OLS",
         "panel_random_effects": "Panel random-effects regression",
         "binary_logit": "이항 로지스틱 회귀분석",
         "linear_probability_model": "Linear probability model",
@@ -359,7 +360,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -738,6 +739,21 @@ def write_korean_results_narrative(
             sentences.append(f"Within R-squared was {float(within_r_squared):.3f}.")
         if absorbed:
             sentences.append("Absorbed fixed effects were " + ", ".join(str(item) for item in absorbed) + ".")
+
+    elif regression_result.model_type == "panel_pooled_ols":
+        entity_variable = regression_result.metadata.get("entity_variable")
+        time_variable = regression_result.metadata.get("time_variable")
+        entity_count = regression_result.fit_statistics.get("entity_count")
+        time_count = regression_result.fit_statistics.get("time_period_count")
+        pooled_r_squared = regression_result.fit_statistics.get("pooled_r_squared")
+        if entity_count is not None and entity_variable is not None:
+            sentences.append(
+                f"Panel pooled OLS used {int(entity_count)} entities defined by {entity_variable}."
+            )
+        if time_count is not None and time_variable is not None:
+            sentences.append(f"The pooled panel covered {int(time_count)} periods defined by {time_variable}.")
+        if pooled_r_squared is not None:
+            sentences.append(f"Pooled R-squared was {float(pooled_r_squared):.3f}.")
 
     elif regression_result.model_type == "panel_first_difference":
         entity_variable = regression_result.metadata.get("entity_variable")
@@ -1262,7 +1278,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference"}:
+    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -1395,6 +1411,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "panel_first_difference":
         notes.append("Panel first-difference models report coefficients from within-entity changes.")
 
+    if regression_result.model_type == "panel_pooled_ols":
+        notes.append("Panel pooled OLS ignores unobserved entity effects unless addressed by covariates; entity-clustered standard errors may be requested.")
+
     if regression_result.model_type == "tobit_regression":
         notes.append("Tobit models estimate latent-scale coefficients for censored continuous outcomes.")
 
@@ -1510,6 +1529,8 @@ def build_regression_publication_report(
             "marginal_r_squared": regression_result.fit_statistics.get("marginal_r_squared"),
             "between_r_squared": regression_result.fit_statistics.get("between_r_squared"),
             "first_difference_r_squared": regression_result.fit_statistics.get("first_difference_r_squared"),
+            "pooled_r_squared": regression_result.fit_statistics.get("pooled_r_squared"),
+            "adjusted_pooled_r_squared": regression_result.fit_statistics.get("adjusted_pooled_r_squared"),
             "adjusted_first_difference_r_squared": regression_result.fit_statistics.get("adjusted_first_difference_r_squared"),
             "adjusted_between_r_squared": regression_result.fit_statistics.get("adjusted_between_r_squared"),
             "conditional_r_squared": regression_result.fit_statistics.get("conditional_r_squared"),

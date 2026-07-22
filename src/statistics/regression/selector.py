@@ -64,6 +64,7 @@ from src.statistics.regression.panel import (
     fit_panel_between_effects,
     fit_panel_first_difference,
     fit_panel_fixed_effects,
+    fit_panel_pooled_ols,
     fit_panel_random_effects,
 )
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
@@ -442,6 +443,23 @@ def fit_regression_by_level(
             time_variable=time_variable,
             model_id=model_id,
             covariance_type=str(options.get("covariance_type", "cluster_entity")),
+        )
+
+    if model_type == "panel_pooled_ols":
+        options = mixed_effects_options or {}
+        entity_variable = str(options.get("entity_variable", options.get("id_variable", ""))).strip()
+        time_variable = str(options.get("time_variable", "")).strip() or None
+        if not entity_variable:
+            raise ValueError("Panel pooled OLS requires entity_variable.")
+        return fit_panel_pooled_ols(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            entity_variable=entity_variable,
+            time_variable=time_variable,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "cluster_entity")),
+            add_intercept=bool(options.get("add_intercept", True)),
         )
 
     if model_type == "panel_first_difference":

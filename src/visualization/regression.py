@@ -706,6 +706,7 @@ def build_regression_visualizations(
         "panel_between_effects",
         "panel_first_difference",
         "panel_fixed_effects",
+        "panel_pooled_ols",
         "panel_random_effects",
         "mixed_random_intercept",
         "mixed_random_slope",
