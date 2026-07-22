@@ -1,9 +1,10 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 import pandas as pd
 
 from src.auto.rawdata_loader import (
     AutoRawDataLoadingStep,
+    discover_metadata_files,
     discover_rawdata_files,
     load_rawdata_project,
 )
@@ -80,3 +81,34 @@ def test_auto_rawdata_loading_step_populates_runtime_and_outputs(tmp_path: Path)
         "variable_metadata.xlsx",
         "rawdata_candidates.xlsx",
     }
+
+
+def test_load_rawdata_project_enriches_metadata_from_codebook(tmp_path: Path) -> None:
+    rawdata = tmp_path / "rawdata"
+    rawdata.mkdir()
+    pd.DataFrame(
+        {
+            "q1": [1, 2, 3, 4],
+            "age": [21, 35, 44, 51],
+        }
+    ).to_csv(rawdata / "survey.csv", index=False)
+    codebook = tmp_path / "codebook"
+    codebook.mkdir()
+    pd.DataFrame(
+        {
+            "variable_name": ["q1", "age"],
+            "variable_label": ["job satisfaction outcome score", "respondent age"],
+            "question_text": ["Overall, how satisfied are you with your job?", "Age in years"],
+            "role": ["dependent", "control"],
+        }
+    ).to_csv(codebook / "survey_codebook.csv", index=False)
+
+    result = load_rawdata_project(tmp_path)
+    metadata = result.variable_metadata.set_index("variable_name")
+
+    assert [path.name for path in discover_metadata_files(tmp_path)] == ["survey_codebook.csv"]
+    assert result.metadata_files == [codebook / "survey_codebook.csv"]
+    assert metadata.loc["q1", "variable_label"] == "job satisfaction outcome score"
+    assert metadata.loc["q1", "question_text"] == "Overall, how satisfied are you with your job?"
+    assert metadata.loc["q1", "role_hint"] == "dependent"
+    assert "survey_codebook.csv" in metadata.loc["q1", "metadata_source_files"]

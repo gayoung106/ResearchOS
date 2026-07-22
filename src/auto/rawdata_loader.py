@@ -1,9 +1,10 @@
-"""Automatic rawdata discovery and loading."""
+﻿"""Automatic rawdata discovery and loading."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -14,6 +15,7 @@ from src.pipeline.runtime import PipelineRuntime
 from src.pipeline.step import PipelineStep, StepResult
 
 _EXCEL_EXTENSIONS = {".xlsx", ".xls"}
+_DATA_EXTENSIONS = {".csv", ".txt", ".xlsx", ".xls", ".sav", ".dta", ".sas7bdat", ".parquet", ".json"}
 
 
 @dataclass(slots=True)
@@ -43,8 +45,210 @@ class AutoRawDataLoadResult:
     candidates: list[RawDatasetCandidate]
     read_result: ReadResult
     variable_metadata: pd.DataFrame
+    metadata_files: list[Path] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
+
+_METADATA_FILE_NAME_KEYWORDS = {
+    "codebook",
+    "code_book",
+    "dictionary",
+    "data_dictionary",
+    "questionnaire",
+    "survey_questions",
+    "metadata",
+    "변수",
+    "코드북",
+    "설문",
+    "문항",
+}
+_VARIABLE_NAME_ALIASES = {
+    "variable_name",
+    "variable",
+    "varname",
+    "var_name",
+    "name",
+    "column",
+    "column_name",
+    "field",
+    "item",
+    "변수명",
+    "변수",
+    "문항번호",
+}
+_METADATA_COLUMN_ALIASES = {
+    "variable_label": {
+        "variable_label",
+        "label",
+        "description",
+        "desc",
+        "변수라벨",
+        "변수명_한글",
+        "한글명",
+        "설명",
+    },
+    "label": {"label", "라벨", "표시명"},
+    "korean_name": {"korean_name", "korean", "한글명", "변수명_한글"},
+    "question_text": {"question_text", "question", "item_text", "문항", "문항내용", "질문", "설문문항"},
+    "questionnaire_text": {"questionnaire_text", "questionnaire", "survey_question", "설문지", "설문문항"},
+    "role_hint": {"role", "role_hint", "역할", "변수역할"},
+    "measurement_level_hint": {"measurement_level", "level", "type", "측정수준", "변수유형", "척도"},
+    "codebook_note": {"note", "notes", "codebook_note", "비고", "메모"},
+}
+
+
+def discover_metadata_files(
+    working_directory: str | Path,
+    *,
+    codebook_dir: str | Path = "codebook",
+    questionnaire_dir: str | Path = "questionnaire",
+) -> list[Path]:
+    root = Path(working_directory).expanduser().resolve()
+    directories = [Path(codebook_dir), Path(questionnaire_dir)]
+    files: list[Path] = []
+    for directory in directories:
+        path = directory if directory.is_absolute() else root / directory
+        if path.exists() and path.is_dir():
+            files.extend(find_data_files(path))
+
+    rawdata_path = root / "rawdata"
+    if rawdata_path.exists() and rawdata_path.is_dir():
+        for path in find_data_files(rawdata_path):
+            lowered = _normalize_metadata_key(path.stem)
+            if any(keyword in lowered for keyword in _METADATA_FILE_NAME_KEYWORDS):
+                files.append(path)
+
+    if root.exists() and root.is_dir():
+        for path in root.iterdir():
+            if not path.is_file() or path.suffix.lower() not in _DATA_EXTENSIONS:
+                continue
+            lowered = _normalize_metadata_key(path.stem)
+            if any(keyword in lowered for keyword in _METADATA_FILE_NAME_KEYWORDS):
+                files.append(path)
+
+    return sorted(dict.fromkeys(files))
+
+
+def _normalize_metadata_key(value: object) -> str:
+    return "_".join(str(value).strip().lower().replace("-", "_").split())
+
+
+def _find_column(dataframe: pd.DataFrame, aliases: set[str]) -> str | None:
+    alias_keys = {_normalize_metadata_key(alias) for alias in aliases}
+    for column in dataframe.columns:
+        if _normalize_metadata_key(column) in alias_keys:
+            return str(column)
+    return None
+
+
+def _read_metadata_file(path: Path) -> pd.DataFrame:
+    if path.suffix.lower() in _EXCEL_EXTENSIONS:
+        frames: list[pd.DataFrame] = []
+        excel = pd.ExcelFile(path)
+        for sheet_name in excel.sheet_names:
+            frame = read_data_file(path, sheet_name=sheet_name).dataframe
+            if not frame.empty:
+                frame = frame.copy()
+                frame["metadata_sheet_name"] = str(sheet_name)
+                frames.append(frame)
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    return read_data_file(path).dataframe
+
+
+def _metadata_rows_from_file(path: Path) -> list[dict[str, Any]]:
+    dataframe = _read_metadata_file(path)
+    if dataframe.empty:
+        return []
+    variable_column = _find_column(dataframe, _VARIABLE_NAME_ALIASES)
+    if variable_column is None:
+        return []
+
+    column_map = {
+        target: _find_column(dataframe, aliases)
+        for target, aliases in _METADATA_COLUMN_ALIASES.items()
+    }
+    rows: list[dict[str, Any]] = []
+    for _, row in dataframe.iterrows():
+        raw_name = row.get(variable_column)
+        if pd.isna(raw_name) or not str(raw_name).strip():
+            continue
+        item: dict[str, Any] = {
+            "variable_name": str(raw_name).strip(),
+            "metadata_source_file": str(path),
+        }
+        sheet_name = row.get("metadata_sheet_name")
+        if pd.notna(sheet_name) and str(sheet_name).strip():
+            item["metadata_sheet_name"] = str(sheet_name).strip()
+        for target, source_column in column_map.items():
+            if source_column is None:
+                continue
+            value = row.get(source_column)
+            if pd.notna(value) and str(value).strip():
+                item[target] = str(value).strip()
+        rows.append(item)
+    return rows
+
+
+def _merge_metadata_rows(base_metadata: pd.DataFrame, rows: list[dict[str, Any]]) -> pd.DataFrame:
+    if not rows or base_metadata.empty or "variable_name" not in base_metadata.columns:
+        return base_metadata
+    output = base_metadata.copy()
+    for column in [
+        "label",
+        "korean_name",
+        "question_text",
+        "questionnaire_text",
+        "role_hint",
+        "measurement_level_hint",
+        "codebook_note",
+        "metadata_source_files",
+    ]:
+        if column not in output.columns:
+            output[column] = None
+
+    index_by_normalized_name = {
+        _normalize_metadata_key(variable_name): index
+        for index, variable_name in output["variable_name"].items()
+    }
+    for row in rows:
+        normalized_name = _normalize_metadata_key(row["variable_name"])
+        if normalized_name not in index_by_normalized_name:
+            continue
+        index = index_by_normalized_name[normalized_name]
+        source_file = row.get("metadata_source_file")
+        if source_file:
+            existing = output.at[index, "metadata_source_files"]
+            sources = [] if pd.isna(existing) or not str(existing).strip() else str(existing).split(" | ")
+            if str(source_file) not in sources:
+                sources.append(str(source_file))
+            output.at[index, "metadata_source_files"] = " | ".join(sources)
+        for column in [
+            "variable_label",
+            "label",
+            "korean_name",
+            "question_text",
+            "questionnaire_text",
+            "role_hint",
+            "measurement_level_hint",
+            "codebook_note",
+        ]:
+            value = row.get(column)
+            if value is None or not str(value).strip():
+                continue
+            existing = output.at[index, column] if column in output.columns else None
+            if pd.isna(existing) or not str(existing).strip():
+                output.at[index, column] = value
+    return output
+
+
+def enrich_variable_metadata_from_files(
+    variable_metadata: pd.DataFrame,
+    metadata_files: list[Path],
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for path in metadata_files:
+        rows.extend(_metadata_rows_from_file(path))
+    return _merge_metadata_rows(variable_metadata, rows)
 
 def discover_rawdata_files(
     working_directory: str | Path,
@@ -130,6 +334,8 @@ def load_rawdata_project(
     *,
     rawdata_dir: str | Path = "rawdata",
     source_file: str | Path | None = None,
+    codebook_dir: str | Path = "codebook",
+    questionnaire_dir: str | Path = "questionnaire",
 ) -> AutoRawDataLoadResult:
     root = Path(working_directory).expanduser().resolve()
     warnings: list[str] = []
@@ -163,12 +369,19 @@ def load_rawdata_project(
         selected_read_result.dataframe,
         source_metadata=selected_read_result.metadata,
     )
+    metadata_files = discover_metadata_files(
+        root,
+        codebook_dir=codebook_dir,
+        questionnaire_dir=questionnaire_dir,
+    )
+    variable_metadata = enrich_variable_metadata_from_files(variable_metadata, metadata_files)
     return AutoRawDataLoadResult(
         dataframe=selected_read_result.dataframe,
         selected_candidate=selected_candidate,
         candidates=[candidate for _, candidate in read_candidates],
         read_result=selected_read_result,
         variable_metadata=variable_metadata,
+        metadata_files=metadata_files,
         warnings=warnings,
     )
 
@@ -182,18 +395,24 @@ class AutoRawDataLoadingStep(PipelineStep):
         *,
         rawdata_dir: str | Path = "rawdata",
         source_file: str | Path | None = None,
+        codebook_dir: str | Path = "codebook",
+        questionnaire_dir: str | Path = "questionnaire",
         order: int = 10,
     ) -> None:
         super().__init__(name="01_auto_rawdata_loading", order=order, required=True)
         self.runtime = runtime
         self.rawdata_dir = rawdata_dir
         self.source_file = source_file
+        self.codebook_dir = codebook_dir
+        self.questionnaire_dir = questionnaire_dir
 
     def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
         load_result = load_rawdata_project(
             working_directory,
             rawdata_dir=self.rawdata_dir,
             source_file=self.source_file,
+            codebook_dir=self.codebook_dir,
+            questionnaire_dir=self.questionnaire_dir,
         )
         self.runtime.dataframe = load_result.dataframe
         self.runtime.variable_metadata = load_result.variable_metadata
@@ -237,5 +456,6 @@ class AutoRawDataLoadingStep(PipelineStep):
                 "row_count": load_result.selected_candidate.row_count,
                 "column_count": load_result.selected_candidate.column_count,
                 "candidate_count": len(load_result.candidates),
+                "metadata_file_count": len(load_result.metadata_files),
             },
         )

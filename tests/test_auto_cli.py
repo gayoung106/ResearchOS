@@ -35,6 +35,10 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             "data",
             "--source-file",
             "data/survey.csv",
+            "--codebook-dir",
+            "codebooks",
+            "--questionnaire-dir",
+            "questionnaires",
             "--project-name",
             "cli study",
             "--model-id",
@@ -67,6 +71,8 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["working_directory"] == tmp_path
     assert calls["rawdata_dir"] == "data"
     assert calls["source_file"] == "data/survey.csv"
+    assert calls["codebook_dir"] == "codebooks"
+    assert calls["questionnaire_dir"] == "questionnaires"
     assert calls["project_name"] == "cli study"
     assert calls["model_id"] == "model_a"
     assert calls["enable_robustness"] is True

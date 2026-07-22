@@ -86,6 +86,43 @@ python-layout/
   --project-name "survey study"
 ```
 
+## 코드북과 설문지 파일 함께 사용하기
+
+변수명이 `q1`, `q2`처럼 짧거나 의미를 알기 어려운 경우에는 코드북 또는 설문지 파일을 함께 넣는 것이 좋습니다.
+
+```text
+python-layout/
+  rawdata/
+    survey.xlsx
+  codebook/
+    survey_codebook.xlsx
+  questionnaire/
+    questionnaire.xlsx
+```
+
+코드북 또는 설문지 파일에는 아래 열 중 일부가 있으면 됩니다.
+
+| 열 이름 예시 | 의미 |
+| --- | --- |
+| `variable_name`, `variable`, `column_name`, `변수명` | 원자료의 변수명 |
+| `variable_label`, `label`, `description`, `한글명` | 변수 라벨 또는 설명 |
+| `question_text`, `question`, `문항`, `질문` | 설문 문항 텍스트 |
+| `role`, `역할` | dependent, independent, control 같은 역할 힌트 |
+| `measurement_level`, `type`, `측정수준`, `척도` | continuous, binary, ordinal 같은 측정수준 힌트 |
+| `note`, `비고` | 코드북 메모 |
+
+기본 폴더명은 `codebook/`, `questionnaire/`입니다. 다른 폴더명을 쓰려면 아래처럼 지정합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.auto.cli `
+  --working-directory . `
+  --codebook-dir metadata\codebook `
+  --questionnaire-dir metadata\questionnaire `
+  --project-name "codebook study" `
+  --plan-only
+```
+
+이 정보는 `result/01_auto_import/variable_metadata.xlsx`에 병합되고, 이후 변수 역할 추론과 multi-outcome 후보 선택에 사용됩니다.
 ## 자동 추론을 수동으로 보정하기
 
 자동으로 잡힌 종속변수나 독립변수가 마음에 들지 않으면 CLI 옵션으로 직접 지정할 수 있습니다.

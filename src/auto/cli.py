@@ -30,6 +30,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional explicit data file to analyze instead of scanning rawdata-dir.",
     )
     parser.add_argument(
+        "--codebook-dir",
+        default="codebook",
+        help="Directory containing codebook files used to enrich variable labels and roles.",
+    )
+    parser.add_argument(
+        "--questionnaire-dir",
+        default="questionnaire",
+        help="Directory containing questionnaire files used to enrich question text and labels.",
+    )
+    parser.add_argument(
         "--project-name",
         default="auto_rawdata_analysis",
         help="Project name stored in the ResearchContext.",
@@ -107,6 +117,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(args.working_directory),
         rawdata_dir=args.rawdata_dir,
         source_file=args.source_file,
+        codebook_dir=args.codebook_dir,
+        questionnaire_dir=args.questionnaire_dir,
         project_name=args.project_name,
         enable_robustness=args.enable_robustness,
         run_analysis=not args.plan_only,

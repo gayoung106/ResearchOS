@@ -388,6 +388,8 @@ def run_auto_rawdata_analysis(
     *,
     rawdata_dir: str | Path = "rawdata",
     source_file: str | Path | None = None,
+    codebook_dir: str | Path = "codebook",
+    questionnaire_dir: str | Path = "questionnaire",
     project_name: str = "auto_rawdata_analysis",
     enable_robustness: bool = False,
     run_analysis: bool = True,
@@ -420,7 +422,13 @@ def run_auto_rawdata_analysis(
     )
 
     setup_steps = [
-        AutoRawDataLoadingStep(runtime, rawdata_dir=rawdata_dir, source_file=source_file),
+        AutoRawDataLoadingStep(
+            runtime,
+            rawdata_dir=rawdata_dir,
+            source_file=source_file,
+            codebook_dir=codebook_dir,
+            questionnaire_dir=questionnaire_dir,
+        ),
         AutoVariableInferenceStep(runtime),
         AutoAnalysisPlanStep(runtime, enable_robustness=enable_robustness),
     ]
