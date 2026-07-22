@@ -282,7 +282,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type == "tobit_regression":
+        if result.model_type in {"tobit_regression", "truncated_regression"}:
             return self._run_tobit_regression(
                 result,
                 output_dir,

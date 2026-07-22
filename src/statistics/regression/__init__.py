@@ -74,6 +74,7 @@ from src.statistics.regression.quasi_poisson import fit_quasi_poisson
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.truncated import fit_truncated_regression
 from src.statistics.regression.tweedie import fit_tweedie_regression
 from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weibull_ph import fit_weibull_ph
@@ -123,6 +124,7 @@ __all__ = [
     "fit_regularized_regression",
     "fit_robust_regression",
     "fit_tobit_regression",
+    "fit_truncated_regression",
     "fit_tweedie_regression",
     "fit_weighted_least_squares",
     "fit_weibull_aft",

@@ -34,8 +34,8 @@ class TobitDiagnosticsReport:
 
 
 def _validate_tobit_result(result: RegressionResult) -> Any:
-    if result.model_type != "tobit_regression":
-        raise ValueError("Tobit diagnostics require model_type='tobit_regression'.")
+    if result.model_type not in {"tobit_regression", "truncated_regression"}:
+        raise ValueError("Tobit diagnostics require a Tobit or truncated regression result.")
     if result.raw_result is None:
         raise ValueError("A fitted Tobit result is required for diagnostics.")
     return result.raw_result
@@ -84,8 +84,8 @@ def build_tobit_diagnostics(result: RegressionResult) -> TobitDiagnosticsReport:
     fitted_values = np.asarray(fitted.fittedvalues, dtype=float)
     residuals = np.asarray(fitted.resid, dtype=float)
     latent_fitted = np.asarray(result.metadata.get("latent_fitted_values", []), dtype=float)
-    left = np.asarray(result.metadata.get("left_censored", []), dtype=bool)
-    right = np.asarray(result.metadata.get("right_censored", []), dtype=bool)
+    left = np.asarray(result.metadata.get("left_censored", np.zeros(len(observed), dtype=bool)), dtype=bool)
+    right = np.asarray(result.metadata.get("right_censored", np.zeros(len(observed), dtype=bool)), dtype=bool)
     censored = left | right
     row_labels = getattr(fitted.model.data, "row_labels", None)
     if row_labels is None:
@@ -133,6 +133,8 @@ def build_tobit_diagnostics(result: RegressionResult) -> TobitDiagnosticsReport:
     warnings.extend(result.warnings)
     if result.fit_statistics.get("censoring_rate", 0.0) > 0.5:
         warnings.append("More than half of observations are censored; review Tobit assumptions.")
+    if result.model_type == "truncated_regression":
+        warnings.append("Truncated regression diagnostics are conditional on the observed truncated sample.")
     summary = {
         "model_id": result.model_id,
         "model_type": result.model_type,
@@ -141,6 +143,9 @@ def build_tobit_diagnostics(result: RegressionResult) -> TobitDiagnosticsReport:
         "right_censored_count": result.fit_statistics.get("right_censored_count"),
         "uncensored_count": result.fit_statistics.get("uncensored_count"),
         "censoring_rate": result.fit_statistics.get("censoring_rate"),
+        "left_truncation_limit": result.fit_statistics.get("left_truncation_limit"),
+        "right_truncation_limit": result.fit_statistics.get("right_truncation_limit"),
+        "truncated_sample_count": result.fit_statistics.get("truncated_sample_count"),
         "sigma": result.fit_statistics.get("sigma"),
         "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
         "root_mean_squared_error": rmse,

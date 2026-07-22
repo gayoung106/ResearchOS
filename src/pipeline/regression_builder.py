@@ -404,6 +404,11 @@ def register_regression_pipeline(
         "tobit",
         "censored",
         "tobit_regression",
+        "truncated_regression",
+    }
+    truncated_requested = requested_estimator in {"truncated", "truncated_regression"} or requested_model_type in {
+        "truncated",
+        "truncated_regression",
     }
     panel_fe_requested = requested_estimator in {"panel_fe", "fixed_effects", "panel_fixed_effects"} or requested_model_type in {
         "panel_fe",
@@ -1049,6 +1054,35 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
+    elif truncated_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Truncated regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        lower_limit = regression_options.get("lower_limit")
+        upper_limit = regression_options.get("upper_limit")
+        if lower_limit is None and upper_limit is None:
+            return not_registered(
+                "Truncated regression requires lower_limit, upper_limit, or both.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "truncated_regression"
+        multilevel_options = {
+            "lower_limit": lower_limit,
+            "upper_limit": upper_limit,
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 300)
+            ),
+        }
+
     elif panel_fe_requested or panel_re_requested or panel_cre_requested or panel_be_requested or panel_fd_requested or panel_pooled_requested:
         if measurement_level != "continuous":
             return not_registered(
@@ -2272,6 +2306,7 @@ def register_regression_pipeline(
         "regularized_regression",
         "robust_regression",
         "tobit_regression",
+        "truncated_regression",
         "panel_between_effects",
         "panel_correlated_random_effects",
         "panel_first_difference",

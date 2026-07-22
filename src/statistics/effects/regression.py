@@ -726,7 +726,7 @@ def _build_robust_effects(result: RegressionResult) -> EffectSizeReport:
 def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
-        raise ValueError("A fitted Tobit result is required.")
+        raise ValueError("A fitted Tobit or truncated regression result is required.")
     endog = np.asarray(fitted.model.endog, dtype=float)
     exog = np.asarray(fitted.model.exog, dtype=float)
     exog_names = [str(name) for name in fitted.model.exog_names]
@@ -734,7 +734,7 @@ def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
     effects: list[EffectSizeResult] = []
     warnings: list[str] = []
     if not np.isfinite(outcome_sd) or np.isclose(outcome_sd, 0.0):
-        warnings.append("Tobit standardized effects could not be computed because outcome SD is zero.")
+        warnings.append("Limited-dependent-variable standardized effects could not be computed because outcome SD is zero.")
     coefficient_lookup = {coefficient.term: coefficient for coefficient in result.coefficients}
     uncensored_probability = 1.0 - float(result.fit_statistics.get("censoring_rate", 0.0) or 0.0)
     for index, term in enumerate(exog_names):
@@ -750,7 +750,7 @@ def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
         effects.append(
             EffectSizeResult(
                 term=term,
-                effect_type="latent_standardized_beta",
+                effect_type="truncated_standardized_beta" if result.model_type == "truncated_regression" else "latent_standardized_beta",
                 estimate=standardized,
                 standard_error=None,
                 statistic=coefficient.statistic,
@@ -758,23 +758,28 @@ def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
                 confidence_interval_lower=None,
                 confidence_interval_upper=None,
                 magnitude=None,
-                interpretation="Standardized coefficient on the Tobit latent outcome scale.",
+                interpretation=(
+                    "Standardized coefficient on the truncated-normal latent outcome scale."
+                    if result.model_type == "truncated_regression"
+                    else "Standardized coefficient on the Tobit latent outcome scale."
+                ),
             )
         )
-        effects.append(
-            EffectSizeResult(
-                term=term,
-                effect_type="observed_scale_marginal_effect",
-                estimate=float(coefficient.estimate * uncensored_probability),
-                standard_error=None,
-                statistic=coefficient.statistic,
-                p_value=coefficient.p_value,
-                confidence_interval_lower=None,
-                confidence_interval_upper=None,
-                magnitude=None,
-                interpretation="Approximate marginal effect on the observed censored outcome scale.",
+        if result.model_type == "tobit_regression":
+            effects.append(
+                EffectSizeResult(
+                    term=term,
+                    effect_type="observed_scale_marginal_effect",
+                    estimate=float(coefficient.estimate * uncensored_probability),
+                    standard_error=None,
+                    statistic=coefficient.statistic,
+                    p_value=coefficient.p_value,
+                    confidence_interval_lower=None,
+                    confidence_interval_upper=None,
+                    magnitude=None,
+                    interpretation="Approximate marginal effect on the observed censored outcome scale.",
+                )
             )
-        )
 
     return EffectSizeReport(
         model_id=result.model_id,
@@ -783,6 +788,9 @@ def _build_tobit_effects(result: RegressionResult) -> EffectSizeReport:
         model_effects={
             "pseudo_r_squared": result.fit_statistics.get("pseudo_r_squared"),
             "censoring_rate": result.fit_statistics.get("censoring_rate"),
+            "left_truncation_limit": result.fit_statistics.get("left_truncation_limit"),
+            "right_truncation_limit": result.fit_statistics.get("right_truncation_limit"),
+            "truncated_sample_count": result.fit_statistics.get("truncated_sample_count"),
             "sigma": result.fit_statistics.get("sigma"),
         },
         warnings=warnings,
@@ -1959,7 +1967,7 @@ def build_regression_effect_size_report(
     if result.model_type == "robust_regression":
         return _build_robust_effects(result)
 
-    if result.model_type == "tobit_regression":
+    if result.model_type in {"tobit_regression", "truncated_regression"}:
         return _build_tobit_effects(result)
 
     if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:

@@ -703,6 +703,7 @@ def build_regression_visualizations(
         "regularized_regression",
         "robust_regression",
         "tobit_regression",
+        "truncated_regression",
         "panel_between_effects",
         "panel_correlated_random_effects",
         "panel_first_difference",

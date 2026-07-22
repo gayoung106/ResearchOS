@@ -574,6 +574,23 @@ def _regression_item(
             recommendation="Report Tobit censoring limits, censored counts, and latent-scale estimation method.",
         )
 
+    if result.model_type == "truncated_regression":
+        lower_limit = result.fit_statistics.get("left_truncation_limit")
+        upper_limit = result.fit_statistics.get("right_truncation_limit")
+        evidence = (
+            f"Truncated normal regression, N={result.sample_size}, "
+            f"lower={lower_limit}, upper={upper_limit}, converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report truncation limits, conditional likelihood estimation, and how the analytic sample was formed.",
+        )
+
     if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         entity_variable = result.metadata.get("entity_variable", "unknown")
         time_variable = result.metadata.get("time_variable")
@@ -983,6 +1000,24 @@ def _diagnostics_item(
             maximum_score=10,
             evidence=evidence,
             recommendation="Report Tobit residual checks, censoring diagnostics, and VIF screening.",
+        )
+
+    if result is not None and getattr(result, "model_type", None) == "truncated_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Truncated regression diagnostics, RMSE={summary.get('root_mean_squared_error', 'unknown')}, "
+            f"truncated sample={summary.get('truncated_sample_count', 'unknown')}, "
+            f"diagnostic warnings={warning_count}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report truncated-regression residual diagnostics, truncation limits, and VIF screening.",
         )
 
     if result is not None and getattr(result, "model_type", None) == "panel_fixed_effects":
@@ -1867,7 +1902,7 @@ def build_research_audit_report(
                     "pseudo_r_squared": regression_result.fit_statistics.get("pseudo_r_squared"),
                 }
             )
-        elif regression_result.model_type == "tobit_regression":
+        elif regression_result.model_type in {"tobit_regression", "truncated_regression"}:
             metadata.update(
                 {
                     "lower_limit": regression_result.metadata.get("lower_limit"),
@@ -1876,6 +1911,9 @@ def build_research_audit_report(
                     "right_censored_count": regression_result.fit_statistics.get("right_censored_count"),
                     "censoring_rate": regression_result.fit_statistics.get("censoring_rate"),
                     "sigma": regression_result.fit_statistics.get("sigma"),
+                    "left_truncation_limit": regression_result.fit_statistics.get("left_truncation_limit"),
+                    "right_truncation_limit": regression_result.fit_statistics.get("right_truncation_limit"),
+                    "truncated_sample_count": regression_result.fit_statistics.get("truncated_sample_count"),
                 }
             )
         elif regression_result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:

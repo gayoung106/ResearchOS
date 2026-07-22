@@ -77,6 +77,7 @@ from src.statistics.regression.quasi_poisson import fit_quasi_poisson
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.truncated import fit_truncated_regression
 from src.statistics.regression.tweedie import fit_tweedie_regression
 from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weibull_ph import fit_weibull_ph
@@ -419,6 +420,22 @@ def fit_regression_by_level(
         lower_limit = options.get("lower_limit")
         upper_limit = options.get("upper_limit")
         return fit_tobit_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            lower_limit=float(lower_limit) if lower_limit is not None else None,
+            upper_limit=float(upper_limit) if upper_limit is not None else None,
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 300))),
+        )
+
+    if model_type == "truncated_regression":
+        options = mixed_effects_options or {}
+        lower_limit = options.get("lower_limit")
+        upper_limit = options.get("upper_limit")
+        return fit_truncated_regression(
             dataframe,
             dependent_variable=dependent_variable,
             independent_variables=independent_variables,
