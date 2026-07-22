@@ -410,6 +410,11 @@ def register_regression_pipeline(
         "fixed_effects",
         "panel_fixed_effects",
     }
+    panel_re_requested = requested_estimator in {"panel_re", "random_effects", "panel_random_effects"} or requested_model_type in {
+        "panel_re",
+        "random_effects",
+        "panel_random_effects",
+    }
     beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
         "beta",
         "beta_regression",
@@ -1018,7 +1023,7 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
-    elif panel_fe_requested:
+    elif panel_fe_requested or panel_re_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -1040,7 +1045,7 @@ def register_regression_pipeline(
         ).strip()
         if not entity_variable:
             return not_registered(
-                "Panel fixed effects requires entity_variable or id_variable.",
+                "Panel regression requires entity_variable or id_variable.",
                 dependent_variable=dependent_variable,
                 independent_variables=independent_variables,
                 fixed_effects=fixed_effects,
@@ -1057,11 +1062,13 @@ def register_regression_pipeline(
                 fixed_effects=fixed_effects,
                 measurement_level=measurement_level,
             )
-        model_type = "panel_fixed_effects"
+        model_type = "panel_random_effects" if panel_re_requested else "panel_fixed_effects"
         multilevel_options = {
             "entity_variable": entity_variable,
             "time_variable": time_variable,
             "covariance_type": regression_options.get("covariance_type", "cluster_entity"),
+            "reml": regression_options.get("reml", False),
+            "max_iterations": regression_options.get("max_iterations", regression_options.get("maximum_iterations", 200)),
         }
     elif beta_requested:
         if measurement_level != "proportion":
@@ -2218,6 +2225,7 @@ def register_regression_pipeline(
         "robust_regression",
         "tobit_regression",
         "panel_fixed_effects",
+        "panel_random_effects",
         "parametric_survival_auto",
         "piecewise_exponential",
         "discrete_time_hazard",

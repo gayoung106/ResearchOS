@@ -60,7 +60,7 @@ from src.statistics.regression.negative_binomial import fit_negative_binomial
 from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
-from src.statistics.regression.panel import fit_panel_fixed_effects
+from src.statistics.regression.panel import fit_panel_fixed_effects, fit_panel_random_effects
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
 from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.poisson import fit_poisson
@@ -437,6 +437,23 @@ def fit_regression_by_level(
             time_variable=time_variable,
             model_id=model_id,
             covariance_type=str(options.get("covariance_type", "cluster_entity")),
+        )
+
+    if model_type == "panel_random_effects":
+        options = mixed_effects_options or {}
+        entity_variable = str(options.get("entity_variable", options.get("id_variable", ""))).strip()
+        time_variable = str(options.get("time_variable", "")).strip() or None
+        if not entity_variable:
+            raise ValueError("Panel random effects requires entity_variable.")
+        return fit_panel_random_effects(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            entity_variable=entity_variable,
+            time_variable=time_variable,
+            model_id=model_id,
+            reml=bool(options.get("reml", False)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 200))),
         )
 
     if model_type == "beta_regression":

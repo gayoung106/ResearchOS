@@ -37,8 +37,8 @@ class PanelDiagnosticsReport:
 
 
 def _validate_panel_result(result: RegressionResult) -> None:
-    if result.model_type != "panel_fixed_effects":
-        raise ValueError("Panel diagnostics require model_type='panel_fixed_effects'.")
+    if result.model_type not in {"panel_fixed_effects", "panel_random_effects"}:
+        raise ValueError("Panel diagnostics require a panel regression result.")
 
 
 def calculate_panel_multicollinearity(result: RegressionResult) -> list[MulticollinearityResult]:
@@ -126,6 +126,8 @@ def build_panel_diagnostics(result: RegressionResult) -> PanelDiagnosticsReport:
         "time_period_count": result.fit_statistics.get("time_period_count"),
         "within_r_squared": result.fit_statistics.get("within_r_squared"),
         "adjusted_within_r_squared": result.fit_statistics.get("adjusted_within_r_squared"),
+        "marginal_r_squared": result.fit_statistics.get("marginal_r_squared"),
+        "conditional_r_squared": result.fit_statistics.get("conditional_r_squared"),
         "singleton_entity_count": singleton_count,
         "residual_mean": float(np.mean(residuals)) if residuals.size else np.nan,
         "residual_std": float(np.std(residuals, ddof=1)) if residuals.size > 1 else np.nan,

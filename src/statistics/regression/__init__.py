@@ -57,7 +57,7 @@ from src.statistics.regression.negative_binomial import (
 from src.statistics.regression.ols import fit_ols
 from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
-from src.statistics.regression.panel import fit_panel_fixed_effects
+from src.statistics.regression.panel import fit_panel_fixed_effects, fit_panel_random_effects
 from src.statistics.regression.parametric_survival import fit_parametric_survival_regression
 from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.poisson import fit_poisson
@@ -101,6 +101,7 @@ __all__ = [
     "fit_ordered_logit",
     "fit_ordered_probit",
     "fit_panel_fixed_effects",
+    "fit_panel_random_effects",
     "fit_parametric_survival_regression",
     "fit_piecewise_exponential_regression",
     "fit_multinomial_logit",

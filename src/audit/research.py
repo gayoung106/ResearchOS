@@ -574,20 +574,20 @@ def _regression_item(
             recommendation="Report Tobit censoring limits, censored counts, and latent-scale estimation method.",
         )
 
-    if result.model_type == "panel_fixed_effects":
+    if result.model_type in {"panel_fixed_effects", "panel_random_effects"}:
         entity_variable = result.metadata.get("entity_variable", "unknown")
         time_variable = result.metadata.get("time_variable")
         entity_count = result.fit_statistics.get("entity_count", "unknown")
         time_count = result.fit_statistics.get("time_period_count")
-        within_r_squared = result.fit_statistics.get("within_r_squared")
+        within_r_squared = result.fit_statistics.get("within_r_squared", result.fit_statistics.get("marginal_r_squared"))
         evidence = (
-            f"Panel fixed-effects model, N={result.sample_size}, "
+            f"Panel model, N={result.sample_size}, "
             f"entity={entity_variable}({entity_count}), converged={result.converged}"
         )
         if time_variable is not None:
             evidence += f", time={time_variable}({time_count})"
         if within_r_squared is not None:
-            evidence += f", within R-squared={float(within_r_squared):.3f}"
+            evidence += f", panel R-squared={float(within_r_squared):.3f}"
         return AuditItem(
             category="?? ??",
             item="???? ??",
@@ -990,7 +990,7 @@ def _diagnostics_item(
         warning_count = len(getattr(report, "warnings", []))
         evidence = (
             f"Panel diagnostics, entities={summary.get('entity_count', 'unknown')}, "
-            f"within R-squared={summary.get('within_r_squared', 'unknown')}, "
+            f"panel R-squared={summary.get('within_r_squared', 'unknown')}, "
             f"diagnostic warnings={warning_count}"
         )
         return AuditItem(
@@ -1353,11 +1353,11 @@ def _effect_size_item(
             f"censoring rate={model_effects.get('censoring_rate', 'unknown')}"
         )
         recommendation = "Interpret latent standardized coefficients and observed-scale marginal effects."
-    elif getattr(report, "model_type", None) == "panel_fixed_effects":
+    elif getattr(report, "model_type", None) in {"panel_fixed_effects", "panel_random_effects"}:
         model_effects = getattr(report, "model_effects", {})
         evidence = (
             f"Within-panel effect sizes {len(report.effects)} generated; "
-            f"within R-squared={model_effects.get('within_r_squared', 'unknown')}"
+            f"panel R-squared={model_effects.get('within_r_squared', 'unknown')}"
         )
         recommendation = "Interpret within-standardized coefficients with absorbed fixed effects."
     elif getattr(report, "model_type", None) in {
@@ -1818,7 +1818,7 @@ def build_research_audit_report(
                     "sigma": regression_result.fit_statistics.get("sigma"),
                 }
             )
-        elif regression_result.model_type == "panel_fixed_effects":
+        elif regression_result.model_type in {"panel_fixed_effects", "panel_random_effects"}:
             metadata.update(
                 {
                     "entity_variable": regression_result.metadata.get("entity_variable"),
@@ -1826,6 +1826,9 @@ def build_research_audit_report(
                     "entity_count": regression_result.fit_statistics.get("entity_count"),
                     "time_period_count": regression_result.fit_statistics.get("time_period_count"),
                     "within_r_squared": regression_result.fit_statistics.get("within_r_squared"),
+                    "marginal_r_squared": regression_result.fit_statistics.get("marginal_r_squared"),
+                    "conditional_r_squared": regression_result.fit_statistics.get("conditional_r_squared"),
+                    "random_intercept_variance": regression_result.fit_statistics.get("random_intercept_variance"),
                 }
             )
         elif _is_mixed_effects_model(runtime, model_id):
