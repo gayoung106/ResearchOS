@@ -14,6 +14,7 @@ from src.statistics.regression.base import RegressionResult
 
 _COUNT_DIAGNOSTIC_MODELS = {
     "poisson",
+    "quasi_poisson",
     "negative_binomial",
     "generalized_poisson",
     "zero_inflated_poisson",
@@ -438,6 +439,7 @@ def build_count_diagnostics(
 
     if result.model_type in {
         "poisson",
+        "quasi_poisson",
         "zero_inflated_poisson",
         "hurdle_poisson",
     }:
@@ -469,7 +471,7 @@ def build_count_diagnostics(
         "flagged_observation_count": (flagged_count),
     }
 
-    if result.model_type == "poisson":
+    if result.model_type in {"poisson", "quasi_poisson"}:
         summary["dispersion_ratio"] = result.fit_statistics.get("dispersion_ratio")
     elif result.model_type == "generalized_poisson":
         summary["alpha"] = result.fit_statistics.get("alpha")

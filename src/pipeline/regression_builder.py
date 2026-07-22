@@ -503,6 +503,17 @@ def register_regression_pipeline(
         "log_logistic_aft",
         "log-logistic-aft",
     }
+    quasi_poisson_requested = requested_estimator in {
+        "quasi",
+        "quasi_poisson",
+        "quasi-poisson",
+        "quasipoisson",
+    } or requested_model_type in {
+        "quasi",
+        "quasi_poisson",
+        "quasi-poisson",
+        "quasipoisson",
+    }
     generalized_poisson_requested = requested_estimator in {
         "generalized_poisson",
         "generalized-poisson",
@@ -557,7 +568,6 @@ def register_regression_pipeline(
         "nb",
         "nb2",
         "negative_binomial",
-        "generalized_poisson",
         "negative-binomial",
         "negative_binomial_regression",
         "negative-binomial-regression",
@@ -1568,6 +1578,23 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 1000)
             ),
         }
+    elif quasi_poisson_requested:
+        if measurement_level != "count":
+            return not_registered(
+                "Quasi-Poisson supports count dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "quasi_poisson"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "nonrobust"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
     elif generalized_poisson_requested:
         if measurement_level != "count":
             return not_registered(
@@ -2107,6 +2134,7 @@ def register_regression_pipeline(
         "ordered_probit",
         "multinomial_logit",
         "poisson",
+        "quasi_poisson",
         "negative_binomial",
         "generalized_poisson",
         "hurdle_poisson",

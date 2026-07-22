@@ -756,6 +756,7 @@ def build_regression_visualizations(
         output_files.append(str(observed_path))
     elif regression_result.model_type in {
         "poisson",
+        "quasi_poisson",
         "negative_binomial",
         "generalized_poisson",
         "zero_inflated_poisson",

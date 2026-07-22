@@ -306,6 +306,7 @@ def write_korean_results_narrative(
         "ordered_logit": "순서형 로지스틱 회귀분석",
         "ordered_probit": "Ordered probit regression",
         "tweedie_regression": "Tweedie regression",
+        "quasi_poisson": "Quasi-Poisson regression",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
         "generalized_poisson": "Generalized Poisson regression",
@@ -526,6 +527,7 @@ def write_korean_results_narrative(
             )
         elif regression_result.model_type in {
             "poisson",
+            "quasi_poisson",
             "negative_binomial",
             "generalized_poisson",
             "zero_inflated_poisson",
@@ -1139,7 +1141,7 @@ def write_korean_results_narrative(
         if dispersion_ratio is not None:
             sentences.append(f"The Tweedie dispersion ratio was {float(dispersion_ratio):.3f}.")
 
-    elif regression_result.model_type in {"poisson", "zero_inflated_poisson", "hurdle_poisson"}:
+    elif regression_result.model_type in {"poisson", "quasi_poisson", "zero_inflated_poisson", "hurdle_poisson"}:
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
 
@@ -1202,7 +1204,9 @@ def build_regression_publication_report(
         notes.append("로짓 모형은 오즈비를 함께 제시한다.")
     elif regression_result.model_type in {
         "poisson",
+        "quasi_poisson",
         "negative_binomial",
+        "generalized_poisson",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "hurdle_poisson",
@@ -1211,8 +1215,8 @@ def build_regression_publication_report(
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",
         "mixed_negative_binomial_random_intercept",
-            "mixed_negative_binomial_random_slope",
-            "mixed_negative_binomial_three_level",
+        "mixed_negative_binomial_random_slope",
+        "mixed_negative_binomial_three_level",
     }:
         notes.append("계수형 회귀모형은 발생률비(IRR)를 함께 제시한다.")
 
