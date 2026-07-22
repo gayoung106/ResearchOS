@@ -20,6 +20,10 @@ from src.auto.rawdata_loader import (
     discover_rawdata_files,
     load_rawdata_project,
 )
+from src.auto.runner import (
+    AutoRawDataAnalysisResult,
+    run_auto_rawdata_analysis,
+)
 from src.auto.variable_inference import (
     AutoVariableInferenceResult,
     AutoVariableInferenceStep,
@@ -34,9 +38,10 @@ __all__ = [
     "AutoAnalysisPlanDecision",
     "AutoAnalysisPlanResult",
     "AutoAnalysisPlanStep",
+    "AutoRawDataAnalysisResult",
     "AutoRawDataLoadResult",
-    "AutoRegressionPipelineBuildResult",
     "AutoRawDataLoadingStep",
+    "AutoRegressionPipelineBuildResult",
     "AutoVariableInferenceResult",
     "AutoVariableInferenceStep",
     "RawDatasetCandidate",
@@ -51,5 +56,6 @@ __all__ = [
     "load_rawdata_project",
     "register_auto_regression_pipeline",
     "role_inferences_to_dataframe",
+    "run_auto_rawdata_analysis",
     "variable_map_to_dataframe",
 ]
