@@ -49,6 +49,43 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Load rawdata, infer variables, build the plan, and register the pipeline without running models.",
     )
+    parser.add_argument(
+        "--dependent-variable",
+        default=None,
+        help="Override the inferred dependent variable.",
+    )
+    parser.add_argument(
+        "--independent-variables",
+        nargs="*",
+        default=None,
+        help="Override inferred independent variables. Example: --independent-variables x1 x2",
+    )
+    parser.add_argument(
+        "--control-variables",
+        nargs="*",
+        default=None,
+        help="Override inferred control variables.",
+    )
+    parser.add_argument(
+        "--cluster-variable",
+        default=None,
+        help="Override the inferred cluster/group variable.",
+    )
+    parser.add_argument(
+        "--weight-variable",
+        default=None,
+        help="Override the inferred weight variable.",
+    )
+    parser.add_argument(
+        "--id-variable",
+        default=None,
+        help="Override the inferred entity/id variable.",
+    )
+    parser.add_argument(
+        "--time-variable",
+        default=None,
+        help="Override the inferred time variable.",
+    )
     return parser
 
 
@@ -63,6 +100,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         enable_robustness=args.enable_robustness,
         run_analysis=not args.plan_only,
         model_id=args.model_id,
+        dependent_variable=args.dependent_variable,
+        independent_variables=args.independent_variables,
+        control_variables=args.control_variables,
+        cluster_variable=args.cluster_variable,
+        weight_variable=args.weight_variable,
+        id_variable=args.id_variable,
+        time_variable=args.time_variable,
     )
 
     status = "completed" if result.success else "failed"

@@ -9,6 +9,11 @@ from src.auto.analysis_plan import (
     build_auto_analysis_plan,
     write_auto_analysis_config_files,
 )
+from src.auto.overrides import (
+    AutoVariableRoleOverrides,
+    apply_variable_role_overrides,
+    build_auto_variable_role_overrides,
+)
 from src.auto.pipeline import (
     AutoRegressionPipelineBuildResult,
     build_auto_regression_orchestrator,
@@ -45,12 +50,15 @@ __all__ = [
     "AutoRegressionPipelineBuildResult",
     "AutoVariableInferenceResult",
     "AutoVariableInferenceStep",
+    "AutoVariableRoleOverrides",
     "RawDatasetCandidate",
     "VariableRoleInference",
     "auto_analysis_plan_decisions_to_dataframe",
     "auto_analysis_plan_summary_to_dataframe",
+    "apply_variable_role_overrides",
     "build_auto_analysis_plan",
     "build_auto_regression_orchestrator",
+    "build_auto_variable_role_overrides",
     "build_auto_variable_map",
     "discover_rawdata_files",
     "infer_variable_roles",

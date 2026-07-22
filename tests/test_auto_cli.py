@@ -38,6 +38,21 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             "model_a",
             "--enable-robustness",
             "--plan-only",
+            "--dependent-variable",
+            "final_score",
+            "--independent-variables",
+            "baseline_score",
+            "age",
+            "--control-variables",
+            "gender",
+            "--cluster-variable",
+            "site",
+            "--weight-variable",
+            "sample_weight",
+            "--id-variable",
+            "person_id",
+            "--time-variable",
+            "wave",
         ]
     )
 
@@ -50,6 +65,13 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["model_id"] == "model_a"
     assert calls["enable_robustness"] is True
     assert calls["run_analysis"] is False
+    assert calls["dependent_variable"] == "final_score"
+    assert calls["independent_variables"] == ["baseline_score", "age"]
+    assert calls["control_variables"] == ["gender"]
+    assert calls["cluster_variable"] == "site"
+    assert calls["weight_variable"] == "sample_weight"
+    assert calls["id_variable"] == "person_id"
+    assert calls["time_variable"] == "wave"
     assert "Auto rawdata analysis completed." in captured.out
     assert "Model type: ols" in captured.out
 

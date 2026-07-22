@@ -6,9 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.auto.analysis_plan import AutoAnalysisPlanStep
+from src.auto.overrides import (
+    apply_variable_role_overrides,
+    build_auto_variable_role_overrides,
+)
 from src.auto.pipeline import AutoRegressionPipelineBuildResult, build_auto_regression_orchestrator
 from src.auto.rawdata_loader import AutoRawDataLoadingStep
-from src.auto.variable_inference import AutoVariableInferenceStep
+from src.auto.variable_inference import AutoVariableInferenceStep, variable_map_to_dataframe
 from src.common.config_models import AnalysisPlan, VariableMap
 from src.pipeline.context import ResearchContext
 from src.pipeline.orchestrator import OrchestratorResult, ResearchOrchestrator
@@ -100,7 +104,7 @@ def _write_auto_run_summary(
 
 
 def _format_bool(value: bool) -> str:
-    return "??" if value else "??"
+    return "\uc131\uacf5" if value else "\uc2e4\ud328"
 
 
 def _artifact_or_none(runtime: PipelineRuntime, key: str) -> object | None:
@@ -125,77 +129,77 @@ def _write_auto_run_markdown(
     registration = result.pipeline_build_result.registration if result.pipeline_build_result else None
 
     lines = [
-        "# ?? ?? ?? ??",
+        "# \uc790\ub3d9 \ubd84\uc11d \uc2e4\ud589 \uc694\uc57d",
         "",
-        f"- ?????: {result.context.project_name}",
-        f"- ?? ??: {_format_bool(result.success)}",
-        f"- ?? ??: {result.failed_stage or '-'}",
-        f"- ?? ?: {len(result.warnings)}",
+        f"- \ud504\ub85c\uc81d\ud2b8\uba85: {result.context.project_name}",
+        f"- \uc804\uccb4 \uc0c1\ud0dc: {_format_bool(result.success)}",
+        f"- \uc2e4\ud328 \ub2e8\uacc4: {result.failed_stage or '-'}",
+        f"- \uacbd\uace0 \uc218: {len(result.warnings)}",
         "",
-        "## ??? ??",
+        "## \uc6d0\uc790\ub8cc \uc120\ud0dd",
     ]
     if rawdata is not None:
         candidate = rawdata.selected_candidate
         lines.extend(
             [
-                f"- ??: `{candidate.source_path}`",
+                f"- \ud30c\uc77c: `{candidate.source_path}`",
                 f"- Sheet: {candidate.sheet_name or '-'}",
-                f"- ? ?: {candidate.row_count}",
-                f"- ? ?: {candidate.column_count}",
-                f"- ?? ?: {len(rawdata.candidates)}",
+                f"- \ud589 \uc218: {candidate.row_count}",
+                f"- \uc5f4 \uc218: {candidate.column_count}",
+                f"- \ud6c4\ubcf4 \uc218: {len(rawdata.candidates)}",
             ]
         )
     else:
-        lines.append("- ???? ???? ?????.")
+        lines.append("- \uc6d0\uc790\ub8cc\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.")
 
-    lines.extend(["", "## ?? ?? ??"])
+    lines.extend(["", "## \uc790\ub3d9 \ubcc0\uc218 \uc5ed\ud560"])
     if isinstance(variable_map, VariableMap):
         role_rows = [
             (name, definition.role, definition.measurement_level)
             for name, definition in variable_map.variables.items()
         ]
-        lines.extend(["| ?? | ?? | ???? |", "| --- | --- | --- |"])
+        lines.extend(["| \ubcc0\uc218 | \uc5ed\ud560 | \uce21\uc815\uc218\uc900 |", "| --- | --- | --- |"])
         lines.extend(f"| `{name}` | {role} | {level} |" for name, role, level in role_rows)
     else:
-        lines.append("- ?? ??? ???? ?????.")
+        lines.append("- \ubcc0\uc218 \uc5ed\ud560\uc744 \ucd94\ub860\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.")
 
-    lines.extend(["", "## ?? ????"])
+    lines.extend(["", "## \uc790\ub3d9 \ubd84\uc11d\uacc4\ud68d"])
     if isinstance(analysis_plan, AnalysisPlan):
         lines.extend(
             [
-                f"- ????: {', '.join(analysis_plan.variables.dependent) or '-'}",
-                f"- ????: {', '.join(analysis_plan.variables.independent) or '-'}",
-                f"- ????: {', '.join(analysis_plan.variables.controls) or '-'}",
-                f"- ????: {', '.join(analysis_plan.variables.clusters) or '-'}",
-                f"- ??? ??: {', '.join(analysis_plan.variables.weights) or '-'}",
-                f"- ???? ???: {_format_bool(analysis_plan.analyses.regression.enabled)}",
-                f"- Panel ?? ???: {_format_bool(analysis_plan.analyses.panel.enabled)}",
-                f"- ??? ?? ???: {_format_bool(analysis_plan.analyses.robustness.enabled)}",
-                f"- ?? ??: `{analysis_plan.analyses.regression.options}`",
+                f"- \uc885\uc18d\ubcc0\uc218: {', '.join(analysis_plan.variables.dependent) or '-'}",
+                f"- \ub3c5\ub9bd\ubcc0\uc218: {', '.join(analysis_plan.variables.independent) or '-'}",
+                f"- \ud1b5\uc81c\ubcc0\uc218: {', '.join(analysis_plan.variables.controls) or '-'}",
+                f"- \uad70\uc9d1\ubcc0\uc218: {', '.join(analysis_plan.variables.clusters) or '-'}",
+                f"- \uac00\uc911\uce58 \ubcc0\uc218: {', '.join(analysis_plan.variables.weights) or '-'}",
+                f"- \ud68c\uadc0\ubd84\uc11d \ud65c\uc131\ud654: {_format_bool(analysis_plan.analyses.regression.enabled)}",
+                f"- Panel \ubd84\uc11d \ud65c\uc131\ud654: {_format_bool(analysis_plan.analyses.panel.enabled)}",
+                f"- \uac15\uac74\uc131 \ubd84\uc11d \ud65c\uc131\ud654: {_format_bool(analysis_plan.analyses.robustness.enabled)}",
+                f"- \ud68c\uadc0 \uc635\uc158: `{analysis_plan.analyses.regression.options}`",
             ]
         )
     else:
-        lines.append("- ????? ???? ?????.")
+        lines.append("- \ubd84\uc11d\uacc4\ud68d\uc744 \uc0dd\uc131\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.")
 
-    lines.extend(["", "## ??? ??"])
+    lines.extend(["", "## \ub4f1\ub85d\ub41c \ubaa8\ub378"])
     if registration is not None:
         lines.extend(
             [
-                f"- ?? ID: {registration.model_id}",
-                f"- ?? ??: {registration.model_type}",
-                f"- ????: {registration.dependent_variable}",
-                f"- ????: {', '.join(registration.independent_variables)}",
-                f"- ?? ??: {_format_bool(registration.diagnostics_registered)}",
-                f"- ???? ??: {_format_bool(registration.effect_size_registered)}",
-                f"- ?? ??: {_format_bool(registration.reporting_registered)}",
-                f"- ??? ??: {_format_bool(registration.visualization_registered)}",
-                f"- Audit ??: {_format_bool(registration.audit_registered)}",
+                f"- \ubaa8\ub378 ID: {registration.model_id}",
+                f"- \ubaa8\ub378 \uc720\ud615: {registration.model_type}",
+                f"- \uc885\uc18d\ubcc0\uc218: {registration.dependent_variable}",
+                f"- \ub3c5\ub9bd\ubcc0\uc218: {', '.join(registration.independent_variables)}",
+                f"- \uc9c4\ub2e8 \ub4f1\ub85d: {_format_bool(registration.diagnostics_registered)}",
+                f"- \ud6a8\uacfc\ud06c\uae30 \ub4f1\ub85d: {_format_bool(registration.effect_size_registered)}",
+                f"- \ubcf4\uace0 \ub4f1\ub85d: {_format_bool(registration.reporting_registered)}",
+                f"- \uc2dc\uac01\ud654 \ub4f1\ub85d: {_format_bool(registration.visualization_registered)}",
+                f"- Audit \ub4f1\ub85d: {_format_bool(registration.audit_registered)}",
             ]
         )
     else:
-        lines.append("- ?? ?????? ???? ?????.")
+        lines.append("- \ubaa8\ub378 \ud30c\uc774\ud504\ub77c\uc778\uc774 \ub4f1\ub85d\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4.")
 
-    lines.extend(["", "## ??? ??", "| ?? | ?? | ??? ? | ?? ? |", "| --- | --- | ---: | ---: |"])
+    lines.extend(["", "## \ub2e8\uacc4\ubcc4 \uacb0\uacfc", "| \ub2e8\uacc4 | \uc0c1\ud0dc | \uc0b0\ucd9c\ubb3c \uc218 | \uacbd\uace0 \uc218 |", "| --- | --- | ---: | ---: |"])
     for step_result in result.setup_step_results:
         lines.append(
             f"| {step_result.stage_name} | {_format_bool(step_result.success)} | "
@@ -215,10 +219,10 @@ def _write_auto_run_markdown(
         )
 
     if result.warnings:
-        lines.extend(["", "## ??"])
+        lines.extend(["", "## \uacbd\uace0"])
         lines.extend(f"- {warning}" for warning in result.warnings)
 
-    lines.extend(["", "## ?? ???"])
+    lines.extend(["", "## \uc8fc\uc694 \uc0b0\ucd9c\ubb3c"])
     lines.extend(f"- `{output_file}`" for output_file in result.output_files)
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return str(report_path)
@@ -233,6 +237,13 @@ def run_auto_rawdata_analysis(
     enable_robustness: bool = False,
     run_analysis: bool = True,
     model_id: str = "main_model",
+    dependent_variable: str | None = None,
+    independent_variables: list[str] | tuple[str, ...] | None = None,
+    control_variables: list[str] | tuple[str, ...] | None = None,
+    cluster_variable: str | None = None,
+    weight_variable: str | None = None,
+    id_variable: str | None = None,
+    time_variable: str | None = None,
 ) -> AutoRawDataAnalysisResult:
     """Run the rawdata-only workflow through automatic planning and analysis."""
     root = Path(working_directory).expanduser().resolve()
@@ -241,6 +252,15 @@ def run_auto_rawdata_analysis(
     output_files: list[str] = []
     warnings: list[str] = []
     setup_results: list[StepResult] = []
+    role_overrides = build_auto_variable_role_overrides(
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        control_variables=control_variables,
+        cluster_variable=cluster_variable,
+        weight_variable=weight_variable,
+        id_variable=id_variable,
+        time_variable=time_variable,
+    )
 
     setup_steps = [
         AutoRawDataLoadingStep(runtime, rawdata_dir=rawdata_dir, source_file=source_file),
@@ -264,6 +284,34 @@ def run_auto_rawdata_analysis(
             output_files=output_files,
             warnings=warnings,
         )
+        if step_result.success and step.name == "02_auto_variable_inference" and role_overrides.has_overrides():
+            try:
+                overridden_map = apply_variable_role_overrides(
+                    runtime.get_artifact("auto_variable_map"),
+                    role_overrides,
+                )
+                runtime.set_artifact("auto_variable_map", overridden_map)
+                override_dir = root / "result" / "02_auto_variables"
+                override_dir.mkdir(parents=True, exist_ok=True)
+                override_path = override_dir / "overridden_variable_map.xlsx"
+                variable_map_to_dataframe(overridden_map).to_excel(override_path, index=False)
+                output_files.append(str(override_path))
+                context.add_generated_file(override_path)
+            except Exception as error:  # noqa: BLE001 - convert invalid overrides into structured failure.
+                step_result = StepResult(
+                    stage_name="02_auto_variable_role_overrides",
+                    success=False,
+                    warnings=[str(error)],
+                    metadata={"error_message": str(error)},
+                )
+                setup_results.append(step_result)
+                _record_step_result(
+                    context=context,
+                    result=step_result,
+                    output_files=output_files,
+                    warnings=warnings,
+                )
+
         if not step_result.success:
             result = AutoRawDataAnalysisResult(
                 success=False,
