@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 import pandas as pd
 
@@ -127,3 +127,38 @@ def test_auto_variable_inference_uses_korean_labels_for_roles() -> None:
         "\uc804\ubc18\uc801\uc778 \uc9c1\ubb34 \ub9cc\uc871\ub3c4 \uc810\uc218"
     )
     assert {"label", "question_text"}.issubset(variable_map.columns)
+
+
+def test_auto_variable_inference_applies_codebook_role_and_level_hints() -> None:
+    data = pd.DataFrame(
+        {
+            "q1": [1, 2, 3, 4, 5, 6],
+            "q2": [2, 2, 3, 3, 4, 4],
+            "age": [21, 35, 44, 51, 39, 28],
+            "school": [1, 1, 2, 2, 3, 3],
+        }
+    )
+    metadata = pd.DataFrame(
+        {
+            "variable_name": ["q1", "q2", "age", "school"],
+            "variable_label": ["final outcome", "baseline predictor", "age", "school identifier"],
+            "role_hint": ["dependent", "independent", "control", "cluster"],
+            "measurement_level_hint": ["continuous", "continuous", "continuous", "nominal"],
+        }
+    )
+
+    result = build_auto_variable_map(data, variable_metadata=metadata)
+    roles = {item.variable_name: item.role for item in result.role_inferences}
+    levels = {name: definition.measurement_level for name, definition in result.variable_map.variables.items()}
+
+    assert roles == {
+        "q1": "dependent",
+        "q2": "independent",
+        "age": "control",
+        "school": "cluster",
+    }
+    assert levels["q1"] == "continuous"
+    assert levels["q2"] == "continuous"
+    assert result.variable_map.variables["q1"].evidence["metadata_role_hint"] == "dependent"
+    assert result.variable_map.variables["q1"].evidence["metadata_measurement_level_hint"] == "continuous"
+    assert any("measurement_level_hint" in note for note in result.detections[0].evidence.notes)

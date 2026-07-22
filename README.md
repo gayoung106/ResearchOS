@@ -149,7 +149,7 @@ python-layout/
   --plan-only
 ```
 
-이 정보는 `result/01_auto_import/variable_metadata.xlsx`에 병합되고, 이후 변수 역할 추론과 multi-outcome 후보 선택에 사용됩니다.
+이 정보는 `result/01_auto_import/variable_metadata.xlsx`에 병합되고, 이후 변수 역할 추론과 multi-outcome 후보 선택에 사용됩니다. 특히 `role`과 `measurement_level` 힌트가 있으면 자동 추론보다 우선 반영됩니다.
 ## 자동 추론을 수동으로 보정하기
 
 자동으로 잡힌 종속변수나 독립변수가 마음에 들지 않으면 CLI 옵션으로 직접 지정할 수 있습니다.

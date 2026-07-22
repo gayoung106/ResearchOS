@@ -1,4 +1,4 @@
-"""Automatic variable measurement-level and role inference."""
+﻿"""Automatic variable measurement-level and role inference."""
 
 from __future__ import annotations
 
@@ -21,6 +21,55 @@ from src.preprocess.detector import (
 
 _ANALYZABLE_OUTCOMES = {"continuous", "binary", "ordinal", "count", "proportion", "scale_item"}
 _PREDICTOR_LEVELS = _ANALYZABLE_OUTCOMES | {"nominal"}
+_VALID_ROLE_HINTS = {"dependent", "independent", "control", "cluster", "weight", "id", "time", "strata", "fixed_effect", "other"}
+_VALID_LEVEL_HINTS = {"continuous", "binary", "ordinal", "nominal", "count", "proportion", "scale_item", "datetime", "unknown"}
+_ROLE_HINT_ALIASES = {
+    "outcome": "dependent",
+    "target": "dependent",
+    "response": "dependent",
+    "predictor": "independent",
+    "covariate": "control",
+    "group": "cluster",
+    "grouping": "cluster",
+    "sampling_weight": "weight",
+    "entity": "id",
+    "identifier": "id",
+    "wave": "time",
+    "period": "time",
+    "종속": "dependent",
+    "결과": "dependent",
+    "독립": "independent",
+    "예측": "independent",
+    "통제": "control",
+    "군집": "cluster",
+    "집단": "cluster",
+    "가중치": "weight",
+    "식별": "id",
+    "시간": "time",
+}
+_LEVEL_HINT_ALIASES = {
+    "numeric": "continuous",
+    "number": "continuous",
+    "integer": "count",
+    "dummy": "binary",
+    "dichotomous": "binary",
+    "categorical": "nominal",
+    "category": "nominal",
+    "likert": "scale_item",
+    "scale": "scale_item",
+    "ratio": "proportion",
+    "percent": "proportion",
+    "날짜": "datetime",
+    "시간": "datetime",
+    "연속": "continuous",
+    "이항": "binary",
+    "순서": "ordinal",
+    "명목": "nominal",
+    "범주": "nominal",
+    "계수": "count",
+    "리커트": "scale_item",
+    "비율": "proportion",
+}
 
 
 @dataclass(slots=True)
@@ -74,6 +123,9 @@ def _metadata_lookup(variable_metadata: pd.DataFrame | None) -> dict[str, dict[s
         "korean_name",
         "question_text",
         "questionnaire_text",
+        "role_hint",
+        "measurement_level_hint",
+        "codebook_note",
     ]
     for _, row in variable_metadata.iterrows():
         variable_name = str(row["variable_name"])
@@ -91,6 +143,91 @@ def _metadata_lookup(variable_metadata: pd.DataFrame | None) -> dict[str, dict[s
         lookup[variable_name] = values
     return lookup
 
+
+
+
+def _normalize_hint(value: object) -> str:
+    return re.sub(r"[^a-z0-9가-힣]+", "_", str(value).strip().lower()).strip("_")
+
+
+def _canonical_hint(value: str, valid_values: set[str], aliases: dict[str, str]) -> str | None:
+    normalized = _normalize_hint(value)
+    if not normalized:
+        return None
+    if normalized in valid_values:
+        return normalized
+    if normalized in aliases:
+        return aliases[normalized]
+    compact = normalized.replace("_", "")
+    for alias, canonical in aliases.items():
+        if alias.replace("_", "") == compact or alias in normalized:
+            return canonical
+    return None
+
+
+def _role_hint(metadata: dict[str, str]) -> str | None:
+    for column in ["role_hint", "codebook_note", "search_text"]:
+        value = metadata.get(column)
+        if value:
+            hint = _canonical_hint(value, _VALID_ROLE_HINTS, _ROLE_HINT_ALIASES)
+            if hint is not None:
+                return hint
+    return None
+
+
+def _level_hint(metadata: dict[str, str]) -> str | None:
+    for column in ["measurement_level_hint", "codebook_note", "search_text"]:
+        value = metadata.get(column)
+        if value:
+            hint = _canonical_hint(value, _VALID_LEVEL_HINTS, _LEVEL_HINT_ALIASES)
+            if hint is not None:
+                return hint
+    return None
+
+
+def _apply_level_hint(detection: VariableDetection, metadata: dict[str, str]) -> VariableDetection:
+    hint = _level_hint(metadata)
+    if hint is None or hint == "unknown" or hint == detection.detected_level:
+        return detection
+    evidence = detection.evidence
+    evidence.notes.append(f"Metadata measurement_level_hint overrode detected level to {hint}.")
+    return VariableDetection(
+        variable_name=detection.variable_name,
+        detected_level=hint,
+        status="detected",
+        confidence=max(detection.confidence, 0.95),
+        evidence=evidence,
+        alternatives=[detection.detected_level, *detection.alternatives],
+    )
+
+
+def _role_from_hint(
+    variable_name: str,
+    detection: VariableDetection,
+    profile: dict[str, Any],
+    metadata: dict[str, str],
+) -> VariableRoleInference | None:
+    role = _role_hint(metadata)
+    if role is None:
+        return None
+    if role == "dependent" and detection.detected_level not in _ANALYZABLE_OUTCOMES:
+        return None
+    if role in {"independent", "control"} and detection.detected_level not in _PREDICTOR_LEVELS:
+        return None
+    if role in {"id", "time", "weight", "cluster", "strata", "fixed_effect", "other"}:
+        confidence = 0.95
+    elif profile["unique_count"] > 1:
+        confidence = 0.92
+    else:
+        confidence = 0.7
+    return VariableRoleInference(
+        variable_name,
+        role,
+        detection.detected_level,
+        confidence,
+        "Metadata role_hint was applied before automatic role scoring.",
+        alternatives=["review"],
+    )
 
 def _series_profile(dataframe: pd.DataFrame, variable_name: str) -> dict[str, Any]:
     series = dataframe[variable_name]
@@ -292,9 +429,14 @@ def infer_variable_roles(
     dependent_candidates: list[tuple[float, int, str, str]] = []
 
     for index, variable_name in enumerate(dataframe.columns):
-        detection = detection_map[str(variable_name)]
+        metadata = metadata_lookup.get(str(variable_name), {})
+        detection = _apply_level_hint(detection_map[str(variable_name)], metadata)
         profile = _series_profile(dataframe, str(variable_name))
-        evidence_text = metadata_lookup.get(str(variable_name), {}).get("search_text", "")
+        hint_role = _role_from_hint(str(variable_name), detection, profile, metadata)
+        if hint_role is not None:
+            special_roles[str(variable_name)] = hint_role
+            continue
+        evidence_text = metadata.get("search_text", "")
         special = _special_role_by_name(str(variable_name), detection, profile, evidence_text)
         if special is not None:
             special_roles[str(variable_name)] = special
@@ -310,9 +452,10 @@ def infer_variable_roles(
 
     output: list[VariableRoleInference] = []
     for variable_name in [str(column) for column in dataframe.columns]:
-        detection = detection_map[variable_name]
+        metadata = metadata_lookup.get(variable_name, {})
+        detection = _apply_level_hint(detection_map[variable_name], metadata)
         profile = _series_profile(dataframe, variable_name)
-        evidence_text = metadata_lookup.get(variable_name, {}).get("search_text", "")
+        evidence_text = metadata.get("search_text", "")
         if variable_name in special_roles:
             output.append(special_roles[variable_name])
             continue
@@ -358,13 +501,16 @@ def build_auto_variable_map(
     *,
     variable_metadata: pd.DataFrame | None = None,
 ) -> AutoVariableInferenceResult:
-    detections = detect_dataframe_variables(dataframe, variable_metadata=variable_metadata)
+    metadata_lookup = _metadata_lookup(variable_metadata)
+    detections = [
+        _apply_level_hint(detection, metadata_lookup.get(detection.variable_name, {}))
+        for detection in detect_dataframe_variables(dataframe, variable_metadata=variable_metadata)
+    ]
     role_inferences = infer_variable_roles(
         dataframe,
         detections,
         variable_metadata=variable_metadata,
     )
-    metadata_lookup = _metadata_lookup(variable_metadata)
     warnings = [
         f"{item.variable_name}: {item.role} confidence={item.confidence:.2f}"
         for item in role_inferences
@@ -385,6 +531,8 @@ def build_auto_variable_map(
                 "auto_role_reason": item.reason,
                 "auto_role_alternatives": item.alternatives,
                 "auto_role_search_text": metadata.get("search_text", item.variable_name),
+                "metadata_role_hint": metadata.get("role_hint"),
+                "metadata_measurement_level_hint": metadata.get("measurement_level_hint"),
             },
             review_status="auto_inferred",
             notes=item.reason,
