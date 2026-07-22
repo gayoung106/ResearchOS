@@ -1,0 +1,89 @@
+﻿"""Command-line entry point for the automatic rawdata workflow."""
+
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+from pathlib import Path
+
+from src.auto.runner import run_auto_rawdata_analysis
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m src.auto.cli",
+        description="Run the automatic rawdata analysis workflow.",
+    )
+    parser.add_argument(
+        "--working-directory",
+        default=".",
+        help="Project directory. Defaults to the current directory.",
+    )
+    parser.add_argument(
+        "--rawdata-dir",
+        default="rawdata",
+        help="Directory containing raw data files, relative to the working directory unless absolute.",
+    )
+    parser.add_argument(
+        "--source-file",
+        default=None,
+        help="Optional explicit data file to analyze instead of scanning rawdata-dir.",
+    )
+    parser.add_argument(
+        "--project-name",
+        default="auto_rawdata_analysis",
+        help="Project name stored in the ResearchContext.",
+    )
+    parser.add_argument(
+        "--model-id",
+        default="main_model",
+        help="Model id used for regression artifacts.",
+    )
+    parser.add_argument(
+        "--enable-robustness",
+        action="store_true",
+        help="Enable registered robustness checks after automatic planning.",
+    )
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Load rawdata, infer variables, build the plan, and register the pipeline without running models.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    result = run_auto_rawdata_analysis(
+        Path(args.working_directory),
+        rawdata_dir=args.rawdata_dir,
+        source_file=args.source_file,
+        project_name=args.project_name,
+        enable_robustness=args.enable_robustness,
+        run_analysis=not args.plan_only,
+        model_id=args.model_id,
+    )
+
+    status = "completed" if result.success else "failed"
+    print(f"Auto rawdata analysis {status}.")
+    if result.failed_stage:
+        print(f"Failed stage: {result.failed_stage}")
+    if result.pipeline_build_result and result.pipeline_build_result.registration:
+        registration = result.pipeline_build_result.registration
+        print(f"Model type: {registration.model_type}")
+        print(f"Dependent variable: {registration.dependent_variable}")
+        print(f"Independent variables: {', '.join(registration.independent_variables)}")
+    if result.output_files:
+        print("Output files:")
+        for output_file in result.output_files:
+            print(f"- {output_file}")
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
+    return 0 if result.success else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
