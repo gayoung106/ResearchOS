@@ -5,11 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from src.auto.multi_outcome import AutoMultiOutcomeAnalysisPlanResult
 from src.common.config_models import AnalysisPlan, VariableMap
 from src.pipeline.context import ResearchContext
 from src.pipeline.orchestrator import ResearchOrchestrator
 from src.pipeline.regression_builder import RegressionRegistration, register_regression_pipeline
 from src.pipeline.runtime import PipelineRuntime
+
+
+@dataclass(slots=True)
+class AutoMultiOutcomePipelineBuildResult:
+    success: bool
+    model_results: dict[str, AutoRegressionPipelineBuildResult] = field(default_factory=dict)
+    orchestrators: dict[str, ResearchOrchestrator] = field(default_factory=dict)
+    runtimes: dict[str, PipelineRuntime] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -88,3 +98,68 @@ def build_auto_regression_orchestrator(
         model_id=model_id,
     )
     return orchestrator, result
+
+
+def build_auto_multi_outcome_regression_orchestrators(
+    *,
+    context: ResearchContext,
+    runtime: PipelineRuntime,
+    working_directory: str | Path = ".",
+    multi_outcome_result_artifact_key: str = "auto_multi_outcome_plan_result",
+) -> AutoMultiOutcomePipelineBuildResult:
+    """Create one registered regression orchestrator for each auto outcome plan."""
+    multi_outcome_result = _runtime_artifact(runtime, multi_outcome_result_artifact_key)
+    if not isinstance(multi_outcome_result, AutoMultiOutcomeAnalysisPlanResult):
+        result = AutoMultiOutcomePipelineBuildResult(
+            success=False,
+            warnings=[f"{multi_outcome_result_artifact_key} artifact is required before multi-outcome registration."],
+        )
+        runtime.set_artifact("auto_multi_outcome_pipeline_build_result", result)
+        return result
+
+    model_results: dict[str, AutoRegressionPipelineBuildResult] = {}
+    orchestrators: dict[str, ResearchOrchestrator] = {}
+    runtimes: dict[str, PipelineRuntime] = {}
+    warnings: list[str] = []
+
+    for outcome_plan in multi_outcome_result.outcome_plans:
+        model_runtime = PipelineRuntime(
+            dataframe=runtime.dataframe,
+            variable_metadata=runtime.variable_metadata,
+            detections=list(runtime.detections),
+            resolved_levels=list(runtime.resolved_levels),
+        )
+        model_runtime.set_artifact("auto_variable_map", outcome_plan.variable_map)
+        model_runtime.set_artifact("auto_analysis_plan", outcome_plan.analysis_plan)
+        model_context = ResearchContext(
+            project_name=f"{context.project_name}:{outcome_plan.model_id}",
+            research_topic=context.research_topic,
+            research_questions=list(context.research_questions),
+            hypotheses=list(context.hypotheses),
+            raw_data_files=list(context.raw_data_files),
+            questionnaire_files=list(context.questionnaire_files),
+            codebook_files=list(context.codebook_files),
+        )
+        model_orchestrator = ResearchOrchestrator(
+            context=model_context,
+            working_directory=Path(working_directory) / "result" / "multi_outcome_runs" / outcome_plan.model_id,
+        )
+        model_result = register_auto_regression_pipeline(
+            orchestrator=model_orchestrator,
+            runtime=model_runtime,
+            model_id=outcome_plan.model_id,
+        )
+        model_results[outcome_plan.model_id] = model_result
+        orchestrators[outcome_plan.model_id] = model_orchestrator
+        runtimes[outcome_plan.model_id] = model_runtime
+        warnings.extend(model_result.warnings)
+
+    result = AutoMultiOutcomePipelineBuildResult(
+        success=all(item.success for item in model_results.values()) and bool(model_results),
+        model_results=model_results,
+        orchestrators=orchestrators,
+        runtimes=runtimes,
+        warnings=list(dict.fromkeys(warnings)),
+    )
+    runtime.set_artifact("auto_multi_outcome_pipeline_build_result", result)
+    return result

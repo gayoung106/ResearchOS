@@ -9,6 +9,7 @@ from src.auto.multi_outcome import (
     build_auto_multi_outcome_analysis_plans,
     infer_auto_outcome_candidates,
 )
+from src.auto.pipeline import build_auto_multi_outcome_regression_orchestrators
 from src.auto.variable_inference import build_auto_variable_map
 from src.common.config_loader import load_analysis_plan, load_variable_map
 from src.pipeline.context import ResearchContext
@@ -96,3 +97,49 @@ def test_auto_multi_outcome_analysis_plan_step_outputs_yaml_files(tmp_path: Path
     variable_map_path = tmp_path / "result" / "03_auto_plan" / "multi_outcome" / "auto_model_1" / "variable_map.yaml"
     assert load_analysis_plan(analysis_plan_path).variables.dependent == ["satisfaction"]
     assert load_variable_map(variable_map_path).variables["satisfaction"].role == "dependent"
+
+
+def test_build_auto_multi_outcome_regression_orchestrators_registers_each_model(tmp_path: Path) -> None:
+    data, _ = _multi_outcome_data()
+    runtime = PipelineRuntime(dataframe=data)
+    plan_result = build_auto_multi_outcome_analysis_plans(
+        _variable_map(),
+        max_outcomes=2,
+        model_id_prefix="auto_model",
+    )
+    runtime.set_artifact("auto_multi_outcome_plan_result", plan_result)
+
+    result = build_auto_multi_outcome_regression_orchestrators(
+        context=ResearchContext(project_name="multi outcome registration"),
+        runtime=runtime,
+        working_directory=tmp_path,
+    )
+
+    assert result.success is True
+    assert sorted(result.model_results) == ["auto_model_1", "auto_model_2"]
+    assert result.model_results["auto_model_1"].registration is not None
+    assert result.model_results["auto_model_1"].registration.dependent_variable == "satisfaction"
+    assert result.model_results["auto_model_2"].registration is not None
+    assert result.model_results["auto_model_2"].registration.dependent_variable == "performance"
+    assert result.orchestrators["auto_model_1"].registry.names() == [
+        "09_regression_analysis",
+        "10_regression_diagnostics",
+        "13_effect_size_analysis",
+        "14_regression_reporting",
+        "15_regression_visualization",
+        "16_research_audit",
+    ]
+    assert runtime.get_artifact("auto_multi_outcome_pipeline_build_result").success is True
+
+
+def test_build_auto_multi_outcome_regression_orchestrators_requires_plan_artifact(tmp_path: Path) -> None:
+    result = build_auto_multi_outcome_regression_orchestrators(
+        context=ResearchContext(project_name="missing multi outcome registration"),
+        runtime=PipelineRuntime(),
+        working_directory=tmp_path,
+    )
+
+    assert result.success is False
+    assert result.warnings == [
+        "auto_multi_outcome_plan_result artifact is required before multi-outcome registration."
+    ]
