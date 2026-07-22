@@ -39,6 +39,8 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert result.context.independent_variables == ["age", "gender"]
     assert result.runtime.get_artifact("auto_rawdata_load_result").selected_candidate.row_count == 8
     assert result.runtime.get_artifact("auto_analysis_plan").analyses.regression.enabled is True
+    validation = result.runtime.get_artifact("auto_run_validation_report")
+    assert validation.passed is True
     assert {Path(path).name for path in result.output_files} >= {
         "analysis_base.parquet",
         "variable_role_inference.xlsx",

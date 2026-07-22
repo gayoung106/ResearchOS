@@ -12,6 +12,7 @@ from src.auto.overrides import (
 )
 from src.auto.pipeline import AutoRegressionPipelineBuildResult, build_auto_regression_orchestrator
 from src.auto.rawdata_loader import AutoRawDataLoadingStep
+from src.auto.validation import validate_auto_run_outputs
 from src.auto.variable_inference import AutoVariableInferenceStep, variable_map_to_dataframe
 from src.common.config_models import AnalysisPlan, VariableMap
 from src.pipeline.context import ResearchContext
@@ -327,6 +328,12 @@ def run_auto_rawdata_analysis(
             result.output_files.extend([summary_path, report_path])
             context.add_generated_file(summary_path)
             context.add_generated_file(report_path)
+            validation_report = validate_auto_run_outputs(
+                runtime=runtime,
+                output_files=result.output_files,
+            )
+            runtime.set_artifact("auto_run_validation_report", validation_report)
+            result.warnings.extend(validation_report.warnings)
             return result
 
     analysis_plan = runtime.get_artifact("auto_analysis_plan")
@@ -371,4 +378,14 @@ def run_auto_rawdata_analysis(
     result.output_files.extend([summary_path, report_path])
     context.add_generated_file(summary_path)
     context.add_generated_file(report_path)
+    validation_report = validate_auto_run_outputs(
+        runtime=runtime,
+        output_files=result.output_files,
+        require_model_outputs=run_analysis,
+    )
+    runtime.set_artifact("auto_run_validation_report", validation_report)
+    if validation_report.warnings:
+        result.warnings.extend(validation_report.warnings)
+        for warning in validation_report.warnings:
+            context.add_warning(f"auto_run_validation: {warning}")
     return result

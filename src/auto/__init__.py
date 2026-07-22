@@ -30,6 +30,11 @@ from src.auto.runner import (
     AutoRawDataAnalysisResult,
     run_auto_rawdata_analysis,
 )
+from src.auto.validation import (
+    AutoRunValidationItem,
+    AutoRunValidationReport,
+    validate_auto_run_outputs,
+)
 from src.auto.variable_inference import (
     AutoVariableInferenceResult,
     AutoVariableInferenceStep,
@@ -48,6 +53,8 @@ __all__ = [
     "AutoRawDataLoadResult",
     "AutoRawDataLoadingStep",
     "AutoRegressionPipelineBuildResult",
+    "AutoRunValidationItem",
+    "AutoRunValidationReport",
     "AutoVariableInferenceResult",
     "AutoVariableInferenceStep",
     "AutoVariableRoleOverrides",
@@ -66,6 +73,7 @@ __all__ = [
     "register_auto_regression_pipeline",
     "role_inferences_to_dataframe",
     "run_auto_rawdata_analysis",
+    "validate_auto_run_outputs",
     "variable_map_to_dataframe",
     "write_auto_analysis_config_files",
 ]
