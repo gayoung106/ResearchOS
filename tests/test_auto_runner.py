@@ -49,12 +49,17 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
         "auto_variable_map.yaml",
         "auto_run_summary.xlsx",
         "auto_run_report.md",
+        "auto_final_report.md",
     }
     report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_run_report.md")
     report_text = report_path.read_text(encoding="utf-8")
     assert "# \uc790\ub3d9 \ubd84\uc11d \uc2e4\ud589 \uc694\uc57d" in report_text
     assert "outcome_score" in report_text
     assert "ols" in report_text
+    final_report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_final_report.md")
+    final_report_text = final_report_path.read_text(encoding="utf-8")
+    assert "Main model" in final_report_text
+    assert "outcome_score" in final_report_text
 
 
 def test_run_auto_rawdata_analysis_executes_registered_pipeline_when_requested(
@@ -154,7 +159,11 @@ def test_run_auto_rawdata_analysis_reports_setup_failure(tmp_path: Path) -> None
     assert result.success is False
     assert result.failed_stage == "01_auto_rawdata_loading"
     assert result.pipeline_build_result is None
-    assert {Path(path).name for path in result.output_files} >= {"auto_run_summary.xlsx", "auto_run_report.md"}
+    assert {Path(path).name for path in result.output_files} >= {
+        "auto_run_summary.xlsx",
+        "auto_run_report.md",
+        "auto_final_report.md",
+    }
 
 
 def test_run_auto_rawdata_analysis_runs_multi_outcome_pipelines_when_enabled(
@@ -197,3 +206,8 @@ def test_run_auto_rawdata_analysis_runs_multi_outcome_pipelines_when_enabled(
     assert result.runtime.get_artifact("auto_multi_outcome_pipeline_run_result").success is True
     assert "outcome_analysis_plans.xlsx" in {Path(path).name for path in result.output_files}
     assert any(Path(path).name.endswith("fake_output.xlsx") for path in result.output_files)
+    final_report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_final_report.md")
+    final_report_text = final_report_path.read_text(encoding="utf-8")
+    assert "Multi-outcome models" in final_report_text
+    assert "satisfaction_outcome" in final_report_text
+    assert "performance_outcome" in final_report_text

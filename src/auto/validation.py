@@ -60,6 +60,7 @@ def validate_auto_run_outputs(
     required_files = {
         "auto_run_summary.xlsx",
         "auto_run_report.md",
+        "auto_final_report.md",
         "analysis_base.parquet",
         "variable_role_inference.xlsx",
         "inferred_variable_map.xlsx",

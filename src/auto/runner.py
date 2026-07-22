@@ -257,6 +257,132 @@ def _write_auto_run_markdown(
     return str(report_path)
 
 
+def _write_auto_final_report(
+    *,
+    working_directory: Path,
+    result: AutoRawDataAnalysisResult,
+) -> str:
+    output_dir = working_directory / "result" / "00_auto_run"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "auto_final_report.md"
+
+    rawdata = _artifact_or_none(result.runtime, "auto_rawdata_load_result")
+    registration = result.pipeline_build_result.registration if result.pipeline_build_result else None
+    validation = _artifact_or_none(result.runtime, "auto_run_validation_report")
+
+    lines = [
+        "# \ucd5c\uc885 \uc790\ub3d9 \ubd84\uc11d \ub9ac\ud3ec\ud2b8",
+        "",
+        f"- \ud504\ub85c\uc81d\ud2b8\uba85: {result.context.project_name}",
+        f"- \uc804\uccb4 \uc0c1\ud0dc: {_format_bool(result.success)}",
+        f"- \uc2e4\ud328 \ub2e8\uacc4: {result.failed_stage or '-'}",
+        f"- \uc0b0\ucd9c\ubb3c \uc218: {len(result.output_files)}",
+        f"- \uacbd\uace0 \uc218: {len(result.warnings)}",
+        "",
+        "## \uc6d0\uc790\ub8cc",
+    ]
+    if rawdata is not None:
+        candidate = rawdata.selected_candidate
+        lines.extend(
+            [
+                f"- \uc120\ud0dd \ud30c\uc77c: `{candidate.source_path}`",
+                f"- \ud589/\uc5f4: {candidate.row_count} / {candidate.column_count}",
+                f"- Sheet: {candidate.sheet_name or '-'}",
+            ]
+        )
+    else:
+        lines.append("- \uc6d0\uc790\ub8cc \uc120\ud0dd \uc815\ubcf4\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.")
+
+    lines.extend(["", "## Main model"])
+    if registration is not None:
+        main_status = result.orchestrator_result.success if result.orchestrator_result is not None else result.pipeline_build_result.success
+        lines.extend(
+            [
+                "| model_id | status | model_type | dependent | independent |",
+                "| --- | --- | --- | --- | --- |",
+                f"| {registration.model_id} | {_format_bool(bool(main_status))} | {registration.model_type} | "
+                f"{registration.dependent_variable} | {', '.join(registration.independent_variables)} |",
+            ]
+        )
+    else:
+        lines.append("- Main model was not registered.")
+
+    lines.extend(["", "## Multi-outcome models"])
+    if result.multi_outcome_pipeline_build_result is not None:
+        run_result = result.multi_outcome_pipeline_run_result
+        lines.extend(
+            [
+                "| model_id | status | model_type | dependent | independent |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for model_id, build_result in result.multi_outcome_pipeline_build_result.model_results.items():
+            registration = build_result.registration
+            if run_result is None:
+                status = build_result.success
+            elif model_id in run_result.completed_models:
+                status = True
+            else:
+                status = False
+            model_type = registration.model_type if registration is not None else "-"
+            dependent = registration.dependent_variable if registration is not None else "-"
+            independent = ", ".join(registration.independent_variables) if registration is not None else "-"
+            lines.append(f"| {model_id} | {_format_bool(status)} | {model_type} | {dependent} | {independent} |")
+    else:
+        lines.append("- Multi-outcome analysis was not enabled.")
+
+    lines.extend(
+        [
+            "",
+            "## \ub2e8\uacc4\ubcc4 \uc694\uc57d",
+            "| stage | status | outputs | warnings |",
+            "| --- | --- | ---: | ---: |",
+        ]
+    )
+    for step_result in result.setup_step_results:
+        lines.append(
+            f"| {step_result.stage_name} | {_format_bool(step_result.success)} | "
+            f"{len(step_result.output_files)} | {len(step_result.warnings)} |"
+        )
+    if result.pipeline_build_result is not None:
+        lines.append(
+            "| 04_auto_pipeline_registration | "
+            f"{_format_bool(result.pipeline_build_result.success)} | 0 | {len(result.pipeline_build_result.warnings)} |"
+        )
+    if result.orchestrator_result is not None:
+        lines.append(
+            "| 05_auto_pipeline_execution | "
+            f"{_format_bool(result.orchestrator_result.success)} | "
+            f"{len(result.context.generated_files)} | {len(result.orchestrator_result.warnings)} |"
+        )
+    if result.multi_outcome_pipeline_build_result is not None:
+        lines.append(
+            "| 04b_auto_multi_outcome_pipeline_registration | "
+            f"{_format_bool(result.multi_outcome_pipeline_build_result.success)} | 0 | "
+            f"{len(result.multi_outcome_pipeline_build_result.warnings)} |"
+        )
+    if result.multi_outcome_pipeline_run_result is not None:
+        lines.append(
+            "| 05b_auto_multi_outcome_pipeline_execution | "
+            f"{_format_bool(result.multi_outcome_pipeline_run_result.success)} | "
+            f"{len(result.multi_outcome_pipeline_run_result.completed_models)} | "
+            f"{len(result.multi_outcome_pipeline_run_result.warnings)} |"
+        )
+
+    if validation is not None:
+        lines.extend(["", "## \uac80\uc99d \uc694\uc57d", f"- \uc0c1\ud0dc: {_format_bool(validation.passed)}"])
+        if validation.warnings:
+            lines.extend(f"- {warning}" for warning in validation.warnings)
+
+    if result.warnings:
+        lines.extend(["", "## \uacbd\uace0"])
+        lines.extend(f"- {warning}" for warning in result.warnings)
+
+    lines.extend(["", "## \uc0b0\ucd9c\ubb3c"])
+    lines.extend(f"- `{output_file}`" for output_file in result.output_files)
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(report_path)
+
 def run_auto_rawdata_analysis(
     working_directory: str | Path = ".",
     *,
@@ -364,15 +490,18 @@ def run_auto_rawdata_analysis(
             )
             summary_path = _write_auto_run_summary(working_directory=root, result=result)
             report_path = _write_auto_run_markdown(working_directory=root, result=result)
-            result.output_files.extend([summary_path, report_path])
+            final_report_path = _write_auto_final_report(working_directory=root, result=result)
+            result.output_files.extend([summary_path, report_path, final_report_path])
             context.add_generated_file(summary_path)
             context.add_generated_file(report_path)
+            context.add_generated_file(final_report_path)
             validation_report = validate_auto_run_outputs(
                 runtime=runtime,
                 output_files=result.output_files,
             )
             runtime.set_artifact("auto_run_validation_report", validation_report)
             result.warnings.extend(validation_report.warnings)
+            _write_auto_final_report(working_directory=root, result=result)
             return result
 
     analysis_plan = runtime.get_artifact("auto_analysis_plan")
@@ -446,9 +575,11 @@ def run_auto_rawdata_analysis(
     )
     summary_path = _write_auto_run_summary(working_directory=root, result=result)
     report_path = _write_auto_run_markdown(working_directory=root, result=result)
-    result.output_files.extend([summary_path, report_path])
+    final_report_path = _write_auto_final_report(working_directory=root, result=result)
+    result.output_files.extend([summary_path, report_path, final_report_path])
     context.add_generated_file(summary_path)
     context.add_generated_file(report_path)
+    context.add_generated_file(final_report_path)
     validation_report = validate_auto_run_outputs(
         runtime=runtime,
         output_files=result.output_files,
@@ -459,4 +590,5 @@ def run_auto_rawdata_analysis(
         result.warnings.extend(validation_report.warnings)
         for warning in validation_report.warnings:
             context.add_warning(f"auto_run_validation: {warning}")
+    _write_auto_final_report(working_directory=root, result=result)
     return result

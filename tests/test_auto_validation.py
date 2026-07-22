@@ -34,6 +34,7 @@ def test_validate_auto_run_outputs_passes_for_plan_only_run(tmp_path: Path) -> N
         "artifact:auto_variable_map",
         "artifact:auto_analysis_plan",
         "file:auto_run_report.md",
+        "file:auto_final_report.md",
         "yaml:auto_analysis_plan",
         "yaml:auto_variable_map",
     }

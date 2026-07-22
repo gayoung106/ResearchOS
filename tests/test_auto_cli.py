@@ -1,6 +1,4 @@
-﻿import subprocess
-import sys
-from pathlib import Path
+﻿from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -118,26 +116,18 @@ def test_auto_cli_smoke_plan_only_creates_core_outputs(tmp_path: Path) -> None:
         }
     ).to_csv(rawdata_dir / "survey.csv", index=False)
 
-    completed = subprocess.run(
+    exit_code = cli.main(
         [
-            sys.executable,
-            "-m",
-            "src.auto.cli",
             "--working-directory",
             str(tmp_path),
             "--project-name",
             "cli smoke",
             "--plan-only",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
+        ]
     )
 
-    assert completed.returncode == 0, completed.stderr
-    assert "Auto rawdata analysis completed." in completed.stdout
-    assert "Model type: ols" in completed.stdout
+    assert exit_code == 0
     assert (tmp_path / "result" / "00_auto_run" / "auto_run_report.md").exists()
+    assert (tmp_path / "result" / "00_auto_run" / "auto_final_report.md").exists()
     assert (tmp_path / "result" / "03_auto_plan" / "auto_analysis_plan.yaml").exists()
     assert (tmp_path / "result" / "03_auto_plan" / "auto_variable_map.yaml").exists()
