@@ -310,6 +310,7 @@ def write_korean_results_narrative(
         "weibull_ph": "Weibull PH regression",
         "binary_cloglog": "Binary complementary log-log regression",
         "binary_probit": "Binary probit regression",
+        "boxcox_regression": "Box-Cox regression",
         "multinomial_logit": "Multinomial logistic regression",
         "ordered_logit": "순서형 로지스틱 회귀분석",
         "ordered_probit": "Ordered probit regression",
@@ -362,7 +363,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "truncated_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "weighted_least_squares", "boxcox_regression", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "truncated_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -600,6 +601,17 @@ def write_korean_results_narrative(
                 )
             else:
                 sentences.append(f"모형의 설명력은 R²={r_squared:.3f}이었다.")
+
+    elif regression_result.model_type == "boxcox_regression":
+        lambda_value = regression_result.fit_statistics.get("boxcox_lambda")
+        transformed_r_squared = regression_result.fit_statistics.get("transformed_r_squared")
+        original_rmse = regression_result.fit_statistics.get("original_scale_root_mean_squared_error")
+        if lambda_value is not None:
+            sentences.append(f"Box-Cox regression used lambda={float(lambda_value):.3f} for the positive outcome transformation.")
+        if transformed_r_squared is not None:
+            sentences.append(f"Transformed-scale R-squared was {float(transformed_r_squared):.3f}.")
+        if original_rmse is not None:
+            sentences.append(f"Original-scale RMSE was {float(original_rmse):.3f}.")
 
     elif regression_result.model_type == "weighted_least_squares":
         r_squared = regression_result.fit_statistics.get("r_squared")
@@ -1315,7 +1327,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "truncated_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+    if regression_result.model_type in {"ols", "weighted_least_squares", "boxcox_regression", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "truncated_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -1435,6 +1447,9 @@ def build_regression_publication_report(
 
     if regression_result.model_type == "weighted_least_squares":
         notes.append("Weighted least squares reports coefficients estimated with positive analytic case weights.")
+
+    if regression_result.model_type == "boxcox_regression":
+        notes.append("Box-Cox regression coefficients are estimated on the transformed positive outcome scale.")
 
     if regression_result.model_type == "panel_fixed_effects":
         notes.append("Panel fixed-effects models report within-panel coefficients after absorbing entity and optional time effects.")

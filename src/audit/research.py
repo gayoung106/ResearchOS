@@ -370,6 +370,23 @@ def _regression_item(
             recommendation="Report the log link, event coding, risk ratios, fitted-probability bounds, and marginal effects.",
         )
 
+    if result.model_type == "boxcox_regression":
+        lambda_value = result.fit_statistics.get("boxcox_lambda")
+        r_squared = result.fit_statistics.get("transformed_r_squared")
+        evidence = (
+            f"Box-Cox regression, N={result.sample_size}, lambda={lambda_value}, "
+            f"transformed R-squared={r_squared}, converged={result.converged}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="???? ??",
+            status=status,
+            score=score,
+            maximum_score=15,
+            evidence=evidence,
+            recommendation="Report Box-Cox lambda, transformed-scale coefficients, residual diagnostics, and original-scale error.",
+        )
+
     if result.model_type == "weighted_least_squares":
         evidence = (
             f"Weighted least squares regression, N={result.sample_size}, "
@@ -807,6 +824,23 @@ def _diagnostics_item(
             maximum_score=10,
             evidence=evidence,
             recommendation="Report ROC-AUC, Brier score, calibration, VIF screening, and probability-bound warnings.",
+        )
+
+    if result is not None and getattr(result, "model_type", None) == "boxcox_regression":
+        summary = getattr(report, "summary", {})
+        warning_count = len(getattr(report, "warnings", []))
+        evidence = (
+            f"Box-Cox diagnostics, lambda={getattr(result, 'fit_statistics', {}).get('boxcox_lambda', 'unknown')}, "
+            f"diagnostic warnings={warning_count}, tests={len(getattr(report, 'diagnostic_tests', []))}"
+        )
+        return AuditItem(
+            category="?? ??",
+            item="?? ??",
+            status="PASS" if warning_count == 0 else "WARNING",
+            score=10 if warning_count == 0 else 7,
+            maximum_score=10,
+            evidence=evidence,
+            recommendation="Report transformed-scale residual diagnostics and the Box-Cox transformation parameter.",
         )
 
     if result is not None and getattr(result, "model_type", None) == "weighted_least_squares":
@@ -1587,6 +1621,8 @@ def build_research_audit_report(
 
     if regression_result is not None:
         metadata["model_type"] = regression_result.model_type
+        metadata["boxcox_lambda"] = regression_result.fit_statistics.get("boxcox_lambda")
+        metadata["original_scale_root_mean_squared_error"] = regression_result.fit_statistics.get("original_scale_root_mean_squared_error")
         metadata["selected_survival_model"] = regression_result.metadata.get("selected_survival_model")
         metadata["survival_selection_criterion"] = regression_result.metadata.get("survival_selection_criterion")
         metadata["candidate_survival_model_count"] = regression_result.metadata.get("candidate_survival_model_count")

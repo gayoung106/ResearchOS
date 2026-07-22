@@ -9,6 +9,7 @@ from src.statistics.regression.beta import fit_beta_regression
 from src.statistics.regression.binary_cloglog import fit_binary_cloglog
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
+from src.statistics.regression.boxcox import fit_boxcox_regression
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import (
     fit_cause_specific_cox,
@@ -1142,6 +1143,20 @@ def fit_regression_by_level(
             max_iterations=int(options.get("max_iterations", 200)),
             random_effect_covariance=str(options.get("random_effect_covariance", "correlated")),
             **extra,
+        )
+
+    if model_type == "boxcox_regression":
+        options = mixed_effects_options or {}
+        lambda_value = options.get("lambda_value", options.get("boxcox_lambda"))
+        return fit_boxcox_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            lambda_value=float(lambda_value) if lambda_value is not None else None,
         )
 
     if measurement_level == "continuous":

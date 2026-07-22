@@ -382,7 +382,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type in {"ols", "weighted_least_squares"}:
+        if result.model_type in {"ols", "weighted_least_squares", "boxcox_regression"}:
             return self._run_ols(
                 result,
                 output_dir,

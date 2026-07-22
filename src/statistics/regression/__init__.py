@@ -9,6 +9,7 @@ from src.statistics.regression.beta import fit_beta_regression
 from src.statistics.regression.binary_cloglog import fit_binary_cloglog
 from src.statistics.regression.binary_logit import fit_binary_logit
 from src.statistics.regression.binary_probit import fit_binary_probit
+from src.statistics.regression.boxcox import fit_boxcox_regression
 from src.statistics.regression.count import fit_count_regression
 from src.statistics.regression.cox import (
     fit_cause_specific_cox,
@@ -105,6 +106,7 @@ __all__ = [
     "fit_binary_cloglog",
     "fit_binary_logit",
     "fit_binary_probit",
+    "fit_boxcox_regression",
     "fit_beta_regression",
     "fit_ordered_logit",
     "fit_ordered_probit",

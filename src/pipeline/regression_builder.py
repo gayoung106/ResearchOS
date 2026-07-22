@@ -309,10 +309,17 @@ def register_regression_pipeline(
         "wls",
         "weighted",
         "weighted_least_squares",
+        "boxcox_regression",
     } or requested_model_type in {
         "wls",
         "weighted",
         "weighted_least_squares",
+        "boxcox_regression",
+    }
+    boxcox_requested = requested_estimator in {"boxcox", "box_cox", "boxcox_regression"} or requested_model_type in {
+        "boxcox",
+        "box_cox",
+        "boxcox_regression",
     }
     cloglog_requested = requested_estimator in {
         "cloglog",
@@ -798,6 +805,22 @@ def register_regression_pipeline(
             "covariance_type": regression_options.get("covariance_type", "HC3"),
             "add_intercept": regression_options.get("add_intercept", True),
         }
+    elif boxcox_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Box-Cox regression supports continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "boxcox_regression"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "lambda_value": regression_options.get("lambda_value", regression_options.get("boxcox_lambda")),
+        }
+
     elif cloglog_requested:
         if measurement_level != "binary":
             return not_registered(
@@ -2298,6 +2321,7 @@ def register_regression_pipeline(
     if model_type in {
         "ols",
         "weighted_least_squares",
+        "boxcox_regression",
         "heckman_selection",
         "iv_2sls_regression",
         "inverse_gaussian_regression",

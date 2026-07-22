@@ -56,8 +56,8 @@ class OLSDiagnosticsReport:
 
 
 def _validate_ols_result(result: RegressionResult) -> Any:
-    if result.model_type not in {"ols", "weighted_least_squares"}:
-        raise ValueError("OLS diagnostics require model_type='ols' or 'weighted_least_squares'.")
+    if result.model_type not in {"ols", "weighted_least_squares", "boxcox_regression"}:
+        raise ValueError("OLS diagnostics require an OLS-compatible regression result.")
     if result.raw_result is None:
         raise ValueError("A fitted statsmodels result is required.")
     return result.raw_result
