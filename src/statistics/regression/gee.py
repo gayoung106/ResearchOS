@@ -12,7 +12,7 @@ import statsmodels.api as sm
 from src.statistics.regression.base import ModelCoefficient, RegressionResult
 from src.statistics.regression.design_matrix import prepare_regression_design_matrix
 
-GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}
+GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}
 
 
 def _family_for_model(model_type: str) -> Any:
@@ -24,6 +24,8 @@ def _family_for_model(model_type: str) -> Any:
         return sm.families.Poisson()
     if model_type == "gee_negative_binomial":
         return sm.families.NegativeBinomial()
+    if model_type == "gee_gamma":
+        return sm.families.Gamma(link=sm.families.links.Log())
     raise ValueError(f"Unsupported GEE model type: {model_type}")
 
 
@@ -45,6 +47,9 @@ def _validate_outcome(outcome: pd.Series, model_type: str) -> pd.Series:
         unique = sorted(outcome.dropna().unique().tolist())
         if unique != [0.0, 1.0]:
             raise ValueError(f"GEE logit requires a 0/1 outcome; found {unique}.")
+    if model_type == "gee_gamma":
+        if (outcome <= 0).any():
+            raise ValueError("GEE Gamma requires a strictly positive outcome.")
     if model_type in {"gee_poisson", "gee_negative_binomial"}:
         if (outcome < 0).any():
             raise ValueError("GEE count models require a non-negative count outcome.")
@@ -157,7 +162,7 @@ def fit_gee(
                 confidence_interval_lower=lower,
                 confidence_interval_upper=upper,
                 exponentiated_estimate=(
-                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson", "gee_negative_binomial"} else None
+                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"} else None
                 ),
             )
         )
@@ -180,6 +185,7 @@ def fit_gee(
         "qicu": qicu,
         "alpha": 1.0 if model_type == "gee_negative_binomial" else None,
         "negative_binomial_alpha": 1.0 if model_type == "gee_negative_binomial" else None,
+        "gamma_scale": float(fitted.scale) if model_type == "gee_gamma" else None,
     }
 
     return RegressionResult(

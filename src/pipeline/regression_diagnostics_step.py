@@ -366,7 +366,7 @@ class RegressionDiagnosticsStep(PipelineStep):
                 output_dir,
             )
 
-        if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
+        if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
             return self._run_gee(
                 result,
                 output_dir,

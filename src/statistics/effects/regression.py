@@ -1832,12 +1832,15 @@ def _build_gee_effects(result: RegressionResult) -> EffectSizeReport:
                 )
             )
     else:
-        effect_type = "odds_ratio" if result.model_type == "gee_logit" else "incidence_rate_ratio"
-        interpretation = (
-            "Population-averaged odds ratio from GEE."
-            if result.model_type == "gee_logit"
-            else "Population-averaged incidence rate ratio from GEE."
-        )
+        if result.model_type == "gee_logit":
+            effect_type = "odds_ratio"
+            interpretation = "Population-averaged odds ratio from GEE."
+        elif result.model_type == "gee_gamma":
+            effect_type = "mean_ratio"
+            interpretation = "Population-averaged mean ratio from Gamma GEE."
+        else:
+            effect_type = "incidence_rate_ratio"
+            interpretation = "Population-averaged incidence rate ratio from GEE."
         for coefficient in result.coefficients:
             if coefficient.term.lower() in {"const", "intercept"}:
                 continue
@@ -1968,7 +1971,7 @@ def build_regression_effect_size_report(
     if result.model_type == "multinomial_logit":
         return _build_multinomial_logit_effects(result)
 
-    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
+    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
         return _build_gee_effects(result)
 
     if result.model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:

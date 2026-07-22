@@ -1003,7 +1003,7 @@ def _diagnostics_item(
             recommendation="Report within-panel VIF checks and entity-level residual diagnostics.",
         )
 
-    if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
+    if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
         evidence = (
@@ -1674,13 +1674,14 @@ def build_research_audit_report(
                     "scale": regression_result.fit_statistics.get("scale"),
                 }
             )
-        elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
+        elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
             metadata.update(
                 {
                     "group_variable": regression_result.metadata.get("group_variable"),
                     "cluster_count": regression_result.fit_statistics.get("cluster_count"),
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
                     "negative_binomial_alpha": regression_result.fit_statistics.get("negative_binomial_alpha"),
+                    "gamma_scale": regression_result.fit_statistics.get("gamma_scale"),
                 }
             )
         elif regression_result.model_type in {"log_binomial", "quasi_binomial", "modified_poisson", "linear_probability_model"}:

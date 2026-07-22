@@ -10,7 +10,7 @@ import pandas as pd
 
 from src.statistics.regression.base import RegressionResult
 
-GEE_DIAGNOSTIC_MODELS = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}
+GEE_DIAGNOSTIC_MODELS = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}
 
 
 @dataclass(slots=True)
@@ -59,6 +59,9 @@ def _variance_function(model_type: str, predicted: np.ndarray, scale: float) -> 
         alpha = max(float(scale), 1e-8)
         mean = np.clip(predicted, 1e-8, None)
         return mean + alpha * mean**2
+    if model_type == "gee_gamma":
+        mean = np.clip(predicted, 1e-8, None)
+        return max(float(scale), 1e-8) * mean**2
     return np.full_like(predicted, max(float(scale), 1e-8), dtype=float)
 
 
