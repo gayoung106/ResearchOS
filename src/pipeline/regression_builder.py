@@ -415,6 +415,17 @@ def register_regression_pipeline(
         "random_effects",
         "panel_random_effects",
     }
+    panel_cre_requested = requested_estimator in {
+        "panel_cre",
+        "correlated_random_effects",
+        "panel_correlated_random_effects",
+        "mundlak",
+    } or requested_model_type in {
+        "panel_cre",
+        "correlated_random_effects",
+        "panel_correlated_random_effects",
+        "mundlak",
+    }
     panel_be_requested = requested_estimator in {"panel_be", "between_effects", "panel_between_effects"} or requested_model_type in {
         "panel_be",
         "between_effects",
@@ -1038,7 +1049,7 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
-    elif panel_fe_requested or panel_re_requested or panel_be_requested or panel_fd_requested or panel_pooled_requested:
+    elif panel_fe_requested or panel_re_requested or panel_cre_requested or panel_be_requested or panel_fd_requested or panel_pooled_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -1092,6 +1103,8 @@ def register_regression_pipeline(
             if panel_fd_requested
             else "panel_between_effects"
             if panel_be_requested
+            else "panel_correlated_random_effects"
+            if panel_cre_requested
             else "panel_random_effects"
             if panel_re_requested
             else "panel_fixed_effects"
@@ -2260,6 +2273,7 @@ def register_regression_pipeline(
         "robust_regression",
         "tobit_regression",
         "panel_between_effects",
+        "panel_correlated_random_effects",
         "panel_first_difference",
         "panel_fixed_effects",
         "panel_pooled_ols",

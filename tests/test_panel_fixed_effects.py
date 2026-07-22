@@ -13,13 +13,16 @@ from src.pipeline.runtime import PipelineRuntime
 from src.reporting.regression import build_regression_publication_report
 from src.statistics.diagnostics.panel import (
     build_panel_diagnostics,
+    build_panel_hausman_diagnostic,
     panel_diagnostic_summary_to_dataframe,
     panel_entity_residuals_to_dataframe,
+    panel_hausman_to_dataframe,
     panel_residuals_to_dataframe,
 )
 from src.statistics.effects.regression import build_regression_effect_size_report
 from src.statistics.regression.panel import (
     fit_panel_between_effects,
+    fit_panel_correlated_random_effects,
     fit_panel_first_difference,
     fit_panel_fixed_effects,
     fit_panel_pooled_ols,
@@ -249,6 +252,143 @@ def test_panel_random_effects_diagnostics_and_pipeline_step(tmp_path: Path) -> N
     assert step_result.success is True
     assert len(step_result.output_files) == 4
     assert runtime.get_artifact("regression_diagnostics:main_model").model_type == "panel_random_effects"
+
+
+def test_fit_panel_correlated_random_effects_integrates_reporting_visualization_and_audit(
+    tmp_path: Path,
+) -> None:
+    data = _panel_data()
+    result = fit_panel_correlated_random_effects(
+        data,
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        entity_variable="entity",
+        time_variable="time",
+    )
+    effects = build_regression_effect_size_report(result)
+    report = build_regression_publication_report(result, effects)
+    visual = build_regression_visualizations(result, output_directory=tmp_path)
+    runtime = PipelineRuntime(dataframe=data)
+    runtime.set_artifact("regression_result:main_model", result)
+    audit = build_research_audit_report(runtime, model_id="main_model")
+
+    assert result.model_type == "panel_correlated_random_effects"
+    assert result.fit_statistics["entity_count"] == 12
+    assert result.fit_statistics["entity_mean_term_count"] == 2
+    assert result.metadata["entity_mean_terms"] == ["mean_x", "mean_z"]
+    assert any(effect.effect_type == "correlated_random_effects_standardized_beta" for effect in effects.effects)
+    assert "Panel correlated random effects used Mundlak entity means" in report.narrative
+    assert any("Mundlak" in note for note in report.notes)
+    assert {Path(path).name for path in visual.output_files} == {
+        "coefficient_forest.png",
+        "residuals_vs_fitted.png",
+        "residual_qq_plot.png",
+    }
+    assert audit.metadata["entity_count"] == 12
+    assert audit.metadata["entity_mean_term_count"] == 2
+
+
+def test_selector_routes_explicit_panel_correlated_random_effects() -> None:
+    result = fit_regression_by_level(
+        _panel_data(),
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        measurement_level="continuous",
+        model_type="panel_correlated_random_effects",
+        mixed_effects_options={"entity_variable": "entity", "time_variable": "time"},
+    )
+
+    assert result.model_type == "panel_correlated_random_effects"
+    assert result.metadata["entity_variable"] == "entity"
+    assert result.metadata["time_variable"] == "time"
+    assert result.metadata["mundlak_correction"] is True
+
+
+def test_builder_registers_explicit_panel_correlated_random_effects_pipeline(tmp_path: Path) -> None:
+    plan = AnalysisPlan.model_validate(
+        {
+            "variables": {
+                "dependent": ["y"],
+                "independent": ["x", "z"],
+            },
+            "analyses": {
+                "regression": {
+                    "enabled": True,
+                    "options": {"estimator": "panel_cre"},
+                },
+                "panel": {
+                    "enabled": True,
+                    "options": {"entity_variable": "entity", "time_variable": "time"},
+                },
+                "robustness": {"enabled": False},
+            },
+        }
+    )
+    variable_map = VariableMap(
+        variables={
+            "y": VariableDefinition(role="dependent", measurement_level="continuous"),
+            "x": VariableDefinition(role="independent", measurement_level="continuous"),
+            "z": VariableDefinition(role="independent", measurement_level="continuous"),
+            "entity": VariableDefinition(role="id", measurement_level="nominal"),
+            "time": VariableDefinition(role="time", measurement_level="continuous"),
+        }
+    )
+    orchestrator = ResearchOrchestrator(
+        context=ResearchContext(project_name="panel cre builder"),
+        working_directory=tmp_path,
+    )
+
+    registration = register_regression_pipeline(
+        orchestrator=orchestrator,
+        runtime=PipelineRuntime(),
+        analysis_plan=plan,
+        variable_map=variable_map,
+    )
+
+    assert registration.registered is True
+    assert registration.model_type == "panel_correlated_random_effects"
+    assert registration.measurement_level == "continuous"
+    assert registration.diagnostics_registered is True
+    assert registration.effect_size_registered is True
+    assert registration.reporting_registered is True
+    assert registration.visualization_registered is True
+    assert registration.audit_registered is True
+
+
+def test_panel_hausman_diagnostic_integrates_audit() -> None:
+    data = _panel_data()
+    fixed = fit_panel_fixed_effects(
+        data,
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        entity_variable="entity",
+        time_variable="time",
+        model_id="main_model",
+    )
+    random = fit_panel_random_effects(
+        data,
+        dependent_variable="y",
+        independent_variables=["x", "z"],
+        entity_variable="entity",
+        time_variable="time",
+        model_id="random_model",
+    )
+    hausman = build_panel_hausman_diagnostic(fixed, random)
+    runtime = PipelineRuntime(dataframe=data)
+    runtime.set_artifact("regression_result:main_model", fixed)
+    runtime.set_artifact("panel_hausman:main_model", hausman)
+    audit = build_research_audit_report(runtime, model_id="main_model")
+
+    table = panel_hausman_to_dataframe(hausman)
+
+    assert hausman.fixed_model_id == "main_model"
+    assert hausman.random_model_id == "random_model"
+    assert hausman.shared_terms == ["x", "z"]
+    assert hausman.degrees_of_freedom == 2
+    assert 0.0 <= hausman.p_value <= 1.0
+    assert table.loc[0, "status"] in {"PASS", "WARNING"}
+    assert any("Panel Hausman diagnostic" in item.evidence for item in audit.items)
+    assert audit.metadata["panel_hausman_p_value"] == hausman.p_value
 
 
 def test_builder_registers_explicit_panel_random_effects_pipeline(tmp_path: Path) -> None:

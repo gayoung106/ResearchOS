@@ -292,6 +292,7 @@ def write_korean_results_narrative(
         "ols": "OLS 회귀분석",
         "weighted_least_squares": "Weighted least squares regression",
         "panel_between_effects": "Panel between-effects regression",
+        "panel_correlated_random_effects": "Panel correlated random-effects regression",
         "panel_first_difference": "Panel first-difference regression",
         "panel_pooled_ols": "Panel pooled OLS",
         "panel_random_effects": "Panel random-effects regression",
@@ -360,7 +361,7 @@ def write_korean_results_narrative(
         direction = _direction_text(coefficient.estimate)
         p_text = _format_p_value(coefficient.p_value)
 
-        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
+        if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols", "mixed_random_intercept", "mixed_random_slope", "gee_gaussian"}:
             beta = (
                 effect_lookup.get(
                     (
@@ -784,6 +785,28 @@ def write_korean_results_narrative(
             sentences.append(f"The source panel covered {int(time_count)} periods defined by {time_variable}.")
         if between_r_squared is not None:
             sentences.append(f"Between R-squared was {float(between_r_squared):.3f}.")
+
+    elif regression_result.model_type == "panel_correlated_random_effects":
+        entity_variable = regression_result.metadata.get("entity_variable")
+        time_variable = regression_result.metadata.get("time_variable")
+        entity_count = regression_result.fit_statistics.get("entity_count")
+        time_count = regression_result.fit_statistics.get("time_period_count")
+        marginal_r_squared = regression_result.fit_statistics.get("marginal_r_squared")
+        conditional_r_squared = regression_result.fit_statistics.get("conditional_r_squared")
+        mean_terms = regression_result.metadata.get("entity_mean_terms") or []
+        if entity_count is not None and entity_variable is not None:
+            sentences.append(
+                f"Panel correlated random effects used Mundlak entity means for {int(entity_count)} entities defined by {entity_variable}."
+            )
+        if time_count is not None and time_variable is not None:
+            sentences.append(f"The correlated random-effects panel covered {int(time_count)} periods defined by {time_variable}.")
+        if mean_terms:
+            sentences.append("Entity-mean Mundlak terms were " + ", ".join(str(term) for term in mean_terms) + ".")
+        if marginal_r_squared is not None and conditional_r_squared is not None:
+            sentences.append(
+                f"Marginal R-squared was {float(marginal_r_squared):.3f}; "
+                f"conditional R-squared was {float(conditional_r_squared):.3f}."
+            )
 
     elif regression_result.model_type == "panel_random_effects":
         entity_variable = regression_result.metadata.get("entity_variable")
@@ -1278,7 +1301,7 @@ def build_regression_publication_report(
         "* p<.05, ** p<.01, *** p<.001.",
     ]
 
-    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+    if regression_result.model_type in {"ols", "weighted_least_squares", "heckman_selection", "iv_2sls_regression", "regularized_regression", "robust_regression", "quantile_regression", "tobit_regression", "panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         notes.append("OLS의 표준화 β와 부분 효과크기를 함께 제시한다.")
     elif regression_result.model_type in {
         "binary_logit",
@@ -1404,6 +1427,9 @@ def build_regression_publication_report(
 
     if regression_result.model_type == "panel_random_effects":
         notes.append("Panel random-effects models report population coefficients with entity-level random intercept variance.")
+
+    if regression_result.model_type == "panel_correlated_random_effects":
+        notes.append("Panel correlated random-effects models include entity-mean Mundlak terms to relax random-effects exogeneity.")
 
     if regression_result.model_type == "panel_between_effects":
         notes.append("Panel between-effects models report coefficients from entity-level means.")

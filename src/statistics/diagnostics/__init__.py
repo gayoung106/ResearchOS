@@ -57,6 +57,17 @@ from src.statistics.diagnostics.ordered_logit import (
     ordered_predictions_to_dataframe,
     ordered_thresholds_to_dataframe,
 )
+from src.statistics.diagnostics.panel import (
+    PanelDiagnosticsReport,
+    PanelHausmanDiagnostic,
+    build_panel_diagnostics,
+    build_panel_hausman_diagnostic,
+    panel_diagnostic_summary_to_dataframe,
+    panel_entity_residuals_to_dataframe,
+    panel_hausman_to_dataframe,
+    panel_multicollinearity_to_dataframe,
+    panel_residuals_to_dataframe,
+)
 from src.statistics.diagnostics.piecewise_exponential import (
     PiecewiseExponentialDiagnosticsReport,
     build_piecewise_exponential_diagnostics,
@@ -93,6 +104,15 @@ __all__ = [
     "MixedEffectsDiagnosticsReport",
     "OLSDiagnosticsReport",
     "PiecewiseExponentialDiagnosticsReport",
+    "panel_residuals_to_dataframe",
+    "panel_multicollinearity_to_dataframe",
+    "panel_hausman_to_dataframe",
+    "panel_entity_residuals_to_dataframe",
+    "panel_diagnostic_summary_to_dataframe",
+    "build_panel_hausman_diagnostic",
+    "build_panel_diagnostics",
+    "PanelHausmanDiagnostic",
+    "PanelDiagnosticsReport",
     "WeibullPHDiagnosticsReport",
     "OrderedClassificationMetrics",
     "OrderedLogitDiagnosticsReport",

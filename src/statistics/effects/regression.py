@@ -825,6 +825,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
                     if result.model_type == "panel_first_difference"
                     else "pooled_standardized_beta"
                     if result.model_type == "panel_pooled_ols"
+                    else "correlated_random_effects_standardized_beta"
+                    if result.model_type == "panel_correlated_random_effects"
                     else "random_effects_standardized_beta"
                 ),
                 estimate=estimate,
@@ -843,6 +845,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
                     if result.model_type == "panel_first_difference"
                     else "Standardized pooled panel OLS coefficient."
                     if result.model_type == "panel_pooled_ols"
+                    else "Standardized coefficient from a Mundlak correlated random-effects panel model."
+                    if result.model_type == "panel_correlated_random_effects"
                     else "Standardized population coefficient from a random-effects panel model."
                 ),
             )
@@ -866,6 +870,7 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
             "adjusted_between_r_squared": result.fit_statistics.get("adjusted_between_r_squared"),
             "conditional_r_squared": result.fit_statistics.get("conditional_r_squared"),
             "random_intercept_variance": result.fit_statistics.get("random_intercept_variance"),
+            "entity_mean_term_count": result.fit_statistics.get("entity_mean_term_count"),
         },
         warnings=warnings,
         metadata={
@@ -1957,7 +1962,7 @@ def build_regression_effect_size_report(
     if result.model_type == "tobit_regression":
         return _build_tobit_effects(result)
 
-    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         return _build_panel_fixed_effects(result)
 
     if result.model_type == "log_binomial":

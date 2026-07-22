@@ -574,7 +574,7 @@ def _regression_item(
             recommendation="Report Tobit censoring limits, censored counts, and latent-scale estimation method.",
         )
 
-    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         entity_variable = result.metadata.get("entity_variable", "unknown")
         time_variable = result.metadata.get("time_variable")
         entity_count = result.fit_statistics.get("entity_count", "unknown")
@@ -1048,6 +1048,44 @@ def _diagnostics_item(
     )
 
 
+def _panel_hausman_item(
+    runtime: PipelineRuntime,
+    model_id: str,
+) -> AuditItem | None:
+    key = f"panel_hausman:{model_id}"
+    if not _artifact_exists(runtime, key):
+        return None
+
+    report = runtime.artifacts[key]
+    warning_count = len(getattr(report, "warnings", []))
+    status = getattr(report, "status", "WARNING")
+    if warning_count and status == "PASS":
+        status = "WARNING"
+    score = 8 if status == "PASS" else 6
+    if warning_count:
+        score = min(score, 6)
+    evidence = (
+        f"Panel Hausman diagnostic, FE={getattr(report, 'fixed_model_id', 'unknown')}, "
+        f"RE={getattr(report, 'random_model_id', 'unknown')}, "
+        f"chi-square={getattr(report, 'statistic', 'unknown')}, "
+        f"df={getattr(report, 'degrees_of_freedom', 'unknown')}, "
+        f"p-value={getattr(report, 'p_value', 'unknown')}, warnings={warning_count}"
+    )
+    return AuditItem(
+        category="Model diagnostics",
+        item="Panel Hausman comparison",
+        status=status,
+        score=score,
+        maximum_score=8,
+        evidence=evidence,
+        recommendation=getattr(
+            report,
+            "recommendation",
+            "Report FE/RE Hausman comparison when choosing between panel estimators.",
+        ),
+    )
+
+
 def _robustness_item(
     runtime: PipelineRuntime,
     model_id: str,
@@ -1353,7 +1391,7 @@ def _effect_size_item(
             f"censoring rate={model_effects.get('censoring_rate', 'unknown')}"
         )
         recommendation = "Interpret latent standardized coefficients and observed-scale marginal effects."
-    elif getattr(report, "model_type", None) in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+    elif getattr(report, "model_type", None) in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
         model_effects = getattr(report, "model_effects", {})
         panel_r_squared = model_effects.get(
             "within_r_squared",
@@ -1468,11 +1506,18 @@ def build_research_audit_report(
         _reliability_item(runtime),
         _regression_item(runtime, model_id),
         _diagnostics_item(runtime, model_id),
-        _robustness_item(runtime, model_id),
-        _effect_size_item(runtime, model_id),
-        _reporting_item(runtime, model_id),
-        _visualization_item(runtime, model_id),
     ]
+    panel_hausman_item = _panel_hausman_item(runtime, model_id)
+    if panel_hausman_item is not None:
+        items.append(panel_hausman_item)
+    items.extend(
+        [
+            _robustness_item(runtime, model_id),
+            _effect_size_item(runtime, model_id),
+            _reporting_item(runtime, model_id),
+            _visualization_item(runtime, model_id),
+        ]
+    )
 
     total_score = sum(item.score for item in items)
     maximum_score = sum(item.maximum_score for item in items)
@@ -1494,6 +1539,17 @@ def build_research_audit_report(
         "passed_item_count": sum(item.status == "PASS" for item in items),
         "not_applicable_item_count": sum(item.status == "NOT_APPLICABLE" for item in items),
     }
+    panel_hausman = runtime.artifacts.get(f"panel_hausman:{model_id}")
+    if panel_hausman is not None:
+        metadata.update(
+            {
+                "panel_hausman_statistic": getattr(panel_hausman, "statistic", None),
+                "panel_hausman_degrees_of_freedom": getattr(panel_hausman, "degrees_of_freedom", None),
+                "panel_hausman_p_value": getattr(panel_hausman, "p_value", None),
+                "panel_hausman_status": getattr(panel_hausman, "status", None),
+            }
+        )
+
     if regression_result is not None:
         metadata["model_type"] = regression_result.model_type
         metadata["selected_survival_model"] = regression_result.metadata.get("selected_survival_model")
@@ -1822,7 +1878,7 @@ def build_research_audit_report(
                     "sigma": regression_result.fit_statistics.get("sigma"),
                 }
             )
-        elif regression_result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
+        elif regression_result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_correlated_random_effects", "panel_between_effects", "panel_first_difference", "panel_pooled_ols"}:
             metadata.update(
                 {
                     "entity_variable": regression_result.metadata.get("entity_variable"),
@@ -1840,6 +1896,7 @@ def build_research_audit_report(
                     "adjusted_between_r_squared": regression_result.fit_statistics.get("adjusted_between_r_squared"),
                     "conditional_r_squared": regression_result.fit_statistics.get("conditional_r_squared"),
                     "random_intercept_variance": regression_result.fit_statistics.get("random_intercept_variance"),
+                    "entity_mean_term_count": regression_result.fit_statistics.get("entity_mean_term_count"),
                 }
             )
         elif _is_mixed_effects_model(runtime, model_id):
