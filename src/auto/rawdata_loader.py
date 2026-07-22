@@ -65,8 +65,8 @@ def _candidate_score(dataframe: pd.DataFrame) -> float:
     missing_rate = float(dataframe.isna().mean().mean())
     duplicate_count = int(dataframe.duplicated().sum())
     usable_columns = sum(dataframe[column].nunique(dropna=True) > 1 for column in dataframe.columns)
-    return float(non_missing + len(dataframe) * 10 + len(dataframe.columns) * 5 + usable_columns * 25)
-    - missing_rate * 100.0 - duplicate_count * 2.0
+    base_score = non_missing + len(dataframe) * 10 + len(dataframe.columns) * 5 + usable_columns * 25
+    return float(base_score - missing_rate * 100.0 - duplicate_count * 2.0)
 
 
 def _summarize_candidate(
