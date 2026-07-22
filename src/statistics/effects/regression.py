@@ -1782,6 +1782,7 @@ def build_regression_effect_size_report(
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "hurdle_poisson",
+        "hurdle_negative_binomial",
         "mixed_poisson_random_intercept",
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",

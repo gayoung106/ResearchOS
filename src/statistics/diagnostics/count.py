@@ -18,6 +18,7 @@ _COUNT_DIAGNOSTIC_MODELS = {
     "zero_inflated_poisson",
     "zero_inflated_negative_binomial",
     "hurdle_poisson",
+    "hurdle_negative_binomial",
     "mixed_poisson_random_intercept",
     "mixed_poisson_random_slope",
     "mixed_poisson_three_level",
@@ -187,6 +188,7 @@ def _nb2_alpha(
     if result.model_type not in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        "hurdle_negative_binomial",
         *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
         return 0.0
@@ -319,6 +321,7 @@ def calculate_count_predictions(
     if result.model_type in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        "hurdle_negative_binomial",
         *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
         deviance_residual = _negative_binomial_deviance_residuals(
@@ -346,6 +349,7 @@ def calculate_count_predictions(
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "hurdle_poisson",
+        "hurdle_negative_binomial",
     }:
         predicted_zero_probability = np.asarray(
             fitted.predict(which="prob-zero"),
@@ -469,6 +473,7 @@ def build_count_diagnostics(
     elif result.model_type in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        "hurdle_negative_binomial",
         *_MIXED_NEGATIVE_BINOMIAL_MODELS,
     }:
         summary["alpha"] = result.fit_statistics.get(

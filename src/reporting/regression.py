@@ -310,6 +310,7 @@ def write_korean_results_narrative(
         "zero_inflated_poisson": "영과잉 포아송 회귀분석",
         "zero_inflated_negative_binomial": "영과잉 음이항 회귀분석",
         "hurdle_poisson": "Hurdle Poisson regression",
+        "hurdle_negative_binomial": "Hurdle negative binomial regression",
         "mixed_random_intercept": "Random Intercept 혼합효과모형",
         "mixed_binary_logit_random_intercept": "Random Intercept 혼합 이항 로지스틱 회귀분석",
         "mixed_binary_logit_random_slope": "Random Slope 혼합 이항 로지스틱 회귀분석",
@@ -527,6 +528,7 @@ def write_korean_results_narrative(
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
             "hurdle_poisson",
+            "hurdle_negative_binomial",
             "mixed_poisson_random_intercept",
             "mixed_poisson_random_slope",
             "mixed_poisson_three_level",
@@ -1122,6 +1124,7 @@ def write_korean_results_narrative(
     elif regression_result.model_type in {
         "negative_binomial",
         "zero_inflated_negative_binomial",
+        "hurdle_negative_binomial",
     }:
         alpha = regression_result.fit_statistics.get("alpha")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_mcfadden")
@@ -1174,6 +1177,8 @@ def build_regression_publication_report(
         "negative_binomial",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
+        "hurdle_poisson",
+        "hurdle_negative_binomial",
         "mixed_poisson_random_intercept",
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",

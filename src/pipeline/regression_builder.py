@@ -499,6 +499,21 @@ def register_regression_pipeline(
         "log_logistic_aft",
         "log-logistic-aft",
     }
+    hurdle_negative_binomial_requested = requested_estimator in {
+        "hurdle_nb",
+        "hurdle-nb",
+        "hurdle_negative_binomial",
+        "hurdle-negative-binomial",
+        "negative_binomial_hurdle",
+        "negative-binomial-hurdle",
+    } or requested_model_type in {
+        "hurdle_nb",
+        "hurdle-nb",
+        "hurdle_negative_binomial",
+        "hurdle-negative-binomial",
+        "negative_binomial_hurdle",
+        "negative-binomial-hurdle",
+    }
     hurdle_poisson_requested = requested_estimator in {
         "hurdle",
         "hurdle_poisson",
@@ -1517,6 +1532,23 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 1000)
             ),
         }
+    elif hurdle_negative_binomial_requested:
+        if measurement_level != "count":
+            return not_registered(
+                "Hurdle negative binomial supports count dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "hurdle_negative_binomial"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 300)
+            ),
+        }
     elif hurdle_poisson_requested:
         if measurement_level != "count":
             return not_registered(
@@ -2022,6 +2054,7 @@ def register_regression_pipeline(
         "poisson",
         "negative_binomial",
         "hurdle_poisson",
+        "hurdle_negative_binomial",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "count_auto",

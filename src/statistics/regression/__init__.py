@@ -24,6 +24,7 @@ from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
 from src.statistics.regression.heckman import fit_heckman_selection
+from src.statistics.regression.hurdle_negative_binomial import fit_hurdle_negative_binomial
 from src.statistics.regression.hurdle_poisson import fit_hurdle_poisson
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
 from src.statistics.regression.iv import fit_iv_2sls_regression
@@ -120,6 +121,7 @@ __all__ = [
     "fit_gamma_regression",
     "fit_heckman_selection",
     "fit_hurdle_poisson",
+    "fit_hurdle_negative_binomial",
     "fit_inverse_gaussian_regression",
     "fit_iv_2sls_regression",
     "fit_log_binomial",

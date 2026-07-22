@@ -1645,6 +1645,7 @@ def build_research_audit_report(
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
             "hurdle_poisson",
+            "hurdle_negative_binomial",
         }:
             metadata.update(
                 {

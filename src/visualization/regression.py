@@ -756,6 +756,7 @@ def build_regression_visualizations(
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "hurdle_poisson",
+        "hurdle_negative_binomial",
     }:
         plot_name = (
             "zero_inflated_observed_vs_predicted.png"
