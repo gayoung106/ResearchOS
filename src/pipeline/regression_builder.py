@@ -420,6 +420,11 @@ def register_regression_pipeline(
         "between_effects",
         "panel_between_effects",
     }
+    panel_fd_requested = requested_estimator in {"panel_fd", "first_difference", "panel_first_difference"} or requested_model_type in {
+        "panel_fd",
+        "first_difference",
+        "panel_first_difference",
+    }
     beta_requested = requested_estimator in {"beta", "beta_regression"} or requested_model_type in {
         "beta",
         "beta_regression",
@@ -1028,7 +1033,7 @@ def register_regression_pipeline(
                 "max_iterations", regression_options.get("maximum_iterations", 300)
             ),
         }
-    elif panel_fe_requested or panel_re_requested or panel_be_requested:
+    elif panel_fe_requested or panel_re_requested or panel_be_requested or panel_fd_requested:
         if measurement_level != "continuous":
             return not_registered(
                 "Panel fixed effects supports continuous dependent variables.",
@@ -1056,6 +1061,14 @@ def register_regression_pipeline(
                 fixed_effects=fixed_effects,
                 measurement_level=measurement_level,
             )
+        if panel_fd_requested and not time_variable:
+            return not_registered(
+                "Panel first difference requires time_variable.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
         missing_panel_variables = [
             variable for variable in [entity_variable, time_variable] if variable and variable not in variable_map.variables
         ]
@@ -1068,17 +1081,21 @@ def register_regression_pipeline(
                 measurement_level=measurement_level,
             )
         model_type = (
-            "panel_between_effects"
+            "panel_first_difference"
+            if panel_fd_requested
+            else "panel_between_effects"
             if panel_be_requested
             else "panel_random_effects"
             if panel_re_requested
             else "panel_fixed_effects"
         )
+        default_covariance = "cluster_entity" if model_type == "panel_fixed_effects" else "HC3"
         multilevel_options = {
             "entity_variable": entity_variable,
             "time_variable": time_variable,
-            "covariance_type": regression_options.get("covariance_type", "cluster_entity"),
+            "covariance_type": regression_options.get("covariance_type", default_covariance),
             "reml": regression_options.get("reml", False),
+            "add_intercept": regression_options.get("add_intercept", False),
             "max_iterations": regression_options.get("max_iterations", regression_options.get("maximum_iterations", 200)),
         }
     elif beta_requested:
@@ -2236,6 +2253,7 @@ def register_regression_pipeline(
         "robust_regression",
         "tobit_regression",
         "panel_between_effects",
+        "panel_first_difference",
         "panel_fixed_effects",
         "panel_random_effects",
         "parametric_survival_auto",

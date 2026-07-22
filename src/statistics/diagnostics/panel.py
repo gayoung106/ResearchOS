@@ -37,7 +37,7 @@ class PanelDiagnosticsReport:
 
 
 def _validate_panel_result(result: RegressionResult) -> None:
-    if result.model_type not in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects"}:
+    if result.model_type not in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference"}:
         raise ValueError("Panel diagnostics require a panel regression result.")
 
 
@@ -128,6 +128,8 @@ def build_panel_diagnostics(result: RegressionResult) -> PanelDiagnosticsReport:
         "adjusted_within_r_squared": result.fit_statistics.get("adjusted_within_r_squared"),
         "marginal_r_squared": result.fit_statistics.get("marginal_r_squared"),
         "between_r_squared": result.fit_statistics.get("between_r_squared"),
+        "first_difference_r_squared": result.fit_statistics.get("first_difference_r_squared"),
+        "adjusted_first_difference_r_squared": result.fit_statistics.get("adjusted_first_difference_r_squared"),
         "adjusted_between_r_squared": result.fit_statistics.get("adjusted_between_r_squared"),
         "conditional_r_squared": result.fit_statistics.get("conditional_r_squared"),
         "singleton_entity_count": singleton_count,

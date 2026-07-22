@@ -420,3 +420,143 @@ def fit_panel_between_effects(
         },
         raw_result=fitted,
     )
+
+
+def fit_panel_first_difference(
+    dataframe: pd.DataFrame,
+    *,
+    dependent_variable: str,
+    independent_variables: list[str],
+    entity_variable: str,
+    time_variable: str,
+    model_id: str = "panel_first_difference_1",
+    covariance_type: str = "HC3",
+    add_intercept: bool = False,
+) -> RegressionResult:
+    """Fit a first-difference panel regression using within-entity changes."""
+    if covariance_type not in {"nonrobust", "HC3", "cluster_entity"}:
+        raise ValueError("Panel first difference covariance_type must be nonrobust, HC3, or cluster_entity.")
+    independent_variables = list(dict.fromkeys(independent_variables))
+    validate_model_variables(dataframe, dependent_variable, independent_variables)
+    if entity_variable not in dataframe.columns:
+        raise KeyError("Panel entity variable is missing from dataframe: " + entity_variable)
+    if time_variable not in dataframe.columns:
+        raise KeyError("Panel first difference requires a time variable in the dataframe: " + time_variable)
+    if entity_variable == dependent_variable or entity_variable in independent_variables:
+        raise ValueError("Panel entity variable cannot duplicate the outcome or predictors.")
+    if time_variable == dependent_variable or time_variable in independent_variables:
+        raise ValueError("Panel time variable cannot duplicate the outcome or predictors.")
+
+    requested = [dependent_variable, *independent_variables, entity_variable, time_variable]
+    work = dataframe[requested].copy()
+    work[dependent_variable] = pd.to_numeric(work[dependent_variable], errors="coerce")
+    for variable in independent_variables:
+        work[variable] = pd.to_numeric(work[variable], errors="coerce")
+    work = work.dropna().sort_values([entity_variable, time_variable])
+    if work.empty:
+        raise ValueError("Panel first difference has no complete observations to estimate.")
+
+    entity_counts = work.groupby(entity_variable).size()
+    if len(entity_counts) <= 1:
+        raise ValueError("Panel first difference requires at least two entities.")
+    differenced = work.copy()
+    for variable in [dependent_variable, *independent_variables]:
+        differenced[variable] = work.groupby(entity_variable, sort=False)[variable].diff()
+    differenced = differenced.dropna(subset=[dependent_variable, *independent_variables])
+    if differenced.empty:
+        raise ValueError("Panel first difference requires at least two complete observations per entity.")
+    used_entities = differenced[entity_variable].nunique()
+    if used_entities <= 1:
+        raise ValueError("Panel first difference requires differenced observations from at least two entities.")
+    if differenced[dependent_variable].nunique() <= 1:
+        raise ValueError("First-differenced dependent variable has no variation.")
+    constant_predictors = [
+        variable for variable in independent_variables if np.isclose(differenced[variable].var(ddof=1), 0.0)
+    ]
+    if constant_predictors:
+        raise ValueError(
+            "Predictors with no first-difference variation cannot be estimated: " + ", ".join(constant_predictors)
+        )
+
+    outcome = differenced[dependent_variable].to_numpy(dtype=float)
+    predictors = differenced[independent_variables].copy()
+    if add_intercept:
+        predictors = sm.add_constant(predictors, has_constant="add")
+    model = sm.OLS(outcome, predictors)
+    if covariance_type == "cluster_entity":
+        fitted = model.fit(cov_type="cluster", cov_kwds={"groups": differenced[entity_variable].to_numpy()})
+        standard_error_type = "cluster_entity"
+    elif covariance_type == "HC3":
+        fitted = model.fit(cov_type="HC3")
+        standard_error_type = "HC3"
+    else:
+        fitted = model.fit()
+        standard_error_type = "nonrobust"
+    confidence_intervals = fitted.conf_int()
+
+    coefficients: list[ModelCoefficient] = []
+    for term in fitted.params.index:
+        coefficients.append(
+            ModelCoefficient(
+                term=str(term),
+                estimate=float(fitted.params[term]),
+                standard_error=float(fitted.bse[term]),
+                statistic=float(fitted.tvalues[term]),
+                p_value=float(fitted.pvalues[term]),
+                confidence_interval_lower=float(confidence_intervals.loc[term, 0]),
+                confidence_interval_upper=float(confidence_intervals.loc[term, 1]),
+            )
+        )
+
+    fitted_values = np.asarray(fitted.fittedvalues, dtype=float)
+    residuals = np.asarray(fitted.resid, dtype=float)
+    singleton_count = int((entity_counts == 1).sum())
+    time_count = int(work[time_variable].nunique())
+    differenced_entity_counts = differenced.groupby(entity_variable).size()
+    warnings: list[str] = []
+    dropped_entity_count = int(len(entity_counts) - used_entities)
+    if dropped_entity_count:
+        warnings.append(f"{dropped_entity_count} entities were dropped because they had no differenced observations.")
+    if len(differenced) <= len(predictors.columns) + 1:
+        warnings.append("The first-difference sample size is small relative to the number of predictors.")
+
+    return RegressionResult(
+        model_id=model_id,
+        model_type="panel_first_difference",
+        dependent_variable=dependent_variable,
+        independent_variables=independent_variables,
+        sample_size=int(len(differenced)),
+        coefficients=coefficients,
+        fit_statistics={
+            "first_difference_r_squared": float(fitted.rsquared),
+            "adjusted_first_difference_r_squared": float(fitted.rsquared_adj),
+            "entity_count": int(len(entity_counts)),
+            "differenced_entity_count": int(used_entities),
+            "time_period_count": time_count,
+            "singleton_entity_count": singleton_count,
+            "average_differenced_observations_per_entity": float(differenced_entity_counts.mean()),
+            "overall_observation_count": int(len(work)),
+            "residual_degrees_of_freedom": float(fitted.df_resid),
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+        },
+        converged=True,
+        standard_error_type=standard_error_type,
+        warnings=warnings,
+        metadata={
+            "entity_variable": entity_variable,
+            "time_variable": time_variable,
+            "add_intercept": add_intercept,
+            "row_labels": [str(index) for index in differenced.index],
+            "entity_labels": differenced[entity_variable].astype(str).tolist(),
+            "time_labels": differenced[time_variable].astype(str).tolist(),
+            "within_outcome": outcome.tolist(),
+            "within_predictors": differenced[independent_variables].to_numpy(dtype=float).tolist(),
+            "within_predictor_names": independent_variables,
+            "within_fitted_values": fitted_values.tolist(),
+            "within_residuals": residuals.tolist(),
+            "first_difference": True,
+            "dropped_case_count": len(dataframe) - len(work),
+        },
+        raw_result=fitted,
+    )

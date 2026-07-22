@@ -59,6 +59,7 @@ from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import (
     fit_panel_between_effects,
+    fit_panel_first_difference,
     fit_panel_fixed_effects,
     fit_panel_random_effects,
 )
@@ -105,6 +106,7 @@ __all__ = [
     "fit_ordered_logit",
     "fit_ordered_probit",
     "fit_panel_between_effects",
+    "fit_panel_first_difference",
     "fit_panel_fixed_effects",
     "fit_panel_random_effects",
     "fit_parametric_survival_regression",

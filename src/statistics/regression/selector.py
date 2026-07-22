@@ -62,6 +62,7 @@ from src.statistics.regression.ordered_logit import fit_ordered_logit
 from src.statistics.regression.ordered_probit import fit_ordered_probit
 from src.statistics.regression.panel import (
     fit_panel_between_effects,
+    fit_panel_first_difference,
     fit_panel_fixed_effects,
     fit_panel_random_effects,
 )
@@ -441,6 +442,25 @@ def fit_regression_by_level(
             time_variable=time_variable,
             model_id=model_id,
             covariance_type=str(options.get("covariance_type", "cluster_entity")),
+        )
+
+    if model_type == "panel_first_difference":
+        options = mixed_effects_options or {}
+        entity_variable = str(options.get("entity_variable", options.get("id_variable", ""))).strip()
+        time_variable = str(options.get("time_variable", "")).strip()
+        if not entity_variable:
+            raise ValueError("Panel first difference requires entity_variable.")
+        if not time_variable:
+            raise ValueError("Panel first difference requires time_variable.")
+        return fit_panel_first_difference(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            entity_variable=entity_variable,
+            time_variable=time_variable,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", False)),
         )
 
     if model_type == "panel_between_effects":

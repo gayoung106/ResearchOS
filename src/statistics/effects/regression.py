@@ -821,6 +821,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
                     if result.model_type == "panel_fixed_effects"
                     else "between_standardized_beta"
                     if result.model_type == "panel_between_effects"
+                    else "first_difference_standardized_beta"
+                    if result.model_type == "panel_first_difference"
                     else "random_effects_standardized_beta"
                 ),
                 estimate=estimate,
@@ -835,6 +837,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
                     if result.model_type == "panel_fixed_effects"
                     else "Standardized between-entity coefficient from entity-level means."
                     if result.model_type == "panel_between_effects"
+                    else "Standardized first-difference coefficient from within-entity changes."
+                    if result.model_type == "panel_first_difference"
                     else "Standardized population coefficient from a random-effects panel model."
                 ),
             )
@@ -851,6 +855,8 @@ def _build_panel_fixed_effects(result: RegressionResult) -> EffectSizeReport:
             "time_period_count": result.fit_statistics.get("time_period_count"),
             "marginal_r_squared": result.fit_statistics.get("marginal_r_squared"),
             "between_r_squared": result.fit_statistics.get("between_r_squared"),
+            "first_difference_r_squared": result.fit_statistics.get("first_difference_r_squared"),
+            "adjusted_first_difference_r_squared": result.fit_statistics.get("adjusted_first_difference_r_squared"),
             "adjusted_between_r_squared": result.fit_statistics.get("adjusted_between_r_squared"),
             "conditional_r_squared": result.fit_statistics.get("conditional_r_squared"),
             "random_intercept_variance": result.fit_statistics.get("random_intercept_variance"),
@@ -1945,7 +1951,7 @@ def build_regression_effect_size_report(
     if result.model_type == "tobit_regression":
         return _build_tobit_effects(result)
 
-    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects"}:
+    if result.model_type in {"panel_fixed_effects", "panel_random_effects", "panel_between_effects", "panel_first_difference"}:
         return _build_panel_fixed_effects(result)
 
     if result.model_type == "log_binomial":
