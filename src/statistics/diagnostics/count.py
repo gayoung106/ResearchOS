@@ -17,6 +17,7 @@ _COUNT_DIAGNOSTIC_MODELS = {
     "negative_binomial",
     "zero_inflated_poisson",
     "zero_inflated_negative_binomial",
+    "hurdle_poisson",
     "mixed_poisson_random_intercept",
     "mixed_poisson_random_slope",
     "mixed_poisson_three_level",
@@ -344,6 +345,7 @@ def calculate_count_predictions(
     if result.model_type in {
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
+        "hurdle_poisson",
     }:
         predicted_zero_probability = np.asarray(
             fitted.predict(which="prob-zero"),
@@ -432,6 +434,7 @@ def build_count_diagnostics(
     if result.model_type in {
         "poisson",
         "zero_inflated_poisson",
+        "hurdle_poisson",
     }:
         dispersion_ratio = result.fit_statistics.get("dispersion_ratio")
         if (

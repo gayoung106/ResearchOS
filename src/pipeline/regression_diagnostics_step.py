@@ -400,6 +400,7 @@ class RegressionDiagnosticsStep(PipelineStep):
             "negative_binomial",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
+            "hurdle_poisson",
             "mixed_poisson_random_intercept",
             "mixed_poisson_random_slope",
             "mixed_poisson_three_level",

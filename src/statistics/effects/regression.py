@@ -1404,8 +1404,12 @@ def _build_count_effects(
     effects: list[EffectSizeResult] = []
 
     for coefficient in result.coefficients:
-        if coefficient.term.lower() in {"const", "intercept"} or coefficient.term.startswith(
-            "inflate_"
+        term_lower = coefficient.term.lower()
+        if (
+            term_lower in {"const", "intercept"}
+            or term_lower.endswith(":const")
+            or term_lower.endswith(":intercept")
+            or coefficient.term.startswith("inflate_")
         ):
             continue
 
@@ -1777,6 +1781,7 @@ def build_regression_effect_size_report(
         "negative_binomial",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
+        "hurdle_poisson",
         "mixed_poisson_random_intercept",
         "mixed_poisson_random_slope",
         "mixed_poisson_three_level",

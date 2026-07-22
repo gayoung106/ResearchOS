@@ -1644,6 +1644,7 @@ def build_research_audit_report(
             "negative_binomial",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
+            "hurdle_poisson",
         }:
             metadata.update(
                 {
@@ -1653,6 +1654,8 @@ def build_research_audit_report(
                     "alpha": regression_result.fit_statistics.get("alpha"),
                     "selected_count_model": regression_result.metadata.get("selected_count_model"),
                     "inflation_model": regression_result.metadata.get("inflation_model"),
+                    "hurdle_model": regression_result.metadata.get("hurdle_model"),
+                    "count_model": regression_result.metadata.get("count_model"),
                 }
             )
         elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:

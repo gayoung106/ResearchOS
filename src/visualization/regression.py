@@ -751,10 +751,18 @@ def build_regression_visualizations(
         _plot_observed_vs_predicted(regression_result, observed_path)
         output_files.append(str(observed_path))
     elif regression_result.model_type in {
+        "poisson",
+        "negative_binomial",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
+        "hurdle_poisson",
     }:
-        observed_path = output_directory / "zero_inflated_observed_vs_predicted.png"
+        plot_name = (
+            "zero_inflated_observed_vs_predicted.png"
+            if regression_result.model_type.startswith("zero_inflated")
+            else "count_observed_vs_predicted.png"
+        )
+        observed_path = output_directory / plot_name
         _plot_count_observed_vs_predicted(regression_result, observed_path)
         output_files.append(str(observed_path))
     elif regression_result.model_type in {"cox_proportional_hazards", "stratified_cox", "left_truncated_cox", "cause_specific_cox", "clustered_cox", "time_varying_cox"}:

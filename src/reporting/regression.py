@@ -309,6 +309,7 @@ def write_korean_results_narrative(
         "negative_binomial": "음이항 회귀분석",
         "zero_inflated_poisson": "영과잉 포아송 회귀분석",
         "zero_inflated_negative_binomial": "영과잉 음이항 회귀분석",
+        "hurdle_poisson": "Hurdle Poisson regression",
         "mixed_random_intercept": "Random Intercept 혼합효과모형",
         "mixed_binary_logit_random_intercept": "Random Intercept 혼합 이항 로지스틱 회귀분석",
         "mixed_binary_logit_random_slope": "Random Slope 혼합 이항 로지스틱 회귀분석",
@@ -525,6 +526,7 @@ def write_korean_results_narrative(
             "negative_binomial",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
+            "hurdle_poisson",
             "mixed_poisson_random_intercept",
             "mixed_poisson_random_slope",
             "mixed_poisson_three_level",
@@ -1107,7 +1109,7 @@ def write_korean_results_narrative(
         if pseudo is not None:
             sentences.append(f"McFadden pseudo R-squared was {float(pseudo):.3f}.")
 
-    elif regression_result.model_type in {"poisson", "zero_inflated_poisson"}:
+    elif regression_result.model_type in {"poisson", "zero_inflated_poisson", "hurdle_poisson"}:
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
 
