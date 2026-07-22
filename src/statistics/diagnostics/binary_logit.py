@@ -17,6 +17,7 @@ _BINARY_DIAGNOSTIC_MODELS = {
     "binary_logit",
     "log_binomial",
     "modified_poisson",
+    "linear_probability_model",
     "binary_cloglog",
     "binary_probit",
     "mixed_binary_logit_random_intercept",

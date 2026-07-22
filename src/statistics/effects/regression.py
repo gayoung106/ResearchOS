@@ -930,6 +930,39 @@ def _build_binary_logit_effects(
     )
 
 
+def _build_linear_probability_effects(result: RegressionResult) -> EffectSizeReport:
+    effects: list[EffectSizeResult] = []
+    for coefficient in result.coefficients:
+        if coefficient.term.lower() in {"const", "intercept"}:
+            continue
+        effects.append(
+            EffectSizeResult(
+                term=coefficient.term,
+                effect_type="risk_difference",
+                estimate=coefficient.estimate,
+                standard_error=coefficient.standard_error,
+                statistic=coefficient.statistic,
+                p_value=coefficient.p_value,
+                confidence_interval_lower=coefficient.confidence_interval_lower,
+                confidence_interval_upper=coefficient.confidence_interval_upper,
+                magnitude=None,
+                interpretation="Risk difference from a linear probability model.",
+            )
+        )
+    return EffectSizeReport(
+        model_id=result.model_id,
+        model_type=result.model_type,
+        effects=effects,
+        model_effects={
+            "r_squared": result.fit_statistics.get("r_squared"),
+            "brier_score": result.fit_statistics.get("brier_score"),
+            "out_of_bounds_prediction_count": result.fit_statistics.get("out_of_bounds_prediction_count"),
+        },
+        warnings=list(result.warnings),
+        metadata={"sample_size": result.sample_size, "link": result.metadata.get("link")},
+    )
+
+
 def _build_modified_poisson_effects(result: RegressionResult) -> EffectSizeReport:
     fitted = result.raw_result
     if fitted is None:
@@ -1833,6 +1866,9 @@ def build_regression_effect_size_report(
 
     if result.model_type == "modified_poisson":
         return _build_modified_poisson_effects(result)
+
+    if result.model_type == "linear_probability_model":
+        return _build_linear_probability_effects(result)
     if result.model_type == "exponential_aft":
         return _build_exponential_aft_effects(result)
     if result.model_type == "loglogistic_aft":

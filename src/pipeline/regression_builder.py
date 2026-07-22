@@ -259,6 +259,17 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    linear_probability_requested = requested_estimator in {
+        "lpm",
+        "linear_probability",
+        "linear_probability_model",
+        "linear-probability-model",
+    } or requested_model_type in {
+        "lpm",
+        "linear_probability",
+        "linear_probability_model",
+        "linear-probability-model",
+    }
     modified_poisson_requested = requested_estimator in {
         "modified_poisson",
         "modified-poisson",
@@ -626,7 +637,21 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if modified_poisson_requested:
+    if linear_probability_requested:
+        if measurement_level != "binary":
+            return not_registered(
+                "Linear probability model supports binary dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "linear_probability_model"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+        }
+    elif modified_poisson_requested:
         if measurement_level != "binary":
             return not_registered(
                 "Modified Poisson regression supports binary dependent variables.",
@@ -2159,6 +2184,7 @@ def register_regression_pipeline(
         "binary_logit",
         "log_binomial",
         "modified_poisson",
+        "linear_probability_model",
         "binary_probit",
         "binary_cloglog",
         "ordered_logit",

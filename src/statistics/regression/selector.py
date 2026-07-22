@@ -29,6 +29,7 @@ from src.statistics.regression.hurdle_negative_binomial import fit_hurdle_negati
 from src.statistics.regression.hurdle_poisson import fit_hurdle_poisson
 from src.statistics.regression.inverse_gaussian import fit_inverse_gaussian_regression
 from src.statistics.regression.iv import fit_iv_2sls_regression
+from src.statistics.regression.linear_probability import fit_linear_probability_model
 from src.statistics.regression.log_binomial import fit_log_binomial
 from src.statistics.regression.loglogistic_aft import fit_loglogistic_aft
 from src.statistics.regression.lognormal_aft import fit_lognormal_aft
@@ -194,6 +195,18 @@ def fit_regression_by_level(
             covariance_type=str(options.get("covariance_type", "HC3")),
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
+
+    if model_type == "linear_probability_model":
+        options = mixed_effects_options or {}
+        return fit_linear_probability_model(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
         )
 
     if model_type == "modified_poisson":
