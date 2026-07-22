@@ -46,7 +46,13 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
         "auto_analysis_plan.yaml",
         "auto_variable_map.yaml",
         "auto_run_summary.xlsx",
+        "auto_run_report.md",
     }
+    report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_run_report.md")
+    report_text = report_path.read_text(encoding="utf-8")
+    assert "# ?? ?? ?? ??" in report_text
+    assert "outcome_score" in report_text
+    assert "ols" in report_text
 
 
 def test_run_auto_rawdata_analysis_executes_registered_pipeline_when_requested(
@@ -92,4 +98,4 @@ def test_run_auto_rawdata_analysis_reports_setup_failure(tmp_path: Path) -> None
     assert result.success is False
     assert result.failed_stage == "01_auto_rawdata_loading"
     assert result.pipeline_build_result is None
-    assert Path(result.output_files[-1]).name == "auto_run_summary.xlsx"
+    assert {Path(path).name for path in result.output_files} >= {"auto_run_summary.xlsx", "auto_run_report.md"}

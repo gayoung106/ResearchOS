@@ -99,6 +99,131 @@ def _write_auto_run_summary(
     return str(summary_path)
 
 
+def _format_bool(value: bool) -> str:
+    return "??" if value else "??"
+
+
+def _artifact_or_none(runtime: PipelineRuntime, key: str) -> object | None:
+    try:
+        return runtime.get_artifact(key)
+    except KeyError:
+        return None
+
+
+def _write_auto_run_markdown(
+    *,
+    working_directory: Path,
+    result: AutoRawDataAnalysisResult,
+) -> str:
+    output_dir = working_directory / "result" / "00_auto_run"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "auto_run_report.md"
+
+    rawdata = _artifact_or_none(result.runtime, "auto_rawdata_load_result")
+    analysis_plan = _artifact_or_none(result.runtime, "auto_analysis_plan")
+    variable_map = _artifact_or_none(result.runtime, "auto_variable_map")
+    registration = result.pipeline_build_result.registration if result.pipeline_build_result else None
+
+    lines = [
+        "# ?? ?? ?? ??",
+        "",
+        f"- ?????: {result.context.project_name}",
+        f"- ?? ??: {_format_bool(result.success)}",
+        f"- ?? ??: {result.failed_stage or '-'}",
+        f"- ?? ?: {len(result.warnings)}",
+        "",
+        "## ??? ??",
+    ]
+    if rawdata is not None:
+        candidate = rawdata.selected_candidate
+        lines.extend(
+            [
+                f"- ??: `{candidate.source_path}`",
+                f"- Sheet: {candidate.sheet_name or '-'}",
+                f"- ? ?: {candidate.row_count}",
+                f"- ? ?: {candidate.column_count}",
+                f"- ?? ?: {len(rawdata.candidates)}",
+            ]
+        )
+    else:
+        lines.append("- ???? ???? ?????.")
+
+    lines.extend(["", "## ?? ?? ??"])
+    if isinstance(variable_map, VariableMap):
+        role_rows = [
+            (name, definition.role, definition.measurement_level)
+            for name, definition in variable_map.variables.items()
+        ]
+        lines.extend(["| ?? | ?? | ???? |", "| --- | --- | --- |"])
+        lines.extend(f"| `{name}` | {role} | {level} |" for name, role, level in role_rows)
+    else:
+        lines.append("- ?? ??? ???? ?????.")
+
+    lines.extend(["", "## ?? ????"])
+    if isinstance(analysis_plan, AnalysisPlan):
+        lines.extend(
+            [
+                f"- ????: {', '.join(analysis_plan.variables.dependent) or '-'}",
+                f"- ????: {', '.join(analysis_plan.variables.independent) or '-'}",
+                f"- ????: {', '.join(analysis_plan.variables.controls) or '-'}",
+                f"- ????: {', '.join(analysis_plan.variables.clusters) or '-'}",
+                f"- ??? ??: {', '.join(analysis_plan.variables.weights) or '-'}",
+                f"- ???? ???: {_format_bool(analysis_plan.analyses.regression.enabled)}",
+                f"- Panel ?? ???: {_format_bool(analysis_plan.analyses.panel.enabled)}",
+                f"- ??? ?? ???: {_format_bool(analysis_plan.analyses.robustness.enabled)}",
+                f"- ?? ??: `{analysis_plan.analyses.regression.options}`",
+            ]
+        )
+    else:
+        lines.append("- ????? ???? ?????.")
+
+    lines.extend(["", "## ??? ??"])
+    if registration is not None:
+        lines.extend(
+            [
+                f"- ?? ID: {registration.model_id}",
+                f"- ?? ??: {registration.model_type}",
+                f"- ????: {registration.dependent_variable}",
+                f"- ????: {', '.join(registration.independent_variables)}",
+                f"- ?? ??: {_format_bool(registration.diagnostics_registered)}",
+                f"- ???? ??: {_format_bool(registration.effect_size_registered)}",
+                f"- ?? ??: {_format_bool(registration.reporting_registered)}",
+                f"- ??? ??: {_format_bool(registration.visualization_registered)}",
+                f"- Audit ??: {_format_bool(registration.audit_registered)}",
+            ]
+        )
+    else:
+        lines.append("- ?? ?????? ???? ?????.")
+
+    lines.extend(["", "## ??? ??", "| ?? | ?? | ??? ? | ?? ? |", "| --- | --- | ---: | ---: |"])
+    for step_result in result.setup_step_results:
+        lines.append(
+            f"| {step_result.stage_name} | {_format_bool(step_result.success)} | "
+            f"{len(step_result.output_files)} | {len(step_result.warnings)} |"
+        )
+    if result.pipeline_build_result is not None:
+        lines.append(
+            "| 04_auto_pipeline_registration | "
+            f"{_format_bool(result.pipeline_build_result.success)} | 0 | "
+            f"{len(result.pipeline_build_result.warnings)} |"
+        )
+    if result.orchestrator_result is not None:
+        lines.append(
+            "| 05_auto_pipeline_execution | "
+            f"{_format_bool(result.orchestrator_result.success)} | "
+            f"{len(result.context.generated_files)} | {len(result.orchestrator_result.warnings)} |"
+        )
+
+    if result.warnings:
+        lines.extend(["", "## ??"])
+        lines.extend(f"- {warning}" for warning in result.warnings)
+
+    lines.extend(["", "## ?? ???"])
+    lines.extend(f"- `{output_file}`" for output_file in result.output_files)
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(report_path)
+
+
 def run_auto_rawdata_analysis(
     working_directory: str | Path = ".",
     *,
@@ -150,8 +275,10 @@ def run_auto_rawdata_analysis(
                 failed_stage=step_result.stage_name,
             )
             summary_path = _write_auto_run_summary(working_directory=root, result=result)
-            result.output_files.append(summary_path)
+            report_path = _write_auto_run_markdown(working_directory=root, result=result)
+            result.output_files.extend([summary_path, report_path])
             context.add_generated_file(summary_path)
+            context.add_generated_file(report_path)
             return result
 
     analysis_plan = runtime.get_artifact("auto_analysis_plan")
@@ -192,6 +319,8 @@ def run_auto_rawdata_analysis(
         failed_stage=failed_stage,
     )
     summary_path = _write_auto_run_summary(working_directory=root, result=result)
-    result.output_files.append(summary_path)
+    report_path = _write_auto_run_markdown(working_directory=root, result=result)
+    result.output_files.extend([summary_path, report_path])
     context.add_generated_file(summary_path)
+    context.add_generated_file(report_path)
     return result
