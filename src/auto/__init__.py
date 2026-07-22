@@ -8,6 +8,11 @@ from src.auto.analysis_plan import (
     auto_analysis_plan_summary_to_dataframe,
     build_auto_analysis_plan,
 )
+from src.auto.pipeline import (
+    AutoRegressionPipelineBuildResult,
+    build_auto_regression_orchestrator,
+    register_auto_regression_pipeline,
+)
 from src.auto.rawdata_loader import (
     AutoRawDataLoadingStep,
     AutoRawDataLoadResult,
@@ -30,6 +35,7 @@ __all__ = [
     "AutoAnalysisPlanResult",
     "AutoAnalysisPlanStep",
     "AutoRawDataLoadResult",
+    "AutoRegressionPipelineBuildResult",
     "AutoRawDataLoadingStep",
     "AutoVariableInferenceResult",
     "AutoVariableInferenceStep",
@@ -38,10 +44,12 @@ __all__ = [
     "auto_analysis_plan_decisions_to_dataframe",
     "auto_analysis_plan_summary_to_dataframe",
     "build_auto_analysis_plan",
+    "build_auto_regression_orchestrator",
     "build_auto_variable_map",
     "discover_rawdata_files",
     "infer_variable_roles",
     "load_rawdata_project",
+    "register_auto_regression_pipeline",
     "role_inferences_to_dataframe",
     "variable_map_to_dataframe",
 ]
