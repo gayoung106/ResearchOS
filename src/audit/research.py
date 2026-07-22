@@ -1631,6 +1631,16 @@ def build_research_audit_report(
                     "pinball_loss": regression_result.fit_statistics.get("pinball_loss"),
                 }
             )
+        elif regression_result.model_type == "tweedie_regression":
+            metadata.update(
+                {
+                    "variance_power": regression_result.metadata.get("variance_power"),
+                    "zero_count": regression_result.fit_statistics.get("zero_count"),
+                    "zero_proportion": regression_result.fit_statistics.get("zero_proportion"),
+                    "dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio"),
+                    "pseudo_r_squared_deviance": regression_result.fit_statistics.get("pseudo_r_squared_deviance"),
+                }
+            )
         elif regression_result.model_type == "multinomial_logit":
             metadata.update(
                 {

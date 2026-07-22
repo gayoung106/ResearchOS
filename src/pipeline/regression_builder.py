@@ -341,6 +341,10 @@ def register_regression_pipeline(
         "gamma",
         "gamma_regression",
     }
+    tweedie_requested = requested_estimator in {"tweedie", "tweedie_regression"} or requested_model_type in {
+        "tweedie",
+        "tweedie_regression",
+    }
     regularized_requested = requested_estimator in {
         "regularized",
         "regularized_regression",
@@ -800,6 +804,24 @@ def register_regression_pipeline(
             "max_iterations": regression_options.get(
                 "max_iterations", regression_options.get("maximum_iterations", 100)
             ),
+        }
+    elif tweedie_requested:
+        if measurement_level != "continuous":
+            return not_registered(
+                "Tweedie regression supports non-negative continuous dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "tweedie_regression"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+            "variance_power": regression_options.get("variance_power", regression_options.get("power", 1.5)),
         }
     elif gamma_requested:
         if measurement_level != "continuous":
@@ -2055,6 +2077,7 @@ def register_regression_pipeline(
         "iv_2sls_regression",
         "inverse_gaussian_regression",
         "gamma_regression",
+        "tweedie_regression",
         "regularized_regression",
         "robust_regression",
         "tobit_regression",

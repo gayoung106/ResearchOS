@@ -180,6 +180,13 @@ from src.statistics.diagnostics.tobit import (
     tobit_observations_to_dataframe,
     tobit_prediction_metrics_to_dataframe,
 )
+from src.statistics.diagnostics.tweedie import (
+    build_tweedie_diagnostics,
+    tweedie_diagnostic_summary_to_dataframe,
+    tweedie_multicollinearity_to_dataframe,
+    tweedie_observations_to_dataframe,
+    tweedie_prediction_metrics_to_dataframe,
+)
 from src.statistics.diagnostics.weibull_aft import (
     build_weibull_aft_diagnostics,
     weibull_aft_diagnostic_summary_to_dataframe,
@@ -241,6 +248,12 @@ class RegressionDiagnosticsStep(PipelineStep):
 
         if result.model_type == "iv_2sls_regression":
             return self._run_iv_2sls_regression(
+                result,
+                output_dir,
+            )
+
+        if result.model_type == "tweedie_regression":
+            return self._run_tweedie_regression(
                 result,
                 output_dir,
             )
@@ -518,6 +531,33 @@ class RegressionDiagnosticsStep(PipelineStep):
         inverse_gaussian_diagnostic_summary_to_dataframe(report).to_excel(
             paths["summary"], index=False
         )
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=[str(path) for path in paths.values()],
+            warnings=report.warnings,
+            metadata=report.summary,
+        )
+
+    def _run_tweedie_regression(
+        self,
+        result: Any,
+        output_dir: Path,
+    ) -> StepResult:
+        report = build_tweedie_diagnostics(result)
+        self._store_report(report)
+
+        paths = {
+            "vif": output_dir / "multicollinearity.xlsx",
+            "metrics": output_dir / "prediction_metrics.xlsx",
+            "observations": output_dir / "observations.xlsx",
+            "summary": output_dir / "diagnostic_summary.xlsx",
+        }
+        tweedie_multicollinearity_to_dataframe(report).to_excel(paths["vif"], index=False)
+        tweedie_prediction_metrics_to_dataframe(report).to_excel(paths["metrics"], index=False)
+        tweedie_observations_to_dataframe(report).to_excel(paths["observations"], index=False)
+        tweedie_diagnostic_summary_to_dataframe(report).to_excel(paths["summary"], index=False)
 
         return StepResult(
             stage_name=self.name,

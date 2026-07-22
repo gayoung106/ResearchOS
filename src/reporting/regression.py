@@ -305,6 +305,7 @@ def write_korean_results_narrative(
         "multinomial_logit": "Multinomial logistic regression",
         "ordered_logit": "순서형 로지스틱 회귀분석",
         "ordered_probit": "Ordered probit regression",
+        "tweedie_regression": "Tweedie regression",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
         "generalized_poisson": "Generalized Poisson regression",
@@ -416,7 +417,7 @@ def write_korean_results_narrative(
                 if mean_or is not None
                 else f"B={coefficient.estimate:.3f}"
             )
-        elif regression_result.model_type in {"gamma_regression", "inverse_gaussian_regression"}:
+        elif regression_result.model_type in {"gamma_regression", "inverse_gaussian_regression", "tweedie_regression"}:
             mean_ratio = effect_lookup.get(
                 (
                     coefficient.term,
@@ -738,6 +739,20 @@ def write_korean_results_narrative(
             sentences.append(f"Inverse Gaussian Pearson dispersion ratio was {float(dispersion):.3f}.")
         if rmse is not None:
             sentences.append(f"Inverse Gaussian prediction RMSE was {float(rmse):.3f}.")
+
+    elif regression_result.model_type == "tweedie_regression":
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
+        dispersion = regression_result.fit_statistics.get("dispersion_ratio")
+        rmse = regression_result.fit_statistics.get("root_mean_squared_error")
+        variance_power = regression_result.metadata.get("variance_power")
+        if variance_power is not None:
+            sentences.append(f"Tweedie variance power was {float(variance_power):.3f}.")
+        if pseudo is not None:
+            sentences.append(f"Tweedie deviance pseudo R-squared was {float(pseudo):.3f}.")
+        if dispersion is not None:
+            sentences.append(f"Tweedie Pearson dispersion ratio was {float(dispersion):.3f}.")
+        if rmse is not None:
+            sentences.append(f"Tweedie prediction RMSE was {float(rmse):.3f}.")
 
     elif regression_result.model_type == "gamma_regression":
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -1113,6 +1128,17 @@ def write_korean_results_narrative(
         if pseudo is not None:
             sentences.append(f"McFadden pseudo R-squared was {float(pseudo):.3f}.")
 
+    elif regression_result.model_type == "tweedie_regression":
+        variance_power = regression_result.metadata.get("variance_power")
+        dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
+        pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
+        if variance_power is not None:
+            sentences.append(f"The Tweedie variance power was {float(variance_power):.3f}.")
+        if pseudo is not None:
+            sentences.append(f"Deviance pseudo R-squared was {float(pseudo):.3f}.")
+        if dispersion_ratio is not None:
+            sentences.append(f"The Tweedie dispersion ratio was {float(dispersion_ratio):.3f}.")
+
     elif regression_result.model_type in {"poisson", "zero_inflated_poisson", "hurdle_poisson"}:
         dispersion_ratio = regression_result.fit_statistics.get("dispersion_ratio")
         pseudo = regression_result.fit_statistics.get("pseudo_r_squared_deviance")
@@ -1212,6 +1238,9 @@ def build_regression_publication_report(
 
     if regression_result.model_type == "gamma_regression":
         notes.append("Gamma regression uses a log link and reports multiplicative mean ratios.")
+
+    if regression_result.model_type == "tweedie_regression":
+        notes.append("Tweedie regression uses a log link and reports multiplicative mean ratios for non-negative outcomes.")
 
     if regression_result.model_type == "inverse_gaussian_regression":
         notes.append("Inverse Gaussian regression uses a log link and reports multiplicative mean ratios.")
@@ -1353,6 +1382,8 @@ def build_regression_publication_report(
             "median_predicted_time": regression_result.fit_statistics.get("median_predicted_time"),
             "boundary_count": regression_result.fit_statistics.get("boundary_count"),
             "gamma_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "gamma_regression" else None,
+            "tweedie_variance_power": regression_result.metadata.get("variance_power") if regression_result.model_type == "tweedie_regression" else None,
+            "tweedie_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "tweedie_regression" else None,
             "inverse_gaussian_dispersion_ratio": regression_result.fit_statistics.get("dispersion_ratio") if regression_result.model_type == "inverse_gaussian_regression" else None,
             "precision": regression_result.fit_statistics.get("precision"),
             "iv_endogenous_variables": regression_result.metadata.get("endogenous_variables"),

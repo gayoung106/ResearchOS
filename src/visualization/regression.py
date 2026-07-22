@@ -742,6 +742,10 @@ def build_regression_visualizations(
         observed_path = output_directory / "gamma_observed_vs_predicted.png"
         _plot_observed_vs_predicted_continuous(regression_result, observed_path)
         output_files.append(str(observed_path))
+    elif regression_result.model_type == "tweedie_regression":
+        observed_path = output_directory / "tweedie_observed_vs_predicted.png"
+        _plot_observed_vs_predicted_continuous(regression_result, observed_path)
+        output_files.append(str(observed_path))
     elif regression_result.model_type == "fractional_logit":
         observed_path = output_directory / "fractional_observed_vs_predicted.png"
         _plot_observed_vs_predicted(regression_result, observed_path)

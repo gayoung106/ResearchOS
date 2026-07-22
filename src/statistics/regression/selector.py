@@ -66,6 +66,7 @@ from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.tweedie import fit_tweedie_regression
 from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weibull_ph import fit_weibull_ph
 from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
@@ -280,6 +281,20 @@ def fit_regression_by_level(
             fixed_effects=fixed_effects,
             model_id=model_id,
             add_intercept=bool(options.get("add_intercept", True)),
+        )
+
+    if model_type == "tweedie_regression":
+        options = mixed_effects_options or {}
+        return fit_tweedie_regression(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+            variance_power=float(options.get("variance_power", options.get("power", 1.5))),
         )
 
     if model_type == "inverse_gaussian_regression":

@@ -63,6 +63,7 @@ from src.statistics.regression.quantile import fit_quantile_regression
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
 from src.statistics.regression.tobit import fit_tobit_regression
+from src.statistics.regression.tweedie import fit_tweedie_regression
 from src.statistics.regression.weibull_aft import fit_weibull_aft
 from src.statistics.regression.weibull_ph import fit_weibull_ph
 from src.statistics.regression.weighted_least_squares import fit_weighted_least_squares
@@ -103,6 +104,7 @@ __all__ = [
     "fit_regularized_regression",
     "fit_robust_regression",
     "fit_tobit_regression",
+    "fit_tweedie_regression",
     "fit_weighted_least_squares",
     "fit_weibull_aft",
     "fit_weibull_ph",
