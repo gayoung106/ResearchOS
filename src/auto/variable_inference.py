@@ -46,14 +46,50 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
+def _normalize_text(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value).strip().lower())
+
+
 def _tokens(name: str) -> set[str]:
     return {part for part in _normalize_name(name).split("_") if part}
 
 
 def _contains_any(name: str, keywords: set[str]) -> bool:
     normalized = _normalize_name(name)
+    normalized_text = _normalize_text(name)
     tokens = _tokens(name)
-    return bool(tokens & keywords) or any(keyword in normalized for keyword in keywords)
+    return bool(tokens & keywords) or any(
+        keyword in normalized or keyword in normalized_text for keyword in keywords
+    )
+
+
+def _metadata_lookup(variable_metadata: pd.DataFrame | None) -> dict[str, dict[str, str]]:
+    if variable_metadata is None or variable_metadata.empty or "variable_name" not in variable_metadata.columns:
+        return {}
+
+    lookup: dict[str, dict[str, str]] = {}
+    label_columns = [
+        "variable_label",
+        "label",
+        "korean_name",
+        "question_text",
+        "questionnaire_text",
+    ]
+    for _, row in variable_metadata.iterrows():
+        variable_name = str(row["variable_name"])
+        values: dict[str, str] = {}
+        search_parts = [variable_name]
+        for column in label_columns:
+            if column not in variable_metadata.columns:
+                continue
+            value = row[column]
+            if pd.notna(value) and str(value).strip():
+                text_value = str(value).strip()
+                values[column] = text_value
+                search_parts.append(text_value)
+        values["search_text"] = " ".join(search_parts)
+        lookup[variable_name] = values
+    return lookup
 
 
 def _series_profile(dataframe: pd.DataFrame, variable_name: str) -> dict[str, Any]:
@@ -76,34 +112,128 @@ def _special_role_by_name(
     variable_name: str,
     detection: VariableDetection,
     profile: dict[str, Any],
+    evidence_text: str = "",
 ) -> VariableRoleInference | None:
     name = _normalize_name(variable_name)
     tokens = _tokens(variable_name)
+    role_text = f"{variable_name} {evidence_text}"
     level = detection.detected_level
 
-    if profile["is_datetime"] or _contains_any(name, {"date", "datetime", "time", "year", "month", "wave", "period"}):
-        return VariableRoleInference(variable_name, "time", level, 0.9, "Name or dtype suggests a time variable.")
+    if profile["is_datetime"] or _contains_any(
+        role_text,
+        {
+            "date",
+            "datetime",
+            "time",
+            "year",
+            "month",
+            "wave",
+            "period",
+            "\ub0a0\uc9dc",
+            "\uc2dc\uac04",
+            "\uc5f0\ub3c4",
+            "\ub144\ub3c4",
+            "\uc6d4",
+            "\ucc28\uc218",
+            "\ud68c\ucc28",
+            "\uc2dc\uc810",
+        },
+    ):
+        return VariableRoleInference(variable_name, "time", level, 0.9, "Name or label suggests a time variable.")
 
-    if _contains_any(name, {"weight", "weights", "wt", "wgt", "sampling_weight"}):
-        return VariableRoleInference(variable_name, "weight", level, 0.9, "Name suggests an analytic weight variable.")
+    if _contains_any(
+        role_text,
+        {
+            "weight",
+            "weights",
+            "wt",
+            "wgt",
+            "sampling_weight",
+            "\uac00\uc911\uce58",
+            "\ud45c\ubcf8\uac00\uc911",
+        },
+    ):
+        return VariableRoleInference(
+            variable_name,
+            "weight",
+            level,
+            0.9,
+            "Name or label suggests an analytic weight variable.",
+        )
 
-    if _contains_any(name, {"strata", "stratum"}):
-        return VariableRoleInference(variable_name, "strata", level, 0.9, "Name suggests a strata variable.")
+    if _contains_any(role_text, {"strata", "stratum", "\uce35\ud654", "\uce35"}):
+        return VariableRoleInference(variable_name, "strata", level, 0.9, "Name or label suggests a strata variable.")
 
-    if _contains_any(name, {"cluster", "group", "site", "school", "class", "clinic", "hospital", "center", "team"}):
+    if _contains_any(
+        role_text,
+        {
+            "cluster",
+            "group",
+            "site",
+            "school",
+            "class",
+            "clinic",
+            "hospital",
+            "center",
+            "team",
+            "\uc9d1\ub2e8",
+            "\uad70\uc9d1",
+            "\ud559\uad50",
+            "\ud559\uae09",
+            "\ubcd1\uc6d0",
+            "\uae30\uad00",
+            "\uc13c\ud130",
+            "\ubd80\uc11c",
+            "\ud300",
+            "\uc9c0\uc810",
+        },
+    ):
         confidence = 0.85 if profile["unique_count"] >= 3 else 0.65
-        return VariableRoleInference(variable_name, "cluster", level, confidence, "Name suggests a clustering or grouping variable.")
+        return VariableRoleInference(
+            variable_name,
+            "cluster",
+            level,
+            confidence,
+            "Name or label suggests a clustering or grouping variable.",
+        )
 
-    if name in {"id", "caseid", "case_id"} or name.endswith("_id") or "id" in tokens:
+    if (
+        name in {"id", "caseid", "case_id"}
+        or name.endswith("_id")
+        or "id" in tokens
+        or _contains_any(
+            role_text,
+            {
+                "\uc544\uc774\ub514",
+                "\uc2dd\ubcc4",
+                "\uc751\ub2f5\uc790",
+                "\uc0ac\ub840\ubc88\ud638",
+                "\uac1c\uc778\ubc88\ud638",
+            },
+        )
+    ):
         confidence = 0.95 if profile["unique_rate"] >= 0.8 else 0.75
-        return VariableRoleInference(variable_name, "id", level, confidence, "Name suggests an identifier variable.")
+        return VariableRoleInference(
+            variable_name,
+            "id",
+            level,
+            confidence,
+            "Name or label suggests an identifier variable.",
+        )
 
     return None
 
 
-def _dependent_score(variable_name: str, detection: VariableDetection, profile: dict[str, Any], index: int) -> tuple[float, str]:
+def _dependent_score(
+    variable_name: str,
+    detection: VariableDetection,
+    profile: dict[str, Any],
+    index: int,
+    evidence_text: str = "",
+) -> tuple[float, str]:
     name = _normalize_name(variable_name)
     tokens = _tokens(variable_name)
+    role_text = f"{variable_name} {evidence_text}"
     level = detection.detected_level
     if level not in _ANALYZABLE_OUTCOMES:
         return (float("-inf"), "Variable is not an analyzable outcome level.")
@@ -116,9 +246,32 @@ def _dependent_score(variable_name: str, detection: VariableDetection, profile: 
     if name in exact_names or tokens & exact_names:
         score += 100.0
         reason = "Name strongly suggests an outcome variable."
-    if _contains_any(name, {"outcome", "result", "score", "total", "dependent", "response", "post", "followup"}):
-        score += 50.0
-        reason = "Name suggests an outcome variable."
+    if _contains_any(
+        role_text,
+        {
+            "outcome",
+            "result",
+            "score",
+            "total",
+            "dependent",
+            "response",
+            "post",
+            "followup",
+            "\uacb0\uacfc",
+            "\uc131\uacfc",
+            "\uc810\uc218",
+            "\ucd1d\uc810",
+            "\ud569\uacc4",
+            "\uc885\uc18d",
+            "\uc751\ub2f5",
+            "\uc0ac\ud6c4",
+            "\ub9cc\uc871\ub3c4",
+            "\ud6a8\uacfc",
+            "\ud3c9\uac00",
+        },
+    ):
+        score += 70.0
+        reason = "Name or label suggests an outcome variable."
     if level in {"continuous", "count", "proportion"}:
         score += 20.0
     elif level in {"binary", "ordinal", "scale_item"}:
@@ -130,19 +283,23 @@ def _dependent_score(variable_name: str, detection: VariableDetection, profile: 
 def infer_variable_roles(
     dataframe: pd.DataFrame,
     detections: list[VariableDetection],
+    *,
+    variable_metadata: pd.DataFrame | None = None,
 ) -> list[VariableRoleInference]:
     detection_map = {detection.variable_name: detection for detection in detections}
+    metadata_lookup = _metadata_lookup(variable_metadata)
     special_roles: dict[str, VariableRoleInference] = {}
     dependent_candidates: list[tuple[float, int, str, str]] = []
 
     for index, variable_name in enumerate(dataframe.columns):
         detection = detection_map[str(variable_name)]
         profile = _series_profile(dataframe, str(variable_name))
-        special = _special_role_by_name(str(variable_name), detection, profile)
+        evidence_text = metadata_lookup.get(str(variable_name), {}).get("search_text", "")
+        special = _special_role_by_name(str(variable_name), detection, profile, evidence_text)
         if special is not None:
             special_roles[str(variable_name)] = special
             continue
-        score, reason = _dependent_score(str(variable_name), detection, profile, index)
+        score, reason = _dependent_score(str(variable_name), detection, profile, index, evidence_text)
         if score != float("-inf"):
             dependent_candidates.append((score, -index, str(variable_name), reason))
 
@@ -155,6 +312,7 @@ def infer_variable_roles(
     for variable_name in [str(column) for column in dataframe.columns]:
         detection = detection_map[variable_name]
         profile = _series_profile(dataframe, variable_name)
+        evidence_text = metadata_lookup.get(variable_name, {}).get("search_text", "")
         if variable_name in special_roles:
             output.append(special_roles[variable_name])
             continue
@@ -201,29 +359,37 @@ def build_auto_variable_map(
     variable_metadata: pd.DataFrame | None = None,
 ) -> AutoVariableInferenceResult:
     detections = detect_dataframe_variables(dataframe, variable_metadata=variable_metadata)
-    role_inferences = infer_variable_roles(dataframe, detections)
+    role_inferences = infer_variable_roles(
+        dataframe,
+        detections,
+        variable_metadata=variable_metadata,
+    )
+    metadata_lookup = _metadata_lookup(variable_metadata)
     warnings = [
         f"{item.variable_name}: {item.role} confidence={item.confidence:.2f}"
         for item in role_inferences
         if item.confidence < 0.7
     ]
-    variable_map = VariableMap(
-        variables={
-            item.variable_name: VariableDefinition(
-                original_name=item.variable_name,
-                role=item.role,  # type: ignore[arg-type]
-                measurement_level=item.measurement_level,  # type: ignore[arg-type]
-                evidence={
-                    "auto_role_confidence": item.confidence,
-                    "auto_role_reason": item.reason,
-                    "auto_role_alternatives": item.alternatives,
-                },
-                review_status="auto_inferred",
-                notes=item.reason,
-            )
-            for item in role_inferences
-        }
-    )
+    variables: dict[str, VariableDefinition] = {}
+    for item in role_inferences:
+        metadata = metadata_lookup.get(item.variable_name, {})
+        variables[item.variable_name] = VariableDefinition(
+            original_name=item.variable_name,
+            korean_name=metadata.get("korean_name", ""),
+            label=metadata.get("variable_label", metadata.get("label", "")),
+            question_text=metadata.get("question_text", metadata.get("questionnaire_text", "")),
+            role=item.role,  # type: ignore[arg-type]
+            measurement_level=item.measurement_level,  # type: ignore[arg-type]
+            evidence={
+                "auto_role_confidence": item.confidence,
+                "auto_role_reason": item.reason,
+                "auto_role_alternatives": item.alternatives,
+                "auto_role_search_text": metadata.get("search_text", item.variable_name),
+            },
+            review_status="auto_inferred",
+            notes=item.reason,
+        )
+    variable_map = VariableMap(variables=variables)
     return AutoVariableInferenceResult(
         variable_map=variable_map,
         detections=detections,
@@ -248,6 +414,8 @@ def variable_map_to_dataframe(variable_map: VariableMap) -> pd.DataFrame:
                 "variable_name": name,
                 "role": definition.role,
                 "measurement_level": definition.measurement_level,
+                "label": definition.label,
+                "question_text": definition.question_text,
                 "review_status": definition.review_status,
                 "confidence": definition.evidence.get("auto_role_confidence"),
                 "reason": definition.evidence.get("auto_role_reason"),

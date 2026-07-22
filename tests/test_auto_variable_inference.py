@@ -86,3 +86,44 @@ def test_auto_variable_inference_step_populates_runtime_and_outputs(tmp_path: Pa
         "variable_role_inference.xlsx",
         "inferred_variable_map.xlsx",
     }
+
+
+def test_auto_variable_inference_uses_korean_labels_for_roles() -> None:
+    data = pd.DataFrame(
+        {
+            "q2": [3.1, 3.4, 3.7, 4.0, 4.1, 4.3, 4.4, 4.7],
+            "age": [21, 35, 44, 51, 39, 28, 46, 57],
+            "school_code": [1, 1, 2, 2, 3, 3, 4, 4],
+            "q1": [2.0, 2.4, 3.1, 3.3, 4.0, 4.2, 4.7, 5.1],
+        }
+    )
+    metadata = pd.DataFrame(
+        {
+            "variable_name": ["q2", "age", "school_code", "q1"],
+            "variable_label": [
+                "\uc0c1\uc0ac \uc9c0\uc6d0 \uc778\uc2dd",
+                "\uc5f0\ub839",
+                "\uc18c\uc18d \ud559\uad50",
+                "\uc9c1\ubb34 \ub9cc\uc871\ub3c4 \ucd1d\uc810",
+            ],
+            "question_text": [
+                "\uc0c1\uc0ac\uac00 \uc5bc\ub9c8\ub098 \uc9c0\uc6d0\ud569\ub2c8\uae4c?",
+                "\ub9cc \ub098\uc774",
+                "\ud604\uc7ac \uc18c\uc18d\ub41c \ud559\uad50",
+                "\uc804\ubc18\uc801\uc778 \uc9c1\ubb34 \ub9cc\uc871\ub3c4 \uc810\uc218",
+            ],
+        }
+    )
+
+    result = build_auto_variable_map(data, variable_metadata=metadata)
+    roles = {item.variable_name: item.role for item in result.role_inferences}
+    variable_map = variable_map_to_dataframe(result.variable_map)
+
+    assert roles["q1"] == "dependent"
+    assert roles["q2"] == "independent"
+    assert roles["school_code"] == "cluster"
+    assert result.variable_map.variables["q1"].label == "\uc9c1\ubb34 \ub9cc\uc871\ub3c4 \ucd1d\uc810"
+    assert result.variable_map.variables["q1"].question_text == (
+        "\uc804\ubc18\uc801\uc778 \uc9c1\ubb34 \ub9cc\uc871\ub3c4 \uc810\uc218"
+    )
+    assert {"label", "question_text"}.issubset(variable_map.columns)
