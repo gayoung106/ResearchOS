@@ -1,4 +1,9 @@
-﻿from types import SimpleNamespace
+﻿import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pandas as pd
 
 from src.auto import cli
 
@@ -95,3 +100,39 @@ def test_auto_cli_returns_nonzero_on_failure(monkeypatch, capsys) -> None:
     assert "Auto rawdata analysis failed." in captured.out
     assert "Failed stage: 01_auto_rawdata_loading" in captured.out
     assert "missing rawdata" in captured.out
+
+
+def test_auto_cli_smoke_plan_only_creates_core_outputs(tmp_path: Path) -> None:
+    rawdata_dir = tmp_path / "rawdata"
+    rawdata_dir.mkdir()
+    pd.DataFrame(
+        {
+            "outcome_score": [2.0, 2.4, 3.1, 3.3, 4.0, 4.2, 4.7, 5.1],
+            "age": [21, 35, 44, 51, 39, 28, 46, 57],
+            "gender": [0, 1, 1, 0, 1, 0, 1, 0],
+        }
+    ).to_csv(rawdata_dir / "survey.csv", index=False)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.auto.cli",
+            "--working-directory",
+            str(tmp_path),
+            "--project-name",
+            "cli smoke",
+            "--plan-only",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "Auto rawdata analysis completed." in completed.stdout
+    assert "Model type: ols" in completed.stdout
+    assert (tmp_path / "result" / "00_auto_run" / "auto_run_report.md").exists()
+    assert (tmp_path / "result" / "03_auto_plan" / "auto_analysis_plan.yaml").exists()
+    assert (tmp_path / "result" / "03_auto_plan" / "auto_variable_map.yaml").exists()
