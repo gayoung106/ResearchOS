@@ -62,6 +62,7 @@ from src.statistics.regression.parametric_survival import fit_parametric_surviva
 from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.poisson import fit_poisson
 from src.statistics.regression.quantile import fit_quantile_regression
+from src.statistics.regression.quasi_binomial import fit_quasi_binomial
 from src.statistics.regression.quasi_poisson import fit_quasi_poisson
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
@@ -105,6 +106,7 @@ __all__ = [
     "fit_multinomial_logit",
     "fit_poisson",
     "fit_quantile_regression",
+    "fit_quasi_binomial",
     "fit_quasi_poisson",
     "fit_regularized_regression",
     "fit_robust_regression",

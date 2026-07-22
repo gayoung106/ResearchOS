@@ -1682,7 +1682,7 @@ def build_research_audit_report(
                     "covariance_structure": regression_result.metadata.get("covariance_structure"),
                 }
             )
-        elif regression_result.model_type in {"log_binomial", "modified_poisson", "linear_probability_model"}:
+        elif regression_result.model_type in {"log_binomial", "quasi_binomial", "modified_poisson", "linear_probability_model"}:
             metadata.update(
                 {
                     "link": regression_result.metadata.get("link"),
@@ -1692,6 +1692,8 @@ def build_research_audit_report(
                     "brier_score": regression_result.fit_statistics.get("brier_score"),
                     "out_of_bounds_prediction_count": regression_result.fit_statistics.get("out_of_bounds_prediction_count"),
                     "modified_poisson": regression_result.metadata.get("modified_poisson"),
+                    "quasi_binomial": regression_result.model_type == "quasi_binomial",
+                    "dispersion_scale": regression_result.fit_statistics.get("dispersion_scale"),
                     "linear_probability_model": regression_result.model_type == "linear_probability_model",
                     "r_squared": regression_result.fit_statistics.get("r_squared"),
                 }

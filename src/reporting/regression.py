@@ -295,6 +295,7 @@ def write_korean_results_narrative(
         "linear_probability_model": "Linear probability model",
         "modified_poisson": "Modified Poisson regression",
         "log_binomial": "Log-binomial regression",
+        "quasi_binomial": "Quasi-binomial regression",
         "piecewise_exponential": "Piecewise exponential regression",
         "discrete_time_hazard": "Discrete-time hazard regression",
         "exponential_aft": "Exponential AFT regression",
@@ -515,6 +516,7 @@ def write_korean_results_narrative(
                 else f"B={coefficient.estimate:.3f}"
             )
         elif regression_result.model_type in {
+            "quasi_binomial",
             "binary_logit",
             "mixed_binary_logit_random_intercept",
             "mixed_binary_logit_random_slope",
@@ -1101,6 +1103,7 @@ def write_korean_results_narrative(
         "log_binomial",
         "modified_poisson",
         "linear_probability_model",
+        "quasi_binomial",
         "binary_cloglog",
         "binary_probit",
         "ordered_probit",
@@ -1302,6 +1305,9 @@ def build_regression_publication_report(
     if regression_result.model_type == "linear_probability_model":
         notes.append("Linear probability models report risk differences with robust standard errors when requested.")
 
+    if regression_result.model_type == "quasi_binomial":
+        notes.append("Quasi-binomial models report logit coefficients with Pearson-scale dispersion adjustment.")
+
     if regression_result.model_type == "binary_cloglog":
         notes.append("Binary complementary log-log models report exponentiated coefficients and average marginal effects.")
 
@@ -1364,10 +1370,11 @@ def build_regression_publication_report(
             "reml": regression_result.metadata.get("reml"),
             "random_effect_covariance": regression_result.metadata.get("random_effect_covariance"),
             "covariance_structure": regression_result.metadata.get("covariance_structure"),
-            "binary_link": regression_result.metadata.get("link") if regression_result.model_type in {"log_binomial", "modified_poisson", "linear_probability_model", "binary_cloglog", "binary_probit"} else None,
+            "binary_link": regression_result.metadata.get("link") if regression_result.model_type in {"log_binomial", "quasi_binomial", "modified_poisson", "linear_probability_model", "binary_cloglog", "binary_probit"} else None,
             "ordered_link": regression_result.metadata.get("link") if regression_result.model_type == "ordered_probit" else None,
-            "brier_score": regression_result.fit_statistics.get("brier_score") if regression_result.model_type in {"log_binomial", "modified_poisson", "linear_probability_model", "binary_cloglog", "binary_probit"} else None,
+            "brier_score": regression_result.fit_statistics.get("brier_score") if regression_result.model_type in {"log_binomial", "quasi_binomial", "modified_poisson", "linear_probability_model", "binary_cloglog", "binary_probit"} else None,
             "out_of_bounds_prediction_count": regression_result.fit_statistics.get("out_of_bounds_prediction_count") if regression_result.model_type in {"log_binomial", "modified_poisson", "linear_probability_model"} else None,
+            "dispersion_scale": regression_result.fit_statistics.get("dispersion_scale") if regression_result.model_type == "quasi_binomial" else None,
             "reference_category": regression_result.metadata.get("reference_category"),
             "category_labels": regression_result.metadata.get("category_labels"),
             "quantile": regression_result.fit_statistics.get("quantile"),

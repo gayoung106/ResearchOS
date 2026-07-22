@@ -65,6 +65,7 @@ from src.statistics.regression.parametric_survival import fit_parametric_surviva
 from src.statistics.regression.piecewise_exponential import fit_piecewise_exponential_regression
 from src.statistics.regression.poisson import fit_poisson
 from src.statistics.regression.quantile import fit_quantile_regression
+from src.statistics.regression.quasi_binomial import fit_quasi_binomial
 from src.statistics.regression.quasi_poisson import fit_quasi_poisson
 from src.statistics.regression.regularized import fit_regularized_regression
 from src.statistics.regression.robust import fit_robust_regression
@@ -195,6 +196,19 @@ def fit_regression_by_level(
             covariance_type=str(options.get("covariance_type", "HC3")),
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 500))),
+        )
+
+    if model_type == "quasi_binomial":
+        options = mixed_effects_options or {}
+        return fit_quasi_binomial(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
     if model_type == "linear_probability_model":

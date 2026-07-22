@@ -259,6 +259,17 @@ def register_regression_pipeline(
     regression_options = _regression_options(analysis_plan)
     requested_model_type = str(regression_options.get("model_type", "")).strip().lower()
     requested_estimator = str(regression_options.get("estimator", "")).strip().lower()
+    quasi_binomial_requested = requested_estimator in {
+        "quasi_binomial",
+        "quasi-binomial",
+        "quasibinomial",
+        "overdispersed_binomial",
+    } or requested_model_type in {
+        "quasi_binomial",
+        "quasi-binomial",
+        "quasibinomial",
+        "overdispersed_binomial",
+    }
     linear_probability_requested = requested_estimator in {
         "lpm",
         "linear_probability",
@@ -637,7 +648,24 @@ def register_regression_pipeline(
     multilevel_options = _multilevel_options(analysis_plan)
     group_variable = None
 
-    if linear_probability_requested:
+    if quasi_binomial_requested:
+        if measurement_level != "binary":
+            return not_registered(
+                "Quasi-binomial regression supports binary dependent variables.",
+                dependent_variable=dependent_variable,
+                independent_variables=independent_variables,
+                fixed_effects=fixed_effects,
+                measurement_level=measurement_level,
+            )
+        model_type = "quasi_binomial"
+        multilevel_options = {
+            "covariance_type": regression_options.get("covariance_type", "HC3"),
+            "add_intercept": regression_options.get("add_intercept", True),
+            "max_iterations": regression_options.get(
+                "max_iterations", regression_options.get("maximum_iterations", 100)
+            ),
+        }
+    elif linear_probability_requested:
         if measurement_level != "binary":
             return not_registered(
                 "Linear probability model supports binary dependent variables.",
@@ -2183,6 +2211,7 @@ def register_regression_pipeline(
         "beta_regression",
         "binary_logit",
         "log_binomial",
+        "quasi_binomial",
         "modified_poisson",
         "linear_probability_model",
         "binary_probit",
