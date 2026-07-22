@@ -6,11 +6,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.auto.analysis_plan import AutoAnalysisPlanStep
+from src.auto.multi_outcome import AutoMultiOutcomeAnalysisPlanStep
 from src.auto.overrides import (
     apply_variable_role_overrides,
     build_auto_variable_role_overrides,
 )
-from src.auto.pipeline import AutoRegressionPipelineBuildResult, build_auto_regression_orchestrator
+from src.auto.pipeline import (
+    AutoMultiOutcomePipelineBuildResult,
+    AutoMultiOutcomePipelineRunResult,
+    AutoRegressionPipelineBuildResult,
+    build_auto_multi_outcome_regression_orchestrators,
+    build_auto_regression_orchestrator,
+    run_auto_multi_outcome_regression_orchestrators,
+)
 from src.auto.rawdata_loader import AutoRawDataLoadingStep
 from src.auto.validation import validate_auto_run_outputs
 from src.auto.variable_inference import AutoVariableInferenceStep, variable_map_to_dataframe
@@ -28,6 +36,8 @@ class AutoRawDataAnalysisResult:
     runtime: PipelineRuntime
     setup_step_results: list[StepResult] = field(default_factory=list)
     pipeline_build_result: AutoRegressionPipelineBuildResult | None = None
+    multi_outcome_pipeline_build_result: AutoMultiOutcomePipelineBuildResult | None = None
+    multi_outcome_pipeline_run_result: AutoMultiOutcomePipelineRunResult | None = None
     orchestrator: ResearchOrchestrator | None = None
     orchestrator_result: OrchestratorResult | None = None
     output_files: list[str] = field(default_factory=list)
@@ -98,6 +108,24 @@ def _write_auto_run_summary(
                 "success": result.orchestrator_result.success,
                 "output_file_count": len(result.context.generated_files),
                 "warning_count": len(result.orchestrator_result.warnings),
+            }
+        )
+    if result.multi_outcome_pipeline_build_result is not None:
+        rows.append(
+            {
+                "stage_name": "04b_auto_multi_outcome_pipeline_registration",
+                "success": result.multi_outcome_pipeline_build_result.success,
+                "output_file_count": 0,
+                "warning_count": len(result.multi_outcome_pipeline_build_result.warnings),
+            }
+        )
+    if result.multi_outcome_pipeline_run_result is not None:
+        rows.append(
+            {
+                "stage_name": "05b_auto_multi_outcome_pipeline_execution",
+                "success": result.multi_outcome_pipeline_run_result.success,
+                "output_file_count": len(result.multi_outcome_pipeline_run_result.completed_models),
+                "warning_count": len(result.multi_outcome_pipeline_run_result.warnings),
             }
         )
     pd.DataFrame(rows).to_excel(summary_path, index=False)
@@ -245,6 +273,8 @@ def run_auto_rawdata_analysis(
     weight_variable: str | None = None,
     id_variable: str | None = None,
     time_variable: str | None = None,
+    enable_multi_outcome: bool = False,
+    max_outcomes: int = 3,
 ) -> AutoRawDataAnalysisResult:
     """Run the rawdata-only workflow through automatic planning and analysis."""
     root = Path(working_directory).expanduser().resolve()
@@ -268,6 +298,15 @@ def run_auto_rawdata_analysis(
         AutoVariableInferenceStep(runtime),
         AutoAnalysisPlanStep(runtime, enable_robustness=enable_robustness),
     ]
+    if enable_multi_outcome:
+        setup_steps.append(
+            AutoMultiOutcomeAnalysisPlanStep(
+                runtime,
+                max_outcomes=max_outcomes,
+                model_id_prefix=model_id,
+                enable_robustness=enable_robustness,
+            )
+        )
     for step in setup_steps:
         try:
             step_result = step.run(context, root)
@@ -352,6 +391,8 @@ def run_auto_rawdata_analysis(
         context.add_warning(f"04_auto_pipeline_registration: {warning}")
 
     orchestrator_result: OrchestratorResult | None = None
+    multi_outcome_build_result: AutoMultiOutcomePipelineBuildResult | None = None
+    multi_outcome_run_result: AutoMultiOutcomePipelineRunResult | None = None
     success = build_result.success
     failed_stage = None if success else "04_auto_pipeline_registration"
     if build_result.success and run_analysis:
@@ -361,12 +402,42 @@ def run_auto_rawdata_analysis(
         warnings.extend(orchestrator_result.warnings)
         output_files = list(dict.fromkeys(output_files + context.generated_files))
 
+    if enable_multi_outcome:
+        multi_outcome_build_result = build_auto_multi_outcome_regression_orchestrators(
+            context=context,
+            runtime=runtime,
+            working_directory=root,
+        )
+        warnings.extend(multi_outcome_build_result.warnings)
+        for warning in multi_outcome_build_result.warnings:
+            context.add_warning(f"04b_auto_multi_outcome_pipeline_registration: {warning}")
+        if not multi_outcome_build_result.success:
+            success = False
+            failed_stage = failed_stage or "04b_auto_multi_outcome_pipeline_registration"
+        elif run_analysis and build_result.success:
+            multi_outcome_run_result = run_auto_multi_outcome_regression_orchestrators(
+                multi_outcome_build_result,
+                runtime=runtime,
+            )
+            success = success and multi_outcome_run_result.success
+            if not multi_outcome_run_result.success:
+                failed_stage = failed_stage or "05b_auto_multi_outcome_pipeline_execution"
+            warnings.extend(multi_outcome_run_result.warnings)
+            multi_output_files = [
+                str(generated_file)
+                for model_orchestrator in multi_outcome_build_result.orchestrators.values()
+                for generated_file in model_orchestrator.context.generated_files
+            ]
+            output_files = list(dict.fromkeys(output_files + context.generated_files + multi_output_files))
+
     result = AutoRawDataAnalysisResult(
         success=success,
         context=context,
         runtime=runtime,
         setup_step_results=setup_results,
         pipeline_build_result=build_result,
+        multi_outcome_pipeline_build_result=multi_outcome_build_result,
+        multi_outcome_pipeline_run_result=multi_outcome_run_result,
         orchestrator=orchestrator,
         orchestrator_result=orchestrator_result,
         output_files=list(dict.fromkeys(output_files)),

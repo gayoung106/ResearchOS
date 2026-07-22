@@ -50,6 +50,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Load rawdata, infer variables, build the plan, and register the pipeline without running models.",
     )
     parser.add_argument(
+        "--multi-outcome",
+        action="store_true",
+        help="Build and run one registered analysis pipeline per inferred outcome candidate.",
+    )
+    parser.add_argument(
+        "--max-outcomes",
+        type=int,
+        default=3,
+        help="Maximum number of inferred outcomes to analyze when --multi-outcome is enabled.",
+    )
+    parser.add_argument(
         "--dependent-variable",
         default=None,
         help="Override the inferred dependent variable.",
@@ -107,6 +118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         weight_variable=args.weight_variable,
         id_variable=args.id_variable,
         time_variable=args.time_variable,
+        enable_multi_outcome=args.multi_outcome,
+        max_outcomes=args.max_outcomes,
     )
 
     status = "completed" if result.success else "failed"
@@ -118,6 +131,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Model type: {registration.model_type}")
         print(f"Dependent variable: {registration.dependent_variable}")
         print(f"Independent variables: {', '.join(registration.independent_variables)}")
+    multi_build_result = getattr(result, "multi_outcome_pipeline_build_result", None)
+    if multi_build_result is not None:
+        print(f"Multi-outcome models: {len(multi_build_result.model_results)}")
     if result.output_files:
         print("Output files:")
         for output_file in result.output_files:

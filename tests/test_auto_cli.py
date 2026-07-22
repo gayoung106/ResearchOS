@@ -43,6 +43,9 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             "model_a",
             "--enable-robustness",
             "--plan-only",
+            "--multi-outcome",
+            "--max-outcomes",
+            "2",
             "--dependent-variable",
             "final_score",
             "--independent-variables",
@@ -70,6 +73,8 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["model_id"] == "model_a"
     assert calls["enable_robustness"] is True
     assert calls["run_analysis"] is False
+    assert calls["enable_multi_outcome"] is True
+    assert calls["max_outcomes"] == 2
     assert calls["dependent_variable"] == "final_score"
     assert calls["independent_variables"] == ["baseline_score", "age"]
     assert calls["control_variables"] == ["gender"]

@@ -155,3 +155,45 @@ def test_run_auto_rawdata_analysis_reports_setup_failure(tmp_path: Path) -> None
     assert result.failed_stage == "01_auto_rawdata_loading"
     assert result.pipeline_build_result is None
     assert {Path(path).name for path in result.output_files} >= {"auto_run_summary.xlsx", "auto_run_report.md"}
+
+
+def test_run_auto_rawdata_analysis_runs_multi_outcome_pipelines_when_enabled(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    rawdata_dir = tmp_path / "rawdata"
+    rawdata_dir.mkdir()
+    pd.DataFrame(
+        {
+            "satisfaction_outcome": [2.0, 2.4, 3.1, 3.3, 4.0, 4.2, 4.7, 5.1],
+            "performance_outcome": [10.0, 11.2, 12.1, 13.0, 14.5, 15.1, 15.8, 16.2],
+            "baseline_score": [1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6],
+            "age": [21, 35, 44, 51, 39, 28, 46, 57],
+        }
+    ).to_csv(rawdata_dir / "survey.csv", index=False)
+    calls: list[str] = []
+
+    def fake_run(self: ResearchOrchestrator, **kwargs) -> OrchestratorResult:
+        calls.append(self.context.project_name)
+        self.context.add_generated_file(self.working_directory / "result" / f"{len(calls)}_fake_output.xlsx")
+        return OrchestratorResult(success=True, completed_stages=["09_regression_analysis"])
+
+    monkeypatch.setattr(ResearchOrchestrator, "run", fake_run)
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto rawdata multi outcome",
+        enable_multi_outcome=True,
+        max_outcomes=2,
+    )
+
+    assert result.success is True
+    assert result.multi_outcome_pipeline_build_result is not None
+    assert result.multi_outcome_pipeline_build_result.success is True
+    assert result.multi_outcome_pipeline_run_result is not None
+    assert result.multi_outcome_pipeline_run_result.success is True
+    assert len(result.multi_outcome_pipeline_run_result.completed_models) == 2
+    assert len(calls) == 3
+    assert result.runtime.get_artifact("auto_multi_outcome_pipeline_run_result").success is True
+    assert "outcome_analysis_plans.xlsx" in {Path(path).name for path in result.output_files}
+    assert any(Path(path).name.endswith("fake_output.xlsx") for path in result.output_files)
