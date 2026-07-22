@@ -9,10 +9,14 @@ from src.auto.multi_outcome import (
     build_auto_multi_outcome_analysis_plans,
     infer_auto_outcome_candidates,
 )
-from src.auto.pipeline import build_auto_multi_outcome_regression_orchestrators
+from src.auto.pipeline import (
+    build_auto_multi_outcome_regression_orchestrators,
+    run_auto_multi_outcome_regression_orchestrators,
+)
 from src.auto.variable_inference import build_auto_variable_map
 from src.common.config_loader import load_analysis_plan, load_variable_map
 from src.pipeline.context import ResearchContext
+from src.pipeline.orchestrator import OrchestratorResult, ResearchOrchestrator
 from src.pipeline.runtime import PipelineRuntime
 
 
@@ -143,3 +147,73 @@ def test_build_auto_multi_outcome_regression_orchestrators_requires_plan_artifac
     assert result.warnings == [
         "auto_multi_outcome_plan_result artifact is required before multi-outcome registration."
     ]
+
+
+def test_run_auto_multi_outcome_regression_orchestrators_runs_each_model(monkeypatch, tmp_path: Path) -> None:
+    data, _ = _multi_outcome_data()
+    runtime = PipelineRuntime(dataframe=data)
+    plan_result = build_auto_multi_outcome_analysis_plans(
+        _variable_map(),
+        max_outcomes=2,
+        model_id_prefix="auto_model",
+    )
+    runtime.set_artifact("auto_multi_outcome_plan_result", plan_result)
+    build_result = build_auto_multi_outcome_regression_orchestrators(
+        context=ResearchContext(project_name="multi outcome run"),
+        runtime=runtime,
+        working_directory=tmp_path,
+    )
+    calls: list[tuple[str, bool]] = []
+
+    def fake_run(self: ResearchOrchestrator, **kwargs: object) -> OrchestratorResult:
+        calls.append((self.context.project_name, bool(kwargs["rerun_completed"])))
+        return OrchestratorResult(success=True, completed_stages=self.registry.names())
+
+    monkeypatch.setattr(ResearchOrchestrator, "run", fake_run)
+
+    result = run_auto_multi_outcome_regression_orchestrators(
+        build_result,
+        runtime=runtime,
+        rerun_completed=True,
+    )
+
+    assert result.success is True
+    assert result.completed_models == ["auto_model_1", "auto_model_2"]
+    assert result.failed_models == []
+    assert result.skipped_models == []
+    assert [call[1] for call in calls] == [True, True]
+    assert runtime.get_artifact("auto_multi_outcome_pipeline_run_result").success is True
+
+
+def test_run_auto_multi_outcome_regression_orchestrators_tracks_failed_models(monkeypatch, tmp_path: Path) -> None:
+    data, _ = _multi_outcome_data()
+    runtime = PipelineRuntime(dataframe=data)
+    plan_result = build_auto_multi_outcome_analysis_plans(
+        _variable_map(),
+        max_outcomes=2,
+        model_id_prefix="auto_model",
+    )
+    runtime.set_artifact("auto_multi_outcome_plan_result", plan_result)
+    build_result = build_auto_multi_outcome_regression_orchestrators(
+        context=ResearchContext(project_name="multi outcome failed run"),
+        runtime=runtime,
+        working_directory=tmp_path,
+    )
+
+    def fake_run(self: ResearchOrchestrator, **kwargs: object) -> OrchestratorResult:
+        if self.context.project_name.endswith("auto_model_2"):
+            return OrchestratorResult(
+                success=False,
+                failed_stage="09_regression_analysis",
+                warnings=["model failed"],
+            )
+        return OrchestratorResult(success=True, completed_stages=self.registry.names())
+
+    monkeypatch.setattr(ResearchOrchestrator, "run", fake_run)
+
+    result = run_auto_multi_outcome_regression_orchestrators(build_result, runtime=runtime)
+
+    assert result.success is False
+    assert result.completed_models == ["auto_model_1"]
+    assert result.failed_models == ["auto_model_2"]
+    assert "auto_model_2: model failed" in result.warnings

@@ -8,7 +8,7 @@ from pathlib import Path
 from src.auto.multi_outcome import AutoMultiOutcomeAnalysisPlanResult
 from src.common.config_models import AnalysisPlan, VariableMap
 from src.pipeline.context import ResearchContext
-from src.pipeline.orchestrator import ResearchOrchestrator
+from src.pipeline.orchestrator import OrchestratorResult, ResearchOrchestrator
 from src.pipeline.regression_builder import RegressionRegistration, register_regression_pipeline
 from src.pipeline.runtime import PipelineRuntime
 
@@ -19,6 +19,16 @@ class AutoMultiOutcomePipelineBuildResult:
     model_results: dict[str, AutoRegressionPipelineBuildResult] = field(default_factory=dict)
     orchestrators: dict[str, ResearchOrchestrator] = field(default_factory=dict)
     runtimes: dict[str, PipelineRuntime] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class AutoMultiOutcomePipelineRunResult:
+    success: bool
+    model_run_results: dict[str, OrchestratorResult] = field(default_factory=dict)
+    completed_models: list[str] = field(default_factory=list)
+    failed_models: list[str] = field(default_factory=list)
+    skipped_models: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -162,4 +172,60 @@ def build_auto_multi_outcome_regression_orchestrators(
         warnings=list(dict.fromkeys(warnings)),
     )
     runtime.set_artifact("auto_multi_outcome_pipeline_build_result", result)
+    return result
+
+
+def run_auto_multi_outcome_regression_orchestrators(
+    build_result: AutoMultiOutcomePipelineBuildResult,
+    *,
+    runtime: PipelineRuntime | None = None,
+    start_from: str | None = None,
+    end_at: str | None = None,
+    rerun_completed: bool = False,
+) -> AutoMultiOutcomePipelineRunResult:
+    """Run every registered multi-outcome regression orchestrator."""
+    model_run_results: dict[str, OrchestratorResult] = {}
+    completed_models: list[str] = []
+    failed_models: list[str] = []
+    skipped_models: list[str] = []
+    warnings = list(build_result.warnings)
+
+    if not build_result.orchestrators:
+        result = AutoMultiOutcomePipelineRunResult(
+            success=False,
+            warnings=warnings + ["No multi-outcome orchestrators are available to run."],
+        )
+        if runtime is not None:
+            runtime.set_artifact("auto_multi_outcome_pipeline_run_result", result)
+        return result
+
+    for model_id, orchestrator in build_result.orchestrators.items():
+        model_build_result = build_result.model_results.get(model_id)
+        if model_build_result is not None and not model_build_result.success:
+            skipped_models.append(model_id)
+            warnings.append(f"{model_id} was skipped because pipeline registration failed.")
+            continue
+
+        run_result = orchestrator.run(
+            start_from=start_from,
+            end_at=end_at,
+            rerun_completed=rerun_completed,
+        )
+        model_run_results[model_id] = run_result
+        warnings.extend(f"{model_id}: {warning}" for warning in run_result.warnings)
+        if run_result.success:
+            completed_models.append(model_id)
+        else:
+            failed_models.append(model_id)
+
+    result = AutoMultiOutcomePipelineRunResult(
+        success=bool(model_run_results) and not failed_models and not skipped_models,
+        model_run_results=model_run_results,
+        completed_models=completed_models,
+        failed_models=failed_models,
+        skipped_models=skipped_models,
+        warnings=list(dict.fromkeys(warnings)),
+    )
+    if runtime is not None:
+        runtime.set_artifact("auto_multi_outcome_pipeline_run_result", result)
     return result
