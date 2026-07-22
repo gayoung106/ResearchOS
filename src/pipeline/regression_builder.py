@@ -646,6 +646,8 @@ def register_regression_pipeline(
         "gee_negative_binomial",
         "gee_nb",
         "gee_gamma",
+        "gee_inverse_gaussian",
+        "gee_inverse-gaussian",
     } or requested_model_type in {
         "gee",
         "gee_gaussian",
@@ -654,6 +656,8 @@ def register_regression_pipeline(
         "gee_negative_binomial",
         "gee_nb",
         "gee_gamma",
+        "gee_inverse_gaussian",
+        "gee_inverse-gaussian",
     }
     multilevel = analysis_plan.analyses.multilevel
     multilevel_options = _multilevel_options(analysis_plan)
@@ -1788,12 +1792,14 @@ def register_regression_pipeline(
             ),
         }
     elif gee_requested:
-        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
+        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
             model_type = requested_model_type
         elif requested_model_type == "gee_nb" or requested_estimator in {"gee_negative_binomial", "gee_nb"}:
             model_type = "gee_negative_binomial"
         elif requested_estimator == "gee_gamma":
             model_type = "gee_gamma"
+        elif requested_estimator in {"gee_inverse_gaussian", "gee_inverse-gaussian"} or requested_model_type == "gee_inverse-gaussian":
+            model_type = "gee_inverse_gaussian"
         else:
             model_type = (
                 "gee_logit"
@@ -2248,6 +2254,8 @@ def register_regression_pipeline(
         "gee_poisson",
         "gee_negative_binomial",
         "gee_gamma",
+        "gee_inverse_gaussian",
+        "gee_inverse-gaussian",
     }:
         orchestrator.register(
             RegressionDiagnosticsStep(

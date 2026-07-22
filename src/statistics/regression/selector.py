@@ -754,7 +754,7 @@ def fit_regression_by_level(
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
-    if model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma"}:
+    if model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
         options = mixed_effects_options or {}
         gee_group = group_variable or str(options.get("group_variable", "")).strip()
         if not gee_group:
