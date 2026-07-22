@@ -1003,7 +1003,7 @@ def _diagnostics_item(
             recommendation="Report within-panel VIF checks and entity-level residual diagnostics.",
         )
 
-    if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
+    if result is not None and getattr(result, "model_type", None) in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}:
         summary = getattr(report, "summary", {})
         warning_count = len(getattr(report, "warnings", []))
         evidence = (
@@ -1674,7 +1674,7 @@ def build_research_audit_report(
                     "scale": regression_result.fit_statistics.get("scale"),
                 }
             )
-        elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
+        elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}:
             metadata.update(
                 {
                     "group_variable": regression_result.metadata.get("group_variable"),
@@ -1683,6 +1683,8 @@ def build_research_audit_report(
                     "negative_binomial_alpha": regression_result.fit_statistics.get("negative_binomial_alpha"),
                     "gamma_scale": regression_result.fit_statistics.get("gamma_scale"),
                     "inverse_gaussian_scale": regression_result.fit_statistics.get("inverse_gaussian_scale"),
+                    "tweedie_var_power": regression_result.fit_statistics.get("tweedie_var_power"),
+                    "tweedie_scale": regression_result.fit_statistics.get("tweedie_scale"),
                 }
             )
         elif regression_result.model_type in {"log_binomial", "quasi_binomial", "modified_poisson", "linear_probability_model"}:

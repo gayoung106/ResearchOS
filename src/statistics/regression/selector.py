@@ -754,7 +754,7 @@ def fit_regression_by_level(
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
         )
 
-    if model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
+    if model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}:
         options = mixed_effects_options or {}
         gee_group = group_variable or str(options.get("group_variable", "")).strip()
         if not gee_group:
@@ -770,6 +770,7 @@ def fit_regression_by_level(
             covariance_structure=str(options.get("covariance_structure", "exchangeable")),
             add_intercept=bool(options.get("add_intercept", True)),
             maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 100))),
+            tweedie_var_power=float(options.get("tweedie_var_power", 1.5)),
         )
 
     if model_type == "mixed_negative_binomial_three_level":

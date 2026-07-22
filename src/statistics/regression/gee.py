@@ -12,10 +12,10 @@ import statsmodels.api as sm
 from src.statistics.regression.base import ModelCoefficient, RegressionResult
 from src.statistics.regression.design_matrix import prepare_regression_design_matrix
 
-GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}
+GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}
 
 
-def _family_for_model(model_type: str) -> Any:
+def _family_for_model(model_type: str, *, tweedie_var_power: float = 1.5) -> Any:
     if model_type == "gee_gaussian":
         return sm.families.Gaussian()
     if model_type == "gee_logit":
@@ -28,6 +28,8 @@ def _family_for_model(model_type: str) -> Any:
         return sm.families.Gamma(link=sm.families.links.Log())
     if model_type == "gee_inverse_gaussian":
         return sm.families.InverseGaussian(link=sm.families.links.Log())
+    if model_type == "gee_tweedie":
+        return sm.families.Tweedie(var_power=tweedie_var_power, link=sm.families.links.Log())
     raise ValueError(f"Unsupported GEE model type: {model_type}")
 
 
@@ -49,6 +51,9 @@ def _validate_outcome(outcome: pd.Series, model_type: str) -> pd.Series:
         unique = sorted(outcome.dropna().unique().tolist())
         if unique != [0.0, 1.0]:
             raise ValueError(f"GEE logit requires a 0/1 outcome; found {unique}.")
+    if model_type == "gee_tweedie":
+        if (outcome < 0).any():
+            raise ValueError("GEE Tweedie requires a non-negative outcome.")
     if model_type in {"gee_gamma", "gee_inverse_gaussian"}:
         if (outcome <= 0).any():
             raise ValueError("GEE positive continuous models require a strictly positive outcome.")
@@ -106,10 +111,13 @@ def fit_gee(
     covariance_structure: str = "exchangeable",
     add_intercept: bool = True,
     maximum_iterations: int = 100,
+    tweedie_var_power: float = 1.5,
 ) -> RegressionResult:
     """Fit a population-averaged GEE model and return the common regression result."""
     if model_type not in GEE_MODEL_TYPES:
         raise ValueError(f"Unsupported GEE model type: {model_type}")
+    if model_type == "gee_tweedie" and not 1.0 < float(tweedie_var_power) < 2.0:
+        raise ValueError("GEE Tweedie requires tweedie_var_power between 1 and 2.")
     if not group_variable.strip():
         raise ValueError("GEE requires a group_variable.")
     if group_variable not in dataframe.columns:
@@ -143,7 +151,7 @@ def fit_gee(
         outcome,
         predictors,
         groups=groups,
-        family=_family_for_model(model_type),
+        family=_family_for_model(model_type, tweedie_var_power=float(tweedie_var_power)),
         cov_struct=_covariance_structure(covariance_structure),
     )
     fitted = model.fit(maxiter=maximum_iterations)
@@ -164,7 +172,7 @@ def fit_gee(
                 confidence_interval_lower=lower,
                 confidence_interval_upper=upper,
                 exponentiated_estimate=(
-                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"} else None
+                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"} else None
                 ),
             )
         )
@@ -189,6 +197,8 @@ def fit_gee(
         "negative_binomial_alpha": 1.0 if model_type == "gee_negative_binomial" else None,
         "gamma_scale": float(fitted.scale) if model_type == "gee_gamma" else None,
         "inverse_gaussian_scale": float(fitted.scale) if model_type == "gee_inverse_gaussian" else None,
+        "tweedie_var_power": float(tweedie_var_power) if model_type == "gee_tweedie" else None,
+        "tweedie_scale": float(fitted.scale) if model_type == "gee_tweedie" else None,
     }
 
     return RegressionResult(
@@ -208,6 +218,7 @@ def fit_gee(
             "family": model.family.__class__.__name__,
             "add_intercept": add_intercept,
             "maximum_iterations": maximum_iterations,
+            "tweedie_var_power": float(tweedie_var_power) if model_type == "gee_tweedie" else None,
             "qic_warnings": qic_warnings,
             "qic_warning_count": len(qic_warnings),
             **design.metadata,

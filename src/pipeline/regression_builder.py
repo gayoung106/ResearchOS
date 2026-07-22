@@ -648,6 +648,7 @@ def register_regression_pipeline(
         "gee_gamma",
         "gee_inverse_gaussian",
         "gee_inverse-gaussian",
+        "gee_tweedie",
     } or requested_model_type in {
         "gee",
         "gee_gaussian",
@@ -658,6 +659,7 @@ def register_regression_pipeline(
         "gee_gamma",
         "gee_inverse_gaussian",
         "gee_inverse-gaussian",
+        "gee_tweedie",
     }
     multilevel = analysis_plan.analyses.multilevel
     multilevel_options = _multilevel_options(analysis_plan)
@@ -1792,7 +1794,7 @@ def register_regression_pipeline(
             ),
         }
     elif gee_requested:
-        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
+        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}:
             model_type = requested_model_type
         elif requested_model_type == "gee_nb" or requested_estimator in {"gee_negative_binomial", "gee_nb"}:
             model_type = "gee_negative_binomial"
@@ -1800,6 +1802,8 @@ def register_regression_pipeline(
             model_type = "gee_gamma"
         elif requested_estimator in {"gee_inverse_gaussian", "gee_inverse-gaussian"} or requested_model_type == "gee_inverse-gaussian":
             model_type = "gee_inverse_gaussian"
+        elif requested_estimator == "gee_tweedie":
+            model_type = "gee_tweedie"
         else:
             model_type = (
                 "gee_logit"
@@ -1840,6 +1844,7 @@ def register_regression_pipeline(
             "covariance_structure": regression_options.get("covariance_structure", "exchangeable"),
             "add_intercept": regression_options.get("add_intercept", True),
             "max_iterations": regression_options.get("max_iterations", regression_options.get("maximum_iterations", 100)),
+            "tweedie_var_power": regression_options.get("tweedie_var_power", 1.5),
         }
     elif multilevel.enabled:
         raw_random_slopes = multilevel_options.get("random_slope_variables")
@@ -2256,6 +2261,7 @@ def register_regression_pipeline(
         "gee_gamma",
         "gee_inverse_gaussian",
         "gee_inverse-gaussian",
+        "gee_tweedie",
     }:
         orchestrator.register(
             RegressionDiagnosticsStep(

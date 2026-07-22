@@ -10,7 +10,7 @@ import pandas as pd
 
 from src.statistics.regression.base import RegressionResult
 
-GEE_DIAGNOSTIC_MODELS = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}
+GEE_DIAGNOSTIC_MODELS = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}
 
 
 @dataclass(slots=True)
@@ -48,7 +48,7 @@ def _validate_gee_result(result: RegressionResult) -> None:
         raise ValueError("GEE diagnostics metadata is missing: " + ", ".join(missing))
 
 
-def _variance_function(model_type: str, predicted: np.ndarray, scale: float) -> np.ndarray:
+def _variance_function(model_type: str, predicted: np.ndarray, scale: float, var_power: float = 1.5) -> np.ndarray:
     predicted = np.asarray(predicted, dtype=float)
     if model_type == "gee_logit":
         clipped = np.clip(predicted, 1e-8, 1 - 1e-8)
@@ -65,6 +65,9 @@ def _variance_function(model_type: str, predicted: np.ndarray, scale: float) -> 
     if model_type == "gee_inverse_gaussian":
         mean = np.clip(predicted, 1e-8, None)
         return max(float(scale), 1e-8) * mean**3
+    if model_type == "gee_tweedie":
+        mean = np.clip(predicted, 1e-8, None)
+        return max(float(scale), 1e-8) * mean**float(var_power)
     return np.full_like(predicted, max(float(scale), 1e-8), dtype=float)
 
 
@@ -79,7 +82,12 @@ def build_gee_diagnostics(result: RegressionResult) -> GEEDiagnosticsReport:
         raise ValueError("GEE diagnostics arrays have inconsistent lengths.")
 
     raw_residual = observed - predicted
-    variance = _variance_function(result.model_type, predicted, float(result.fit_statistics.get("scale", 1.0)))
+    variance = _variance_function(
+        result.model_type,
+        predicted,
+        float(result.fit_statistics.get("scale", 1.0)),
+        float(result.fit_statistics.get("tweedie_var_power", 1.5) or 1.5),
+    )
     pearson_residual = raw_residual / np.sqrt(variance)
     residuals = pd.DataFrame(
         {

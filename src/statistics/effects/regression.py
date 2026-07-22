@@ -1841,6 +1841,9 @@ def _build_gee_effects(result: RegressionResult) -> EffectSizeReport:
         elif result.model_type == "gee_inverse_gaussian":
             effect_type = "mean_ratio"
             interpretation = "Population-averaged mean ratio from inverse Gaussian GEE."
+        elif result.model_type == "gee_tweedie":
+            effect_type = "mean_ratio"
+            interpretation = "Population-averaged mean ratio from Tweedie GEE."
         else:
             effect_type = "incidence_rate_ratio"
             interpretation = "Population-averaged incidence rate ratio from GEE."
@@ -1974,7 +1977,7 @@ def build_regression_effect_size_report(
     if result.model_type == "multinomial_logit":
         return _build_multinomial_logit_effects(result)
 
-    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian"}:
+    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial", "gee_gamma", "gee_inverse_gaussian", "gee_tweedie"}:
         return _build_gee_effects(result)
 
     if result.model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:
