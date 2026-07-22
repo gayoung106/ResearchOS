@@ -307,6 +307,7 @@ def write_korean_results_narrative(
         "ordered_probit": "Ordered probit regression",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
+        "generalized_poisson": "Generalized Poisson regression",
         "zero_inflated_poisson": "영과잉 포아송 회귀분석",
         "zero_inflated_negative_binomial": "영과잉 음이항 회귀분석",
         "hurdle_poisson": "Hurdle Poisson regression",
@@ -525,6 +526,7 @@ def write_korean_results_narrative(
         elif regression_result.model_type in {
             "poisson",
             "negative_binomial",
+            "generalized_poisson",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
             "hurdle_poisson",

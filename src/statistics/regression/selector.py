@@ -23,6 +23,7 @@ from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
+from src.statistics.regression.generalized_poisson import fit_generalized_poisson
 from src.statistics.regression.heckman import fit_heckman_selection
 from src.statistics.regression.hurdle_negative_binomial import fit_hurdle_negative_binomial
 from src.statistics.regression.hurdle_poisson import fit_hurdle_poisson
@@ -87,6 +88,20 @@ def fit_regression_by_level(
     mixed_effects_options: dict[str, object] | None = None,
 ) -> RegressionResult:
     """측정수준 또는 명시적 모형 설정에 적합한 회귀모형을 실행한다."""
+    if model_type == "generalized_poisson":
+        options = mixed_effects_options or {}
+        return fit_generalized_poisson(
+            dataframe,
+            dependent_variable=dependent_variable,
+            independent_variables=independent_variables,
+            fixed_effects=fixed_effects,
+            model_id=model_id,
+            covariance_type=str(options.get("covariance_type", "HC3")),
+            add_intercept=bool(options.get("add_intercept", True)),
+            maximum_iterations=int(options.get("max_iterations", options.get("maximum_iterations", 200))),
+            parameterization=int(options.get("parameterization", options.get("p", 1))),
+        )
+
     if model_type == "hurdle_negative_binomial":
         options = mixed_effects_options or {}
         return fit_hurdle_negative_binomial(

@@ -23,6 +23,7 @@ from src.statistics.regression.exponential_aft import fit_exponential_aft
 from src.statistics.regression.fractional_logit import fit_fractional_logit
 from src.statistics.regression.gamma import fit_gamma_regression
 from src.statistics.regression.gee import fit_gee
+from src.statistics.regression.generalized_poisson import fit_generalized_poisson
 from src.statistics.regression.heckman import fit_heckman_selection
 from src.statistics.regression.hurdle_negative_binomial import fit_hurdle_negative_binomial
 from src.statistics.regression.hurdle_poisson import fit_hurdle_poisson
@@ -119,6 +120,7 @@ __all__ = [
     "fit_exponential_aft",
     "fit_fractional_logit",
     "fit_gamma_regression",
+    "fit_generalized_poisson",
     "fit_heckman_selection",
     "fit_hurdle_poisson",
     "fit_hurdle_negative_binomial",

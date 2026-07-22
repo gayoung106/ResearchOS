@@ -398,6 +398,7 @@ class RegressionDiagnosticsStep(PipelineStep):
         if result.model_type in {
             "poisson",
             "negative_binomial",
+            "generalized_poisson",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
             "hurdle_poisson",

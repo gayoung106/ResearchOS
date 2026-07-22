@@ -1642,6 +1642,7 @@ def build_research_audit_report(
         elif regression_result.model_type in {
             "poisson",
             "negative_binomial",
+            "generalized_poisson",
             "zero_inflated_poisson",
             "zero_inflated_negative_binomial",
             "hurdle_poisson",
@@ -1657,6 +1658,7 @@ def build_research_audit_report(
                     "inflation_model": regression_result.metadata.get("inflation_model"),
                     "hurdle_model": regression_result.metadata.get("hurdle_model"),
                     "count_model": regression_result.metadata.get("count_model"),
+                    "generalized_poisson_parameterization": regression_result.metadata.get("generalized_poisson_parameterization"),
                 }
             )
         elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:

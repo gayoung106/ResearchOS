@@ -1779,6 +1779,7 @@ def build_regression_effect_size_report(
     if result.model_type in {
         "poisson",
         "negative_binomial",
+        "generalized_poisson",
         "zero_inflated_poisson",
         "zero_inflated_negative_binomial",
         "hurdle_poisson",
