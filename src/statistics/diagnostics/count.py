@@ -28,6 +28,7 @@ _COUNT_DIAGNOSTIC_MODELS = {
     "mixed_negative_binomial_random_slope",
     "mixed_negative_binomial_three_level",
     "gee_poisson",
+    "gee_negative_binomial",
 }
 
 _MIXED_NEGATIVE_BINOMIAL_MODELS = {
@@ -35,6 +36,7 @@ _MIXED_NEGATIVE_BINOMIAL_MODELS = {
     "mixed_negative_binomial_random_slope",
     "mixed_negative_binomial_three_level",
     "gee_poisson",
+    "gee_negative_binomial",
 }
 
 

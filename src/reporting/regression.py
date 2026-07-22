@@ -310,6 +310,7 @@ def write_korean_results_narrative(
         "ordered_probit": "Ordered probit regression",
         "tweedie_regression": "Tweedie regression",
         "quasi_poisson": "Quasi-Poisson regression",
+        "gee_negative_binomial": "GEE negative binomial regression",
         "poisson": "포아송 회귀분석",
         "negative_binomial": "음이항 회귀분석",
         "generalized_poisson": "Generalized Poisson regression",
@@ -552,6 +553,7 @@ def write_korean_results_narrative(
             "mixed_negative_binomial_random_slope",
             "mixed_negative_binomial_three_level",
             "gee_poisson",
+            "gee_negative_binomial",
         }:
             incidence_rate_ratio = effect_lookup.get(
                 (
@@ -1122,7 +1124,7 @@ def write_korean_results_narrative(
     elif regression_result.model_type in _GLMM_MODELS:
         _append_glmm_structure_sentences(sentences, regression_result)
 
-    elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+    elif regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
         cluster_count = regression_result.fit_statistics.get("cluster_count")
         group_variable = regression_result.metadata.get("group_variable")
         covariance_structure = regression_result.metadata.get("covariance_structure")
@@ -1317,7 +1319,7 @@ def build_regression_publication_report(
     if regression_result.model_type == "ordered_probit":
         notes.append("Ordered probit reports latent-index coefficients and ordered threshold parameters.")
 
-    if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+    if regression_result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
         notes.append("GEE models are population-averaged and use robust sandwich standard errors.")
 
     if regression_result.model_type == "weighted_least_squares":

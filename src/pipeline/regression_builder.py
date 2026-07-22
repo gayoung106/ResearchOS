@@ -638,11 +638,20 @@ def register_regression_pipeline(
         "quantile",
         "quantile_regression",
     }
-    gee_requested = requested_estimator == "gee" or requested_model_type in {
+    gee_requested = requested_estimator in {
         "gee",
         "gee_gaussian",
         "gee_logit",
         "gee_poisson",
+        "gee_negative_binomial",
+        "gee_nb",
+    } or requested_model_type in {
+        "gee",
+        "gee_gaussian",
+        "gee_logit",
+        "gee_poisson",
+        "gee_negative_binomial",
+        "gee_nb",
     }
     multilevel = analysis_plan.analyses.multilevel
     multilevel_options = _multilevel_options(analysis_plan)
@@ -1777,8 +1786,10 @@ def register_regression_pipeline(
             ),
         }
     elif gee_requested:
-        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+        if requested_model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
             model_type = requested_model_type
+        elif requested_model_type == "gee_nb" or requested_estimator in {"gee_negative_binomial", "gee_nb"}:
+            model_type = "gee_negative_binomial"
         else:
             model_type = (
                 "gee_logit"
@@ -2231,6 +2242,7 @@ def register_regression_pipeline(
         "gee_gaussian",
         "gee_logit",
         "gee_poisson",
+        "gee_negative_binomial",
     }:
         orchestrator.register(
             RegressionDiagnosticsStep(

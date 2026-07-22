@@ -1968,7 +1968,7 @@ def build_regression_effect_size_report(
     if result.model_type == "multinomial_logit":
         return _build_multinomial_logit_effects(result)
 
-    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson"}:
+    if result.model_type in {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}:
         return _build_gee_effects(result)
 
     if result.model_type in {"mixed_random_intercept", "mixed_random_slope", "mixed_three_level"}:

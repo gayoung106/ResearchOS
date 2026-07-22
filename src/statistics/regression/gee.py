@@ -12,7 +12,7 @@ import statsmodels.api as sm
 from src.statistics.regression.base import ModelCoefficient, RegressionResult
 from src.statistics.regression.design_matrix import prepare_regression_design_matrix
 
-GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson"}
+GEE_MODEL_TYPES = {"gee_gaussian", "gee_logit", "gee_poisson", "gee_negative_binomial"}
 
 
 def _family_for_model(model_type: str) -> Any:
@@ -22,6 +22,8 @@ def _family_for_model(model_type: str) -> Any:
         return sm.families.Binomial()
     if model_type == "gee_poisson":
         return sm.families.Poisson()
+    if model_type == "gee_negative_binomial":
+        return sm.families.NegativeBinomial()
     raise ValueError(f"Unsupported GEE model type: {model_type}")
 
 
@@ -43,12 +45,12 @@ def _validate_outcome(outcome: pd.Series, model_type: str) -> pd.Series:
         unique = sorted(outcome.dropna().unique().tolist())
         if unique != [0.0, 1.0]:
             raise ValueError(f"GEE logit requires a 0/1 outcome; found {unique}.")
-    if model_type == "gee_poisson":
+    if model_type in {"gee_poisson", "gee_negative_binomial"}:
         if (outcome < 0).any():
-            raise ValueError("GEE Poisson requires a non-negative count outcome.")
+            raise ValueError("GEE count models require a non-negative count outcome.")
         rounded = np.round(outcome)
         if not np.allclose(outcome, rounded):
-            raise ValueError("GEE Poisson requires integer count outcomes.")
+            raise ValueError("GEE count models require integer count outcomes.")
         return pd.Series(rounded, index=outcome.index, name=outcome.name, dtype=float)
     return outcome
 
@@ -155,7 +157,7 @@ def fit_gee(
                 confidence_interval_lower=lower,
                 confidence_interval_upper=upper,
                 exponentiated_estimate=(
-                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson"} else None
+                    float(np.exp(estimate)) if model_type in {"gee_logit", "gee_poisson", "gee_negative_binomial"} else None
                 ),
             )
         )
@@ -176,6 +178,8 @@ def fit_gee(
         "scale": float(fitted.scale),
         "qic": qic,
         "qicu": qicu,
+        "alpha": 1.0 if model_type == "gee_negative_binomial" else None,
+        "negative_binomial_alpha": 1.0 if model_type == "gee_negative_binomial" else None,
     }
 
     return RegressionResult(
