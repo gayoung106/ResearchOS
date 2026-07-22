@@ -162,3 +162,30 @@ def test_auto_variable_inference_applies_codebook_role_and_level_hints() -> None
     assert result.variable_map.variables["q1"].evidence["metadata_role_hint"] == "dependent"
     assert result.variable_map.variables["q1"].evidence["metadata_measurement_level_hint"] == "continuous"
     assert any("measurement_level_hint" in note for note in result.detections[0].evidence.notes)
+
+
+def test_auto_variable_inference_resolves_multiple_dependent_hints_for_main_plan() -> None:
+    data = pd.DataFrame(
+        {
+            "satisfaction": [2.0, 2.4, 3.1, 3.3, 4.0, 4.2],
+            "performance": [10.0, 11.2, 12.1, 13.0, 14.5, 15.1],
+            "age": [21, 35, 44, 51, 39, 28],
+        }
+    )
+    metadata = pd.DataFrame(
+        {
+            "variable_name": ["satisfaction", "performance", "age"],
+            "variable_label": ["satisfaction outcome", "performance outcome", "age"],
+            "role_hint": ["dependent", "dependent", "control"],
+            "measurement_level_hint": ["continuous", "continuous", "continuous"],
+        }
+    )
+
+    result = build_auto_variable_map(data, variable_metadata=metadata)
+    roles = {item.variable_name: item.role for item in result.role_inferences}
+
+    assert roles["satisfaction"] == "dependent"
+    assert roles["performance"] == "independent"
+    assert roles["age"] == "control"
+    assert result.variable_map.variables["performance"].evidence["auto_role_conflict_resolved"] is True
+    assert any("Multiple dependent variables" in warning for warning in result.warnings)

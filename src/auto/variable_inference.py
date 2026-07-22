@@ -166,7 +166,7 @@ def _canonical_hint(value: str, valid_values: set[str], aliases: dict[str, str])
 
 
 def _role_hint(metadata: dict[str, str]) -> str | None:
-    for column in ["role_hint", "codebook_note", "search_text"]:
+    for column in ["role_hint", "codebook_note"]:
         value = metadata.get(column)
         if value:
             hint = _canonical_hint(value, _VALID_ROLE_HINTS, _ROLE_HINT_ALIASES)
@@ -176,7 +176,7 @@ def _role_hint(metadata: dict[str, str]) -> str | None:
 
 
 def _level_hint(metadata: dict[str, str]) -> str | None:
-    for column in ["measurement_level_hint", "codebook_note", "search_text"]:
+    for column in ["measurement_level_hint", "codebook_note"]:
         value = metadata.get(column)
         if value:
             hint = _canonical_hint(value, _VALID_LEVEL_HINTS, _LEVEL_HINT_ALIASES)
@@ -496,6 +496,55 @@ def infer_variable_roles(
     return output
 
 
+
+
+def _resolved_conflict_role(item: VariableRoleInference, role: str) -> VariableRoleInference:
+    alternatives = list(dict.fromkeys([item.role, *item.alternatives, "review"]))
+    return VariableRoleInference(
+        item.variable_name,
+        role,
+        item.measurement_level,
+        min(item.confidence, 0.75),
+        f"Role conflict resolved: {item.role} was changed to {role} for the main auto plan.",
+        alternatives=alternatives,
+    )
+
+
+def _resolve_singleton_role_conflicts(
+    role_inferences: list[VariableRoleInference],
+) -> tuple[list[VariableRoleInference], list[str]]:
+    singleton_roles = {"dependent", "id", "time", "weight", "strata"}
+    output = list(role_inferences)
+    warnings: list[str] = []
+    index_by_variable = {item.variable_name: index for index, item in enumerate(output)}
+
+    for role in singleton_roles:
+        matches = [item for item in output if item.role == role]
+        if len(matches) <= 1:
+            continue
+        selected = max(
+            matches,
+            key=lambda item: (
+                item.confidence,
+                -index_by_variable[item.variable_name],
+            ),
+        )
+        displaced = [item for item in matches if item.variable_name != selected.variable_name]
+        warnings.append(
+            f"Multiple {role} variables were inferred; kept {selected.variable_name} and reassigned "
+            f"{', '.join(item.variable_name for item in displaced)}."
+        )
+        for item in displaced:
+            index = index_by_variable[item.variable_name]
+            if role == "dependent" and item.measurement_level in _PREDICTOR_LEVELS:
+                replacement_role = "independent"
+            elif item.measurement_level in _PREDICTOR_LEVELS and role not in {"id", "time", "weight"}:
+                replacement_role = "control"
+            else:
+                replacement_role = "other"
+            output[index] = _resolved_conflict_role(item, replacement_role)
+    return output, warnings
+
 def build_auto_variable_map(
     dataframe: pd.DataFrame,
     *,
@@ -511,11 +560,13 @@ def build_auto_variable_map(
         detections,
         variable_metadata=variable_metadata,
     )
+    role_inferences, conflict_warnings = _resolve_singleton_role_conflicts(role_inferences)
     warnings = [
         f"{item.variable_name}: {item.role} confidence={item.confidence:.2f}"
         for item in role_inferences
         if item.confidence < 0.7
     ]
+    warnings.extend(conflict_warnings)
     variables: dict[str, VariableDefinition] = {}
     for item in role_inferences:
         metadata = metadata_lookup.get(item.variable_name, {})
@@ -530,6 +581,7 @@ def build_auto_variable_map(
                 "auto_role_confidence": item.confidence,
                 "auto_role_reason": item.reason,
                 "auto_role_alternatives": item.alternatives,
+                "auto_role_conflict_resolved": "Role conflict resolved" in item.reason,
                 "auto_role_search_text": metadata.get("search_text", item.variable_name),
                 "metadata_role_hint": metadata.get("role_hint"),
                 "metadata_measurement_level_hint": metadata.get("measurement_level_hint"),
