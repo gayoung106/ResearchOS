@@ -67,10 +67,12 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "output_manifest.xlsx" in final_report_text
     manifest_path = next(Path(path) for path in result.output_files if Path(path).name == "output_manifest.xlsx")
     manifest = pd.read_excel(manifest_path)
-    assert {"category", "filename", "relative_path", "exists"}.issubset(manifest.columns)
+    assert {"category", "recommended", "description", "filename", "relative_path", "exists"}.issubset(manifest.columns)
     assert "auto_final_report.md" in set(manifest["filename"])
     assert "auto_validation_report.xlsx" in set(manifest["filename"])
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "exists"].all()
+    assert manifest.loc[manifest["filename"] == "auto_final_report.md", "recommended"].all()
+    assert manifest.loc[manifest["filename"] == "auto_final_report.md", "description"].str.contains("Start here").any()
 
 
 def test_run_auto_rawdata_analysis_executes_registered_pipeline_when_requested(

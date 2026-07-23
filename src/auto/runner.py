@@ -401,6 +401,46 @@ def _output_manifest_priority(category: str) -> int:
     }
     return order.get(category, 99)
 
+def _describe_output_file(path: Path, category: str) -> str:
+    name = path.name.lower()
+    descriptions = {
+        "auto_final_report.md": "Start here: final narrative summary and key model results.",
+        "auto_run_report.md": "Automatic setup and pipeline registration summary.",
+        "auto_run_summary.xlsx": "Stage-level execution status table.",
+        "auto_validation_report.xlsx": "Validation checklist with evidence and repair suggestions.",
+        "output_manifest.xlsx": "Index of generated output files and recommended reading order.",
+        "analysis_base.parquet": "Clean analysis dataset selected from rawdata.",
+        "rawdata_candidates.xlsx": "Candidate raw datasets and sheet selection scores.",
+        "variable_role_inference.xlsx": "Variable role and measurement-level inference details.",
+        "inferred_variable_map.xlsx": "Inferred variable map in spreadsheet form.",
+        "analysis_plan_summary.xlsx": "Auto-generated analysis plan summary.",
+        "auto_analysis_plan.yaml": "Machine-readable analysis plan used by the pipeline.",
+        "auto_variable_map.yaml": "Machine-readable variable map used by the pipeline.",
+        "coefficients.xlsx": "Model coefficient table.",
+        "fit_statistics.xlsx": "Model fit statistics table.",
+    }
+    if name in descriptions:
+        return descriptions[name]
+    category_descriptions = {
+        "diagnostics": "Model diagnostic output.",
+        "effect_size": "Effect-size output.",
+        "reporting": "Publication reporting output.",
+        "visualization": "Generated visualization output.",
+        "research_audit": "Research audit output.",
+        "multi_outcome": "Output from an automatically generated multi-outcome model.",
+    }
+    return category_descriptions.get(category, "Generated analysis output.")
+
+
+def _is_recommended_output(path: Path) -> bool:
+    return path.name.lower() in {
+        "auto_final_report.md",
+        "auto_validation_report.xlsx",
+        "output_manifest.xlsx",
+        "coefficients.xlsx",
+        "fit_statistics.xlsx",
+    }
+
 
 
 def _write_auto_validation_report(
@@ -434,6 +474,8 @@ def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalys
             {
                 "category": category,
                 "recommended_order": _output_manifest_priority(category),
+                "recommended": _is_recommended_output(path),
+                "description": _describe_output_file(path, category),
                 "filename": path.name,
                 "relative_path": relative_path,
                 "absolute_path": str(path),
