@@ -617,8 +617,10 @@ class AutoResearchIntentAgentStep(PipelineStep):
                 updated_map = apply_agent_research_model_to_variable_map(variable_map, agent_model)
                 self.runtime.set_artifact("auto_variable_map", updated_map)
                 map_path = output_dir / "agent_variable_map.yaml"
-                with map_path.open("w", encoding="utf-8") as file:
-                    yaml.safe_dump(updated_map.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
+                standard_map_path = output_dir.parent / "auto_variable_map.yaml"
+                for target_path in [map_path, standard_map_path]:
+                    with target_path.open("w", encoding="utf-8") as file:
+                        yaml.safe_dump(updated_map.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
                 output_files.append(str(map_path))
 
                 analysis_plan = self.runtime.artifacts.get("auto_analysis_plan")
@@ -626,10 +628,13 @@ class AutoResearchIntentAgentStep(PipelineStep):
                     updated_plan = apply_agent_research_model_to_analysis_plan(analysis_plan, agent_model, updated_map)
                     self.runtime.set_artifact("auto_analysis_plan", updated_plan)
                     plan_path = output_dir / "agent_analysis_plan.yaml"
-                    with plan_path.open("w", encoding="utf-8") as file:
-                        yaml.safe_dump(updated_plan.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
+                    standard_plan_path = output_dir.parent / "auto_analysis_plan.yaml"
+                    for target_path in [plan_path, standard_plan_path]:
+                        with target_path.open("w", encoding="utf-8") as file:
+                            yaml.safe_dump(updated_plan.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
                     output_files.append(str(plan_path))
                 metadata["agent_model_applied"] = True
+                metadata["standard_config_updated"] = True
                 metadata["validation_passed"] = True
 
         return StepResult(

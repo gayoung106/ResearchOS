@@ -1,9 +1,10 @@
-﻿from pathlib import Path
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
 
 from src.auto.runner import run_auto_rawdata_analysis
+from src.common.config_loader import load_analysis_plan, load_variable_map
 from src.pipeline.orchestrator import OrchestratorResult, ResearchOrchestrator
 from src.statistics.regression.base import ModelCoefficient, RegressionResult
 
@@ -369,6 +370,11 @@ def test_run_auto_rawdata_analysis_applies_agent_research_model(tmp_path: Path) 
     assert plan.variables.independent == ["gender"]
     assert plan.variables.controls == ["age"]
     assert variable_map.variables["gender"].review_status == "agent_recommended"
+    standard_plan = load_analysis_plan(tmp_path / "result" / "03_auto_plan" / "auto_analysis_plan.yaml")
+    standard_map = load_variable_map(tmp_path / "result" / "03_auto_plan" / "auto_variable_map.yaml")
+    assert standard_plan.variables.independent == ["gender"]
+    assert standard_plan.variables.controls == ["age"]
+    assert standard_map.variables["gender"].review_status == "agent_recommended"
     assert result.pipeline_build_result is not None
     assert result.pipeline_build_result.registration is not None
     assert result.pipeline_build_result.registration.independent_variables == ["gender", "age"]
