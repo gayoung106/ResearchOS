@@ -354,6 +354,84 @@ def _append_model_result_summary(lines: list[str], runtime: PipelineRuntime, *, 
             lines.extend(["", "Warnings:"])
             lines.extend(f"- {warning}" for warning in warnings[:5])
 
+
+
+def _classify_output_file(path: Path) -> str:
+    parts = {part.lower() for part in path.parts}
+    name = path.name.lower()
+    if "00_auto_run" in parts:
+        return "auto_run"
+    if "01_auto_import" in parts:
+        return "rawdata_import"
+    if "02_auto_variables" in parts:
+        return "variable_inference"
+    if "03_auto_plan" in parts:
+        return "analysis_plan"
+    if "09_regression_analysis" in parts or name in {"coefficients.xlsx", "fit_statistics.xlsx"}:
+        return "regression_result"
+    if "10_diagnostics" in parts:
+        return "diagnostics"
+    if "13_effect_size" in parts:
+        return "effect_size"
+    if "14_regression_reporting" in parts:
+        return "reporting"
+    if "15_regression_visualization" in parts:
+        return "visualization"
+    if "16_research_audit" in parts:
+        return "research_audit"
+    if "multi_outcome_runs" in parts:
+        return "multi_outcome"
+    return "other"
+
+
+def _output_manifest_priority(category: str) -> int:
+    order = {
+        "auto_run": 0,
+        "rawdata_import": 1,
+        "variable_inference": 2,
+        "analysis_plan": 3,
+        "regression_result": 4,
+        "diagnostics": 5,
+        "effect_size": 6,
+        "reporting": 7,
+        "visualization": 8,
+        "research_audit": 9,
+        "multi_outcome": 10,
+        "other": 99,
+    }
+    return order.get(category, 99)
+
+
+def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalysisResult) -> str:
+    import pandas as pd
+
+    output_dir = working_directory / "result" / "00_auto_run"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / "output_manifest.xlsx"
+    output_paths = list(dict.fromkeys([*result.output_files, str(manifest_path)]))
+    rows: list[dict[str, object]] = []
+    for output_file in output_paths:
+        path = Path(output_file)
+        category = _classify_output_file(path)
+        try:
+            relative_path = path.resolve().relative_to(working_directory).as_posix()
+        except ValueError:
+            relative_path = str(path)
+        exists = path.exists()
+        rows.append(
+            {
+                "category": category,
+                "recommended_order": _output_manifest_priority(category),
+                "filename": path.name,
+                "relative_path": relative_path,
+                "absolute_path": str(path),
+                "exists": exists,
+                "size_bytes": path.stat().st_size if exists else None,
+            }
+        )
+    rows.sort(key=lambda row: (int(row["recommended_order"]), str(row["relative_path"])))
+    pd.DataFrame(rows).to_excel(manifest_path, index=False)
+    return str(manifest_path)
 def _write_auto_final_report(
     *,
     working_directory: Path,
@@ -607,6 +685,9 @@ def run_auto_rawdata_analysis(
             context.add_generated_file(summary_path)
             context.add_generated_file(report_path)
             context.add_generated_file(final_report_path)
+            manifest_path = _write_output_manifest(working_directory=root, result=result)
+            result.output_files.append(manifest_path)
+            context.add_generated_file(manifest_path)
             validation_report = validate_auto_run_outputs(
                 runtime=runtime,
                 output_files=result.output_files,
@@ -614,6 +695,7 @@ def run_auto_rawdata_analysis(
             runtime.set_artifact("auto_run_validation_report", validation_report)
             result.warnings.extend(validation_report.warnings)
             _write_auto_final_report(working_directory=root, result=result)
+            _write_output_manifest(working_directory=root, result=result)
             return result
 
     analysis_plan = runtime.get_artifact("auto_analysis_plan")
@@ -692,6 +774,9 @@ def run_auto_rawdata_analysis(
     context.add_generated_file(summary_path)
     context.add_generated_file(report_path)
     context.add_generated_file(final_report_path)
+    manifest_path = _write_output_manifest(working_directory=root, result=result)
+    result.output_files.append(manifest_path)
+    context.add_generated_file(manifest_path)
     validation_report = validate_auto_run_outputs(
         runtime=runtime,
         output_files=result.output_files,
@@ -703,4 +788,5 @@ def run_auto_rawdata_analysis(
         for warning in validation_report.warnings:
             context.add_warning(f"auto_run_validation: {warning}")
     _write_auto_final_report(working_directory=root, result=result)
+    _write_output_manifest(working_directory=root, result=result)
     return result

@@ -52,6 +52,7 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
         "auto_run_summary.xlsx",
         "auto_run_report.md",
         "auto_final_report.md",
+        "output_manifest.xlsx",
     }
     report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_run_report.md")
     report_text = report_path.read_text(encoding="utf-8")
@@ -62,6 +63,12 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     final_report_text = final_report_path.read_text(encoding="utf-8")
     assert "Main model" in final_report_text
     assert "outcome_score" in final_report_text
+    assert "output_manifest.xlsx" in final_report_text
+    manifest_path = next(Path(path) for path in result.output_files if Path(path).name == "output_manifest.xlsx")
+    manifest = pd.read_excel(manifest_path)
+    assert {"category", "filename", "relative_path", "exists"}.issubset(manifest.columns)
+    assert "auto_final_report.md" in set(manifest["filename"])
+    assert manifest.loc[manifest["filename"] == "auto_final_report.md", "exists"].all()
 
 
 def test_run_auto_rawdata_analysis_executes_registered_pipeline_when_requested(
@@ -165,6 +172,7 @@ def test_run_auto_rawdata_analysis_reports_setup_failure(tmp_path: Path) -> None
         "auto_run_summary.xlsx",
         "auto_run_report.md",
         "auto_final_report.md",
+        "output_manifest.xlsx",
     }
 
 
