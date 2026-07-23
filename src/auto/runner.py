@@ -21,6 +21,7 @@ from src.auto.pipeline import (
     run_auto_multi_outcome_regression_orchestrators,
 )
 from src.auto.rawdata_loader import AutoRawDataLoadingStep
+from src.auto.research_intent import AutoResearchIntentAgentStep
 from src.auto.validation import auto_run_validation_report_to_dataframe, validate_auto_run_outputs
 from src.auto.variable_inference import AutoVariableInferenceStep, variable_map_to_dataframe
 from src.common.config_models import AnalysisPlan, VariableMap
@@ -418,6 +419,12 @@ def _describe_output_file(path: Path, category: str) -> str:
         "analysis_plan_summary.xlsx": "Auto-generated analysis plan summary.",
         "auto_analysis_plan.yaml": "Machine-readable analysis plan used by the pipeline.",
         "auto_variable_map.yaml": "Machine-readable variable map used by the pipeline.",
+        "research_intent_template.yaml": "Template for describing the study intent before agent review.",
+        "research_context_packet.json": "Claude-ready packet containing research intent and variable metadata.",
+        "claude_research_model_prompt.txt": "Prompt to paste into Claude for research-model selection.",
+        "agent_research_model_validation.xlsx": "Validation checklist for a Claude-proposed research model.",
+        "agent_analysis_plan.yaml": "Analysis plan after validated agent recommendations were applied.",
+        "agent_variable_map.yaml": "Variable map after validated agent recommendations were applied.",
         "coefficients.xlsx": "Model coefficient table.",
         "fit_statistics.xlsx": "Model fit statistics table.",
     }
@@ -441,6 +448,9 @@ def _is_recommended_output(path: Path) -> bool:
         "output_manifest.xlsx",
         "coefficients.xlsx",
         "fit_statistics.xlsx",
+        "research_context_packet.json",
+        "claude_research_model_prompt.txt",
+        "agent_research_model_validation.xlsx",
     }
 
 
@@ -849,6 +859,10 @@ def run_auto_rawdata_analysis(
     time_variable: str | None = None,
     enable_multi_outcome: bool = False,
     max_outcomes: int = 3,
+    research_intent_file: str | Path | None = None,
+    research_intent_text: str | None = None,
+    agent_research_model_file: str | Path | None = None,
+    apply_agent_model: bool = True,
 ) -> AutoRawDataAnalysisResult:
     """Run the rawdata-only workflow through automatic planning and analysis."""
     root = Path(working_directory).expanduser().resolve()
@@ -879,6 +893,16 @@ def run_auto_rawdata_analysis(
         AutoVariableInferenceStep(runtime),
         AutoAnalysisPlanStep(runtime, enable_robustness=enable_robustness),
     ]
+    if research_intent_file or research_intent_text or agent_research_model_file:
+        setup_steps.append(
+            AutoResearchIntentAgentStep(
+                runtime,
+                research_intent_file=research_intent_file,
+                research_intent_text=research_intent_text,
+                agent_research_model_file=agent_research_model_file,
+                apply_agent_model=apply_agent_model,
+            )
+        )
     if enable_multi_outcome:
         setup_steps.append(
             AutoMultiOutcomeAnalysisPlanStep(

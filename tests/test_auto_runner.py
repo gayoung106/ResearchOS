@@ -305,3 +305,75 @@ def test_auto_final_report_summarizes_regression_artifacts(monkeypatch, tmp_path
     assert "standardized_beta" in final_report_text
     assert "Age was positively associated with outcome_score." in final_report_text
     assert "diagnostic warning" in final_report_text
+
+
+def test_run_auto_rawdata_analysis_writes_research_agent_context(tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+    intent_path = tmp_path / "research_intent.yaml"
+    intent_path.write_text(
+        "research_topic: work outcomes\nresearch_goal: explain outcome_score from age and gender\n",
+        encoding="utf-8",
+    )
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto rawdata research intent",
+        run_analysis=False,
+        research_intent_file=intent_path,
+    )
+
+    assert result.success is True
+    assert result.runtime.get_artifact("auto_research_intent").research_topic == "work outcomes"
+    assert "auto_research_context_packet" in result.runtime.artifacts
+    assert {Path(path).name for path in result.output_files} >= {
+        "research_intent_template.yaml",
+        "research_context_packet.json",
+        "claude_research_model_prompt.txt",
+    }
+    prompt_path = next(Path(path) for path in result.output_files if Path(path).name == "claude_research_model_prompt.txt")
+    assert "Return YAML only" in prompt_path.read_text(encoding="utf-8")
+
+
+def test_run_auto_rawdata_analysis_applies_agent_research_model(tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+    agent_model_path = tmp_path / "agent_research_model.yaml"
+    agent_model_path.write_text(
+        "\n".join(
+            [
+                "dependent_variable: outcome_score",
+                "independent_variables:",
+                "  - gender",
+                "controls:",
+                "  - age",
+                "model_rationale: Agent selected a parsimonious model.",
+                "confidence: 0.8",
+                "requires_human_review: false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto rawdata agent applied",
+        run_analysis=False,
+        research_intent_text="Study outcome_score using demographic predictors.",
+        agent_research_model_file=agent_model_path,
+    )
+
+    plan = result.runtime.get_artifact("auto_analysis_plan")
+    variable_map = result.runtime.get_artifact("auto_variable_map")
+
+    assert result.success is True
+    assert plan.variables.dependent == ["outcome_score"]
+    assert plan.variables.independent == ["gender"]
+    assert plan.variables.controls == ["age"]
+    assert variable_map.variables["gender"].review_status == "agent_recommended"
+    assert result.pipeline_build_result is not None
+    assert result.pipeline_build_result.registration is not None
+    assert result.pipeline_build_result.registration.independent_variables == ["gender", "age"]
+    assert {Path(path).name for path in result.output_files} >= {
+        "agent_research_model_validation.xlsx",
+        "agent_analysis_plan.yaml",
+        "agent_variable_map.yaml",
+    }

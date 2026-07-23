@@ -15,6 +15,7 @@ def _find_output_file(output_files: list[str], filename: str) -> str | None:
             return output_file
     return None
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.auto.cli",
@@ -118,6 +119,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the inferred time variable.",
     )
+    parser.add_argument(
+        "--research-intent-file",
+        default=None,
+        help="YAML or text file describing the research intent for Claude agent context generation.",
+    )
+    parser.add_argument(
+        "--research-intent-text",
+        default=None,
+        help="Inline research intent text for Claude agent context generation.",
+    )
+    parser.add_argument(
+        "--agent-research-model-file",
+        default=None,
+        help="YAML file returned by Claude to validate and apply before pipeline registration.",
+    )
+    parser.add_argument(
+        "--no-apply-agent-model",
+        action="store_true",
+        help="Validate the Claude model YAML but do not apply it to the generated analysis plan.",
+    )
     return parser
 
 
@@ -144,6 +165,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         time_variable=args.time_variable,
         enable_multi_outcome=args.multi_outcome,
         max_outcomes=args.max_outcomes,
+        research_intent_file=args.research_intent_file,
+        research_intent_text=args.research_intent_text,
+        agent_research_model_file=args.agent_research_model_file,
+        apply_agent_model=not args.no_apply_agent_model,
     )
 
     status = "completed" if result.success else "failed"

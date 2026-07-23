@@ -1,4 +1,4 @@
-﻿"""Research-intent and external research-agent helpers."""
+"""Research-intent and external research-agent helpers."""
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ import pandas as pd
 import yaml
 
 from src.common.config_models import AnalysisPlan, VariableMap
+from src.pipeline.context import ResearchContext
+from src.pipeline.runtime import PipelineRuntime
+from src.pipeline.step import PipelineStep, StepResult
 
 _AGENT_ROLES = {
     "dependent",
@@ -538,3 +541,101 @@ def apply_agent_research_model_to_analysis_plan(
     output.analyses.regression.options["agent_model_rationale"] = model.model_rationale
     output.analyses.regression.options["agent_confidence"] = model.confidence
     return output
+
+
+class AutoResearchIntentAgentStep(PipelineStep):
+    """Generate Claude-ready research-agent inputs and optionally apply an agent model."""
+
+    def __init__(
+        self,
+        runtime: PipelineRuntime,
+        *,
+        research_intent_file: str | Path | None = None,
+        research_intent_text: str | None = None,
+        agent_research_model_file: str | Path | None = None,
+        apply_agent_model: bool = True,
+    ) -> None:
+        super().__init__(name="03b_auto_research_intent_agent", order=35, required=False)
+        self.runtime = runtime
+        self.research_intent_file = Path(research_intent_file) if research_intent_file is not None else None
+        self.research_intent_text = research_intent_text
+        self.agent_research_model_file = Path(agent_research_model_file) if agent_research_model_file is not None else None
+        self.apply_agent_model = apply_agent_model
+
+    def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
+        output_dir = Path(working_directory) / "result" / "03_auto_plan" / "research_agent"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_files: list[str] = []
+        warnings: list[str] = []
+
+        variable_map = self.runtime.get_artifact("auto_variable_map")
+        if not isinstance(variable_map, VariableMap):
+            raise TypeError("auto_variable_map must be a VariableMap before research-agent context is built.")
+
+        if self.research_intent_file is not None:
+            intent = load_research_intent(self.research_intent_file)
+        else:
+            intent = ResearchIntent(raw_text=(self.research_intent_text or "").strip())
+
+        template_path = write_research_intent_template(output_dir / "research_intent_template.yaml")
+        output_files.append(str(template_path))
+        quality_report = self.runtime.artifacts.get("auto_rawdata_quality_report")
+        packet = build_research_context_packet(intent, variable_map, quality_report=quality_report)
+        packet_path = write_research_context_packet(packet, output_dir / "research_context_packet.json")
+        prompt_path = write_claude_research_model_prompt(packet, output_dir / "claude_research_model_prompt.txt")
+        output_files.extend([str(packet_path), str(prompt_path)])
+        self.runtime.set_artifact("auto_research_intent", intent)
+        self.runtime.set_artifact("auto_research_context_packet", packet)
+        self.runtime.set_artifact("auto_claude_research_model_prompt", prompt_path.read_text(encoding="utf-8"))
+
+        metadata: dict[str, Any] = {
+            "available_variable_count": len(variable_map.variables),
+            "has_research_intent": bool(intent.raw_text or intent.research_topic or intent.research_goal),
+            "agent_model_applied": False,
+        }
+
+        if self.agent_research_model_file is not None:
+            agent_model = load_agent_research_model(self.agent_research_model_file)
+            validation = validate_agent_research_model(agent_model, variable_map)
+            validation_path = output_dir / "agent_research_model_validation.xlsx"
+            agent_research_model_validation_to_dataframe(validation).to_excel(validation_path, index=False)
+            output_files.append(str(validation_path))
+            self.runtime.set_artifact("auto_agent_research_model", agent_model)
+            self.runtime.set_artifact("auto_agent_research_model_validation", validation)
+            if validation.warnings:
+                warnings.extend(validation.warnings)
+            if not validation.passed:
+                warnings.extend(item.evidence for item in validation.issues if not item.passed)
+                return StepResult(
+                    stage_name=self.name,
+                    success=False,
+                    output_files=output_files,
+                    warnings=warnings,
+                    metadata={**metadata, "validation_passed": False},
+                )
+            if self.apply_agent_model:
+                updated_map = apply_agent_research_model_to_variable_map(variable_map, agent_model)
+                self.runtime.set_artifact("auto_variable_map", updated_map)
+                map_path = output_dir / "agent_variable_map.yaml"
+                with map_path.open("w", encoding="utf-8") as file:
+                    yaml.safe_dump(updated_map.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
+                output_files.append(str(map_path))
+
+                analysis_plan = self.runtime.artifacts.get("auto_analysis_plan")
+                if isinstance(analysis_plan, AnalysisPlan):
+                    updated_plan = apply_agent_research_model_to_analysis_plan(analysis_plan, agent_model, updated_map)
+                    self.runtime.set_artifact("auto_analysis_plan", updated_plan)
+                    plan_path = output_dir / "agent_analysis_plan.yaml"
+                    with plan_path.open("w", encoding="utf-8") as file:
+                        yaml.safe_dump(updated_plan.model_dump(mode="json"), file, allow_unicode=True, sort_keys=False)
+                    output_files.append(str(plan_path))
+                metadata["agent_model_applied"] = True
+                metadata["validation_passed"] = True
+
+        return StepResult(
+            stage_name=self.name,
+            success=True,
+            output_files=output_files,
+            warnings=warnings,
+            metadata=metadata,
+        )

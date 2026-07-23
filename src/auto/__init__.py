@@ -26,6 +26,7 @@ _EXPORTS = {
     "AgentResearchModelValidationIssue": "src.auto.research_intent",
     "AgentResearchModelValidationReport": "src.auto.research_intent",
     "AgentVariableMatch": "src.auto.research_intent",
+    "AutoResearchIntentAgentStep": "src.auto.research_intent",
     "ResearchIntent": "src.auto.research_intent",
     "agent_research_model_from_dict": "src.auto.research_intent",
     "agent_research_model_to_dict": "src.auto.research_intent",

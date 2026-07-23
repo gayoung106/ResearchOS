@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -68,6 +68,13 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             "person_id",
             "--time-variable",
             "wave",
+            "--research-intent-file",
+            "research_intent.yaml",
+            "--research-intent-text",
+            "Study final score.",
+            "--agent-research-model-file",
+            "agent_research_model.yaml",
+            "--no-apply-agent-model",
         ]
     )
 
@@ -92,6 +99,10 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["weight_variable"] == "sample_weight"
     assert calls["id_variable"] == "person_id"
     assert calls["time_variable"] == "wave"
+    assert calls["research_intent_file"] == "research_intent.yaml"
+    assert calls["research_intent_text"] == "Study final score."
+    assert calls["agent_research_model_file"] == "agent_research_model.yaml"
+    assert calls["apply_agent_model"] is False
     assert "Auto rawdata analysis completed." in captured.out
     assert "Model type: ols" in captured.out
     assert "Final report:" in captured.out
