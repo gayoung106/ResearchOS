@@ -333,6 +333,7 @@ def test_run_auto_rawdata_analysis_writes_research_agent_context(tmp_path: Path)
         "claude_research_model_prompt.txt",
         "concept_variable_matches.xlsx",
         "draft_agent_research_model.yaml",
+        "draft_research_model_quality.xlsx",
     }
     prompt_path = next(Path(path) for path in result.output_files if Path(path).name == "claude_research_model_prompt.txt")
     assert "Return YAML only" in prompt_path.read_text(encoding="utf-8")
@@ -473,4 +474,7 @@ def test_run_auto_rawdata_analysis_can_apply_draft_agent_model(tmp_path: Path) -
     assert plan.variables.independent == ["autonomy"]
     assert plan.variables.controls == ["gender"]
     assert "auto_draft_agent_research_model" in result.runtime.artifacts
-    assert "draft_agent_research_model.yaml" in {Path(path).name for path in result.output_files}
+    assert "auto_draft_research_model_quality" in result.runtime.artifacts
+    assert {"draft_agent_research_model.yaml", "draft_research_model_quality.xlsx"}.issubset(
+        {Path(path).name for path in result.output_files}
+    )

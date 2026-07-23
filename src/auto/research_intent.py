@@ -130,6 +130,27 @@ class AgentResearchModel:
 
 
 @dataclass(slots=True)
+class DraftResearchModelQualityItem:
+    """One quality or risk check for a drafted research model."""
+
+    item: str
+    severity: str
+    score: float
+    evidence: str
+    recommendation: str = ""
+
+
+@dataclass(slots=True)
+class DraftResearchModelQualityReport:
+    """Quality report for a ResearchOS-drafted agent research model."""
+
+    overall_score: float
+    risk_level: str
+    items: list[DraftResearchModelQualityItem] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class AgentResearchModelValidationIssue:
     """One validation issue for an agent-proposed research model."""
 
@@ -811,6 +832,134 @@ def write_agent_research_model(model: AgentResearchModel, path: str | Path) -> P
     return output_path
 
 
+def _quality_severity(score: float) -> str:
+    if score >= 0.8:
+        return "low"
+    if score >= 0.55:
+        return "medium"
+    return "high"
+
+
+def _quality_risk_level(score: float, warnings: list[str]) -> str:
+    if score >= 0.8 and not warnings:
+        return "low"
+    if score >= 0.6:
+        return "medium"
+    return "high"
+
+
+def evaluate_draft_research_model_quality(
+    model: AgentResearchModel,
+    extraction: ResearchIntentExtraction,
+    variable_map: VariableMap,
+) -> DraftResearchModelQualityReport:
+    """Assess whether a drafted research model is ready to apply automatically."""
+    items: list[DraftResearchModelQualityItem] = []
+    warnings: list[str] = []
+    validation = validate_agent_research_model(model, variable_map)
+    validation_score = 1.0 if validation.passed else 0.0
+    items.append(
+        DraftResearchModelQualityItem(
+            item="schema_validation",
+            severity=_quality_severity(validation_score),
+            score=validation_score,
+            evidence="validation passed" if validation.passed else "; ".join(item.evidence for item in validation.issues if not item.passed),
+            recommendation="Fix missing variables, role overlaps, or missing predictor/outcome before applying.",
+        )
+    )
+
+    match_scores = [match.confidence for match in model.variable_matches]
+    match_score = sum(match_scores) / len(match_scores) if match_scores else 0.0
+    items.append(
+        DraftResearchModelQualityItem(
+            item="concept_variable_match_strength",
+            severity=_quality_severity(match_score),
+            score=round(match_score, 4),
+            evidence=f"mean selected match score={match_score:.3f}" if match_scores else "no concept-variable matches selected",
+            recommendation="Add a codebook/questionnaire or clearer research intent when match strength is low.",
+        )
+    )
+
+    role_count = sum(
+        bool(values)
+        for values in [
+            [model.dependent_variable] if model.dependent_variable else [],
+            model.independent_variables,
+            model.controls,
+        ]
+    )
+    role_score = min(1.0, role_count / 3)
+    items.append(
+        DraftResearchModelQualityItem(
+            item="core_role_coverage",
+            severity=_quality_severity(role_score),
+            score=round(role_score, 4),
+            evidence=f"dependent={bool(model.dependent_variable)}, independent={len(model.independent_variables)}, controls={len(model.controls)}",
+            recommendation="At minimum, confirm one outcome and one predictor.",
+        )
+    )
+
+    hypothesis_score = min(1.0, len(model.hypotheses) / max(len(model.independent_variables), 1)) if model.independent_variables else 0.0
+    items.append(
+        DraftResearchModelQualityItem(
+            item="hypothesis_coverage",
+            severity=_quality_severity(hypothesis_score),
+            score=round(hypothesis_score, 4),
+            evidence=f"{len(model.hypotheses)} hypotheses for {len(model.independent_variables)} independent variables",
+            recommendation="Review generated hypotheses and expected directions before interpreting results.",
+        )
+    )
+
+    complex_roles = len(model.mediators) + len(model.moderators)
+    complexity_score = 0.65 if complex_roles else 1.0
+    items.append(
+        DraftResearchModelQualityItem(
+            item="model_complexity_risk",
+            severity=_quality_severity(complexity_score),
+            score=complexity_score,
+            evidence=f"mediators={len(model.mediators)}, moderators={len(model.moderators)}",
+            recommendation="Confirm theory and temporal order before estimating mediation or moderation.",
+        )
+    )
+
+    if model.requires_human_review:
+        warnings.append("Draft model is marked as requiring human review.")
+    if extraction.warnings:
+        warnings.extend(extraction.warnings)
+    warnings.extend(validation.warnings)
+    overall_score = round(sum(item.score for item in items) / len(items), 4) if items else 0.0
+    return DraftResearchModelQualityReport(
+        overall_score=overall_score,
+        risk_level=_quality_risk_level(overall_score, warnings),
+        items=items,
+        warnings=list(dict.fromkeys(warnings)),
+    )
+
+
+def draft_research_model_quality_to_dataframe(report: DraftResearchModelQualityReport) -> pd.DataFrame:
+    rows = [
+        {
+            "item": item.item,
+            "severity": item.severity,
+            "score": item.score,
+            "evidence": item.evidence,
+            "recommendation": item.recommendation,
+        }
+        for item in report.items
+    ]
+    for warning in report.warnings:
+        rows.append(
+            {
+                "item": "warning",
+                "severity": "medium",
+                "score": report.overall_score,
+                "evidence": warning,
+                "recommendation": "Review before automatic application.",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def agent_research_model_from_dict(data: dict[str, Any]) -> AgentResearchModel:
     if not isinstance(data, dict):
         raise ValueError("Agent research model must be a mapping.")
@@ -1081,17 +1230,21 @@ class AutoResearchIntentAgentStep(PipelineStep):
         structured_intent = infer_research_intent_structure(intent)
         concept_matches = build_research_concept_variable_matches(structured_intent, variable_map)
         draft_model = draft_agent_research_model_from_intent(structured_intent, variable_map, matches=concept_matches)
+        draft_quality = evaluate_draft_research_model_quality(draft_model, structured_intent, variable_map)
         packet = build_research_context_packet(intent, variable_map, quality_report=quality_report)
         packet_path = write_research_context_packet(packet, output_dir / "research_context_packet.json")
         prompt_path = write_claude_research_model_prompt(packet, output_dir / "claude_research_model_prompt.txt")
         match_path = output_dir / "concept_variable_matches.xlsx"
+        quality_path = output_dir / "draft_research_model_quality.xlsx"
         draft_path = write_agent_research_model(draft_model, output_dir / "draft_agent_research_model.yaml")
         research_concept_variable_matches_to_dataframe(concept_matches).to_excel(match_path, index=False)
-        output_files.extend([str(packet_path), str(prompt_path), str(match_path), str(draft_path)])
+        draft_research_model_quality_to_dataframe(draft_quality).to_excel(quality_path, index=False)
+        output_files.extend([str(packet_path), str(prompt_path), str(match_path), str(quality_path), str(draft_path)])
         self.runtime.set_artifact("auto_research_intent", intent)
         self.runtime.set_artifact("auto_research_intent_extraction", structured_intent)
         self.runtime.set_artifact("auto_research_concept_variable_matches", concept_matches)
         self.runtime.set_artifact("auto_draft_agent_research_model", draft_model)
+        self.runtime.set_artifact("auto_draft_research_model_quality", draft_quality)
         self.runtime.set_artifact("auto_research_context_packet", packet)
         self.runtime.set_artifact("auto_claude_research_model_prompt", prompt_path.read_text(encoding="utf-8"))
 
@@ -1102,6 +1255,8 @@ class AutoResearchIntentAgentStep(PipelineStep):
             "hypothesis_candidate_count": len(structured_intent.hypothesis_candidates),
             "concept_variable_match_count": len(concept_matches),
             "draft_model_confidence": draft_model.confidence,
+            "draft_model_quality_score": draft_quality.overall_score,
+            "draft_model_risk_level": draft_quality.risk_level,
             "agent_model_applied": False,
         }
 

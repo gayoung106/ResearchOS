@@ -15,6 +15,8 @@ from src.auto import (
     build_research_concept_variable_matches,
     build_research_context_packet,
     draft_agent_research_model_from_intent,
+    draft_research_model_quality_to_dataframe,
+    evaluate_draft_research_model_quality,
     infer_research_intent_structure,
     load_agent_research_model,
     load_research_intent,
@@ -283,3 +285,24 @@ def test_draft_agent_research_model_from_intent_uses_best_matches(tmp_path: Path
     assert model.controls == ["gender"]
     assert model.hypotheses[0].hypothesis_id == "H1"
     assert loaded.dependent_variable == "satisfaction"
+
+
+def test_evaluate_draft_research_model_quality_reports_risk_items() -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "The dependent variable is job satisfaction. "
+            "The independent variable is job autonomy. "
+            "The mediator is burnout."
+        )
+    )
+    extraction = infer_research_intent_structure(intent)
+    matches = build_research_concept_variable_matches(extraction, _variable_map())
+    model = draft_agent_research_model_from_intent(extraction, _variable_map(), matches=matches)
+
+    report = evaluate_draft_research_model_quality(model, extraction, _variable_map())
+    frame = draft_research_model_quality_to_dataframe(report)
+
+    assert report.overall_score > 0
+    assert report.risk_level in {"low", "medium", "high"}
+    assert "concept_variable_match_strength" in set(frame["item"])
+    assert "model_complexity_risk" in set(frame["item"])
