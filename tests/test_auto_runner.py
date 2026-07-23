@@ -336,7 +336,14 @@ def test_run_auto_rawdata_analysis_writes_research_agent_context(tmp_path: Path)
         "draft_research_model_quality.xlsx",
     }
     prompt_path = next(Path(path) for path in result.output_files if Path(path).name == "claude_research_model_prompt.txt")
+    final_report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_final_report.md")
+    final_report_text = final_report_path.read_text(encoding="utf-8")
     assert "Return YAML only" in prompt_path.read_text(encoding="utf-8")
+    assert "Research agent model" in final_report_text
+    assert "Draft model:" in final_report_text
+    assert "Draft quality:" in final_report_text
+    assert "Claude handoff:" in final_report_text
+    assert "draft_research_model_quality.xlsx" in final_report_text
 
 
 def test_run_auto_rawdata_analysis_applies_agent_research_model(tmp_path: Path) -> None:
@@ -478,3 +485,9 @@ def test_run_auto_rawdata_analysis_can_apply_draft_agent_model(tmp_path: Path) -
     assert {"draft_agent_research_model.yaml", "draft_research_model_quality.xlsx"}.issubset(
         {Path(path).name for path in result.output_files}
     )
+    final_report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_final_report.md")
+    final_report_text = final_report_path.read_text(encoding="utf-8")
+    assert "Research agent model" in final_report_text
+    assert "dependent: satisfaction" in final_report_text
+    assert "independent: autonomy" in final_report_text
+    assert "risk_level" in final_report_text

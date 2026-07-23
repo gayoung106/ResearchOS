@@ -443,6 +443,9 @@ def _describe_output_file(path: Path, category: str) -> str:
         "agent_research_model_validation.xlsx": "Validation checklist for a Claude-proposed research model.",
         "agent_analysis_plan.yaml": "Analysis plan after validated agent recommendations were applied.",
         "agent_variable_map.yaml": "Variable map after validated agent recommendations were applied.",
+        "concept_variable_matches.xlsx": "Scored links between research concepts and dataset variables.",
+        "draft_agent_research_model.yaml": "ResearchOS-generated conservative draft research model.",
+        "draft_research_model_quality.xlsx": "Quality and risk checks for the draft research model.",
         "coefficients.xlsx": "Model coefficient table.",
         "fit_statistics.xlsx": "Model fit statistics table.",
     }
@@ -469,6 +472,9 @@ def _is_recommended_output(path: Path) -> bool:
         "research_context_packet.json",
         "claude_research_model_prompt.txt",
         "agent_research_model_validation.xlsx",
+        "concept_variable_matches.xlsx",
+        "draft_agent_research_model.yaml",
+        "draft_research_model_quality.xlsx",
     }
 
 
@@ -624,6 +630,87 @@ def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalys
     return str(manifest_path)
 
 
+def _format_list(values: object) -> str:
+    if isinstance(values, list):
+        return ", ".join(str(value) for value in values) or "-"
+    return str(values) if values else "-"
+
+
+def _append_research_agent_summary(lines: list[str], result: AutoRawDataAnalysisResult) -> None:
+    intent = _artifact_or_none(result.runtime, "auto_research_intent")
+    extraction = _artifact_or_none(result.runtime, "auto_research_intent_extraction")
+    draft_model = _artifact_or_none(result.runtime, "auto_draft_agent_research_model")
+    draft_quality = _artifact_or_none(result.runtime, "auto_draft_research_model_quality")
+    concept_matches = _artifact_or_none(result.runtime, "auto_research_concept_variable_matches")
+    agent_validation = _artifact_or_none(result.runtime, "auto_agent_research_model_validation")
+    if all(item is None for item in [intent, extraction, draft_model, draft_quality, concept_matches, agent_validation]):
+        return
+
+    lines.extend(["", "## Research agent model"])
+    if intent is not None:
+        topic = getattr(intent, "research_topic", "") or "-"
+        goal = getattr(intent, "research_goal", "") or getattr(intent, "raw_text", "") or "-"
+        lines.extend([f"- intent_topic: {topic}", f"- intent_goal: {goal}"])
+    if extraction is not None:
+        lines.extend(
+            [
+                f"- research_questions: {_format_list(getattr(extraction, 'research_questions', []))}",
+                f"- dependent_concepts: {_format_list(getattr(extraction, 'dependent_concepts', []))}",
+                f"- independent_concepts: {_format_list(getattr(extraction, 'independent_concepts', []))}",
+                f"- mediator_concepts: {_format_list(getattr(extraction, 'mediator_concepts', []))}",
+                f"- moderator_concepts: {_format_list(getattr(extraction, 'moderator_concepts', []))}",
+            ]
+        )
+    if draft_model is not None:
+        lines.extend(
+            [
+                "",
+                "Draft model:",
+                f"- dependent: {getattr(draft_model, 'dependent_variable', None) or '-'}",
+                f"- independent: {_format_list(getattr(draft_model, 'independent_variables', []))}",
+                f"- mediators: {_format_list(getattr(draft_model, 'mediators', []))}",
+                f"- moderators: {_format_list(getattr(draft_model, 'moderators', []))}",
+                f"- controls: {_format_list(getattr(draft_model, 'controls', []))}",
+                f"- confidence: {_format_number(getattr(draft_model, 'confidence', None))}",
+                f"- requires_human_review: {_format_bool(bool(getattr(draft_model, 'requires_human_review', True)))}",
+            ]
+        )
+    if draft_quality is not None:
+        lines.extend(
+            [
+                "",
+                "Draft quality:",
+                f"- overall_score: {_format_number(getattr(draft_quality, 'overall_score', None))}",
+                f"- risk_level: {getattr(draft_quality, 'risk_level', '-')}",
+            ]
+        )
+        items = list(getattr(draft_quality, "items", []) or [])[:6]
+        if items:
+            lines.extend(["", "| quality_item | severity | score | evidence |", "| --- | --- | ---: | --- |"])
+            for item in items:
+                lines.append(
+                    f"| {getattr(item, 'item', '-')} | {getattr(item, 'severity', '-')} | "
+                    f"{_format_number(getattr(item, 'score', None))} | {getattr(item, 'evidence', '-')} |"
+                )
+    if concept_matches:
+        lines.extend(["", "Top concept-variable matches:", "| concept | role | variable | score |", "| --- | --- | --- | ---: |"])
+        for match in list(concept_matches)[:8]:
+            lines.append(
+                f"| {getattr(match, 'concept', '-')} | {getattr(match, 'role', '-')} | "
+                f"{getattr(match, 'variable_name', '-')} | {_format_number(getattr(match, 'score', None))} |"
+            )
+    if agent_validation is not None:
+        lines.extend(["", f"Claude/agent model validation: {_format_bool(bool(getattr(agent_validation, 'passed', False)))}"])
+    else:
+        lines.extend(
+            [
+                "",
+                "Claude handoff:",
+                "- Open claude_research_model_prompt.txt, paste it into Claude, save the YAML as agent_research_model.yaml, then rerun.",
+            ]
+        )
+
+
 def _append_rawdata_quality_summary(lines: list[str], result: AutoRawDataAnalysisResult) -> None:
     quality = _artifact_or_none(result.runtime, "auto_rawdata_quality_report")
     if quality is None or getattr(quality, "empty", True):
@@ -707,6 +794,10 @@ def _append_next_steps(lines: list[str], result: AutoRawDataAnalysisResult) -> N
         warning_count = int(quality["quality_warning_count"].sum())
         if warning_count > 0:
             steps.append("Review rawdata_quality_report.xlsx before interpreting model results.")
+    if _artifact_or_none(result.runtime, "auto_draft_research_model_quality") is not None:
+        steps.append("Review draft_research_model_quality.xlsx before applying the draft research model automatically.")
+    if _artifact_or_none(result.runtime, "auto_agent_research_model_validation") is None and _artifact_or_none(result.runtime, "auto_research_context_packet") is not None:
+        steps.append("Use claude_research_model_prompt.txt to obtain agent_research_model.yaml, then rerun for validated agent application.")
     if result.orchestrator_result is None:
         steps.append("Review auto_analysis_plan.yaml, then rerun without --plan-only to execute models.")
     else:
@@ -757,6 +848,7 @@ def _write_auto_final_report(
         lines.append("- \uc6d0\uc790\ub8cc \uc120\ud0dd \uc815\ubcf4\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.")
 
     _append_rawdata_quality_summary(lines, result)
+    _append_research_agent_summary(lines, result)
 
     lines.extend(["", "## Main model"])
     if registration is not None:
