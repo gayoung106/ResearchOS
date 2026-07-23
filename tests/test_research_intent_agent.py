@@ -11,6 +11,7 @@ from src.auto import (
     agent_research_model_validation_to_dataframe,
     apply_agent_research_model_to_analysis_plan,
     apply_agent_research_model_to_variable_map,
+    build_agent_analysis_strategy_models,
     build_claude_research_model_prompt,
     build_research_concept_variable_matches,
     build_research_context_packet,
@@ -144,6 +145,8 @@ def test_agent_research_model_validation_and_apply_to_plan() -> None:
     assert updated_plan.variables.dependent == ["satisfaction"]
     assert updated_plan.variables.mediators == ["burnout"]
     assert updated_plan.analyses.mediation.enabled is True
+    assert updated_plan.analyses.mediation.models[0]["mediator_variable"] == "burnout"
+    assert updated_plan.analyses.mediation.methods == ["causal_steps_bootstrap_indirect_effect"]
     assert updated_plan.analyses.regression.options["agent_hypotheses"][0]["hypothesis_id"] == "H1"
 
 
@@ -306,3 +309,20 @@ def test_evaluate_draft_research_model_quality_reports_risk_items() -> None:
     assert report.risk_level in {"low", "medium", "high"}
     assert "concept_variable_match_strength" in set(frame["item"])
     assert "model_complexity_risk" in set(frame["item"])
+
+
+def test_build_agent_analysis_strategy_models_creates_mediation_and_moderation_specs() -> None:
+    model = AgentResearchModel(
+        dependent_variable="satisfaction",
+        independent_variables=["autonomy"],
+        mediators=["burnout"],
+        moderators=["team"],
+        controls=["gender"],
+    )
+
+    strategies = build_agent_analysis_strategy_models(model)
+
+    assert strategies["mediation"][0]["method"] == "causal_steps_bootstrap_indirect_effect"
+    assert strategies["mediation"][0]["mediator_variable"] == "burnout"
+    assert strategies["moderation"][0]["method"] == "interaction_regression"
+    assert strategies["moderation"][0]["interaction_term"] == "autonomy__x__team"

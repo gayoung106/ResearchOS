@@ -40,6 +40,7 @@ _EXPORTS = {
     "apply_agent_research_model_to_variable_map": "src.auto.research_intent",
     "build_claude_research_model_prompt": "src.auto.research_intent",
     "build_research_concept_variable_matches": "src.auto.research_intent",
+    "build_agent_analysis_strategy_models": "src.auto.research_intent",
     "build_research_context_packet": "src.auto.research_intent",
     "draft_agent_research_model_from_intent": "src.auto.research_intent",
     "draft_research_model_quality_to_dataframe": "src.auto.research_intent",

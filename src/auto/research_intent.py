@@ -1123,6 +1123,55 @@ def agent_research_model_validation_to_dataframe(
     )
 
 
+def _agent_hypotheses_to_dicts(model: AgentResearchModel) -> list[dict[str, Any]]:
+    return [
+        {
+            "hypothesis_id": item.hypothesis_id,
+            "statement": item.statement,
+            "focal_variables": list(item.focal_variables),
+            "expected_direction": item.expected_direction,
+        }
+        for item in model.hypotheses
+    ]
+
+
+def build_agent_analysis_strategy_models(model: AgentResearchModel) -> dict[str, list[dict[str, Any]]]:
+    """Build machine-readable mediation and moderation strategy models."""
+    dependent = model.dependent_variable
+    predictors = list(model.independent_variables)
+    controls = list(model.controls)
+    strategies: dict[str, list[dict[str, Any]]] = {"mediation": [], "moderation": []}
+    if dependent:
+        for mediator in model.mediators:
+            strategies["mediation"].append(
+                {
+                    "model_id": f"mediation_{mediator}",
+                    "method": "causal_steps_bootstrap_indirect_effect",
+                    "dependent_variable": dependent,
+                    "independent_variables": predictors,
+                    "mediator_variable": mediator,
+                    "control_variables": controls,
+                    "bootstrap_replications": 1000,
+                    "source": "agent_research_model",
+                }
+            )
+        for moderator in model.moderators:
+            for predictor in predictors:
+                strategies["moderation"].append(
+                    {
+                        "model_id": f"moderation_{predictor}_x_{moderator}",
+                        "method": "interaction_regression",
+                        "dependent_variable": dependent,
+                        "independent_variable": predictor,
+                        "moderator_variable": moderator,
+                        "interaction_term": f"{predictor}__x__{moderator}",
+                        "control_variables": controls,
+                        "source": "agent_research_model",
+                    }
+                )
+    return strategies
+
+
 def apply_agent_research_model_to_variable_map(
     variable_map: VariableMap,
     model: AgentResearchModel,
@@ -1173,18 +1222,31 @@ def apply_agent_research_model_to_analysis_plan(
     output.analyses.regression.enabled = bool(output.variables.dependent and output.variables.independent)
     output.analyses.mediation.enabled = bool(output.variables.mediators)
     output.analyses.moderation.enabled = bool(output.variables.moderators)
+    strategy_models = build_agent_analysis_strategy_models(model)
     if model.hypotheses:
-        output.analyses.regression.options["agent_hypotheses"] = [
-            {
-                "hypothesis_id": item.hypothesis_id,
-                "statement": item.statement,
-                "focal_variables": list(item.focal_variables),
-                "expected_direction": item.expected_direction,
-            }
-            for item in model.hypotheses
-        ]
+        hypotheses = _agent_hypotheses_to_dicts(model)
+        output.analyses.regression.options["agent_hypotheses"] = hypotheses
+        output.analyses.mediation.options["agent_hypotheses"] = hypotheses
+        output.analyses.moderation.options["agent_hypotheses"] = hypotheses
     output.analyses.regression.options["agent_model_rationale"] = model.model_rationale
     output.analyses.regression.options["agent_confidence"] = model.confidence
+    output.analyses.regression.options["agent_requires_human_review"] = model.requires_human_review
+    output.analyses.mediation.models = strategy_models["mediation"]
+    output.analyses.mediation.methods = ["causal_steps_bootstrap_indirect_effect"] if strategy_models["mediation"] else []
+    output.analyses.mediation.checks = [
+        {"check": "temporal_order_review", "required": True, "source": "agent_research_model"},
+        {"check": "indirect_effect_bootstrap", "required": True, "source": "agent_research_model"},
+    ] if strategy_models["mediation"] else []
+    output.analyses.mediation.options["agent_model_rationale"] = model.model_rationale
+    output.analyses.mediation.options["agent_confidence"] = model.confidence
+    output.analyses.moderation.models = strategy_models["moderation"]
+    output.analyses.moderation.methods = ["interaction_regression"] if strategy_models["moderation"] else []
+    output.analyses.moderation.checks = [
+        {"check": "interaction_term_generated", "required": True, "source": "agent_research_model"},
+        {"check": "simple_slopes_or_marginal_effects", "required": True, "source": "agent_research_model"},
+    ] if strategy_models["moderation"] else []
+    output.analyses.moderation.options["agent_model_rationale"] = model.model_rationale
+    output.analyses.moderation.options["agent_confidence"] = model.confidence
     return output
 
 
