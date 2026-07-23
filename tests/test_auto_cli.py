@@ -75,6 +75,7 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             "--agent-research-model-file",
             "agent_research_model.yaml",
             "--no-apply-agent-model",
+            "--apply-draft-agent-model",
         ]
     )
 
@@ -103,6 +104,7 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["research_intent_text"] == "Study final score."
     assert calls["agent_research_model_file"] == "agent_research_model.yaml"
     assert calls["apply_agent_model"] is False
+    assert calls["apply_draft_model"] is True
     assert "Auto rawdata analysis completed." in captured.out
     assert "Model type: ols" in captured.out
     assert "Final report:" in captured.out

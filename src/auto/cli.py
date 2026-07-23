@@ -139,6 +139,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Validate the Claude model YAML but do not apply it to the generated analysis plan.",
     )
+    parser.add_argument(
+        "--apply-draft-agent-model",
+        action="store_true",
+        help="Apply ResearchOS's conservative draft agent model when no Claude model YAML is available.",
+    )
     return parser
 
 
@@ -169,6 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         research_intent_text=args.research_intent_text,
         agent_research_model_file=args.agent_research_model_file,
         apply_agent_model=not args.no_apply_agent_model,
+        apply_draft_model=args.apply_draft_agent_model,
     )
 
     status = "completed" if result.success else "failed"

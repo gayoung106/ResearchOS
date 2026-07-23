@@ -332,6 +332,7 @@ def test_run_auto_rawdata_analysis_writes_research_agent_context(tmp_path: Path)
         "research_context_packet.json",
         "claude_research_model_prompt.txt",
         "concept_variable_matches.xlsx",
+        "draft_agent_research_model.yaml",
     }
     prompt_path = next(Path(path) for path in result.output_files if Path(path).name == "claude_research_model_prompt.txt")
     assert "Return YAML only" in prompt_path.read_text(encoding="utf-8")
@@ -441,3 +442,35 @@ def test_run_auto_rawdata_analysis_auto_detects_agent_research_model_file(tmp_pa
     assert result.pipeline_build_result.registration is not None
     assert result.pipeline_build_result.registration.independent_variables == ["gender", "age"]
     assert "auto_agent_research_model_validation" in result.runtime.artifacts
+
+
+def test_run_auto_rawdata_analysis_can_apply_draft_agent_model(tmp_path: Path) -> None:
+    rawdata_dir = tmp_path / "rawdata"
+    rawdata_dir.mkdir()
+    pd.DataFrame(
+        {
+            "satisfaction": [2.0, 2.4, 3.1, 3.3, 4.0, 4.2, 4.7, 5.1],
+            "autonomy": [1.0, 1.5, 2.0, 2.2, 3.0, 3.4, 3.8, 4.1],
+            "gender": [0, 1, 1, 0, 1, 0, 1, 0],
+        }
+    ).to_csv(rawdata_dir / "survey.csv", index=False)
+    (tmp_path / "research_intent.yaml").write_text(
+        "raw_text: The dependent variable is satisfaction. The independent variable is autonomy. Control variables are gender.\n",
+        encoding="utf-8",
+    )
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto draft agent model",
+        run_analysis=False,
+        apply_draft_model=True,
+    )
+
+    plan = result.runtime.get_artifact("auto_analysis_plan")
+
+    assert result.success is True
+    assert plan.variables.dependent == ["satisfaction"]
+    assert plan.variables.independent == ["autonomy"]
+    assert plan.variables.controls == ["gender"]
+    assert "auto_draft_agent_research_model" in result.runtime.artifacts
+    assert "draft_agent_research_model.yaml" in {Path(path).name for path in result.output_files}

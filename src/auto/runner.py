@@ -881,6 +881,7 @@ def run_auto_rawdata_analysis(
     research_intent_text: str | None = None,
     agent_research_model_file: str | Path | None = None,
     apply_agent_model: bool = True,
+    apply_draft_model: bool = False,
 ) -> AutoRawDataAnalysisResult:
     """Run the rawdata-only workflow through automatic planning and analysis."""
     root = Path(working_directory).expanduser().resolve()
@@ -943,6 +944,7 @@ def run_auto_rawdata_analysis(
                 research_intent_text=research_intent_text,
                 agent_research_model_file=resolved_agent_research_model_file,
                 apply_agent_model=apply_agent_model,
+                apply_draft_model=apply_draft_model,
             )
         )
     if enable_multi_outcome:

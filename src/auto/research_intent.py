@@ -680,6 +680,137 @@ def _agent_hypothesis_from_dict(data: dict[str, Any]) -> AgentHypothesis:
     )
 
 
+def _best_match_by_role(
+    matches: list[ResearchConceptVariableMatch],
+    role: str,
+    *,
+    minimum_score: float,
+) -> list[ResearchConceptVariableMatch]:
+    best_by_concept: dict[str, ResearchConceptVariableMatch] = {}
+    for match in matches:
+        if match.role != role or match.score < minimum_score:
+            continue
+        current = best_by_concept.get(match.concept)
+        if current is None or (match.score, match.variable_name) > (current.score, current.variable_name):
+            best_by_concept[match.concept] = match
+    return sorted(best_by_concept.values(), key=lambda item: (-item.score, item.variable_name))
+
+
+def _unique_variables(matches: list[ResearchConceptVariableMatch]) -> list[str]:
+    output: list[str] = []
+    for match in matches:
+        if match.variable_name not in output:
+            output.append(match.variable_name)
+    return output
+
+
+def _matches_to_agent_variable_matches(matches: list[ResearchConceptVariableMatch]) -> list[AgentVariableMatch]:
+    return [
+        AgentVariableMatch(
+            variable_name=match.variable_name,
+            role=match.role,
+            confidence=match.score,
+            rationale=f"Matched research concept '{match.concept}' via {match.match_type}: {match.evidence}",
+        )
+        for match in matches
+    ]
+
+
+def draft_agent_research_model_from_intent(
+    extraction: ResearchIntentExtraction,
+    variable_map: VariableMap,
+    *,
+    matches: list[ResearchConceptVariableMatch] | None = None,
+    minimum_score: float = 0.55,
+) -> AgentResearchModel:
+    """Draft a conservative research model from structured intent and concept-variable matches."""
+    concept_matches = matches if matches is not None else build_research_concept_variable_matches(extraction, variable_map)
+    dependent_matches = _best_match_by_role(concept_matches, "dependent", minimum_score=minimum_score)
+    independent_matches = _best_match_by_role(concept_matches, "independent", minimum_score=minimum_score)
+    mediator_matches = _best_match_by_role(concept_matches, "mediator", minimum_score=minimum_score)
+    moderator_matches = _best_match_by_role(concept_matches, "moderator", minimum_score=minimum_score)
+    control_matches = _best_match_by_role(concept_matches, "control", minimum_score=minimum_score)
+
+    selected_dependent = dependent_matches[0].variable_name if dependent_matches else None
+    selected_independent = _unique_variables(independent_matches)
+    selected_mediators = [name for name in _unique_variables(mediator_matches) if name != selected_dependent]
+    selected_moderators = [name for name in _unique_variables(moderator_matches) if name != selected_dependent]
+    selected_controls = [
+        name
+        for name in _unique_variables(control_matches)
+        if name not in {selected_dependent, *selected_independent, *selected_mediators, *selected_moderators}
+    ]
+
+    hypotheses: list[AgentHypothesis] = []
+    dependent_concept = extraction.dependent_concepts[0] if extraction.dependent_concepts else "the outcome"
+    for index, match in enumerate(independent_matches[:5], start=1):
+        direction = extraction.hypothesis_candidates[0].expected_direction if extraction.hypothesis_candidates else ""
+        hypotheses.append(
+            AgentHypothesis(
+                hypothesis_id=f"H{index}",
+                statement=f"{match.concept} is associated with {dependent_concept}.",
+                focal_variables=[match.variable_name, selected_dependent] if selected_dependent else [match.variable_name],
+                expected_direction=direction,
+            )
+        )
+    next_index = len(hypotheses) + 1
+    for match in mediator_matches[:3]:
+        hypotheses.append(
+            AgentHypothesis(
+                hypothesis_id=f"H{next_index}",
+                statement=f"{match.concept} mediates the relationship with {dependent_concept}.",
+                focal_variables=[match.variable_name, selected_dependent] if selected_dependent else [match.variable_name],
+                expected_direction="indirect",
+            )
+        )
+        next_index += 1
+    for match in moderator_matches[:3]:
+        hypotheses.append(
+            AgentHypothesis(
+                hypothesis_id=f"H{next_index}",
+                statement=f"{match.concept} moderates the relationship with {dependent_concept}.",
+                focal_variables=[match.variable_name, selected_dependent] if selected_dependent else [match.variable_name],
+                expected_direction="conditional",
+            )
+        )
+        next_index += 1
+
+    selected_matches = [
+        *dependent_matches[:1],
+        *independent_matches,
+        *mediator_matches,
+        *moderator_matches,
+        *control_matches,
+    ]
+    selected_scores = [match.score for match in selected_matches]
+    confidence = round(sum(selected_scores) / len(selected_scores), 4) if selected_scores else 0.0
+    requires_review = not selected_dependent or not selected_independent or confidence < 0.75
+    rationale = (
+        "Drafted from structured research intent and concept-variable similarity scores. "
+        "Review is required before treating this as a theory-confirmed model."
+    )
+    return AgentResearchModel(
+        dependent_variable=selected_dependent,
+        independent_variables=selected_independent,
+        mediators=selected_mediators,
+        moderators=selected_moderators,
+        controls=selected_controls,
+        variable_matches=_matches_to_agent_variable_matches(selected_matches),
+        hypotheses=hypotheses,
+        model_rationale=rationale,
+        confidence=confidence,
+        requires_human_review=requires_review,
+    )
+
+
+def write_agent_research_model(model: AgentResearchModel, path: str | Path) -> Path:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(agent_research_model_to_dict(model), file, allow_unicode=True, sort_keys=False)
+    return output_path
+
+
 def agent_research_model_from_dict(data: dict[str, Any]) -> AgentResearchModel:
     if not isinstance(data, dict):
         raise ValueError("Agent research model must be a mapping.")
@@ -919,6 +1050,7 @@ class AutoResearchIntentAgentStep(PipelineStep):
         research_intent_text: str | None = None,
         agent_research_model_file: str | Path | None = None,
         apply_agent_model: bool = True,
+        apply_draft_model: bool = False,
     ) -> None:
         super().__init__(name="03b_auto_research_intent_agent", order=35, required=False)
         self.runtime = runtime
@@ -926,6 +1058,7 @@ class AutoResearchIntentAgentStep(PipelineStep):
         self.research_intent_text = research_intent_text
         self.agent_research_model_file = Path(agent_research_model_file) if agent_research_model_file is not None else None
         self.apply_agent_model = apply_agent_model
+        self.apply_draft_model = apply_draft_model
 
     def run(self, context: ResearchContext, working_directory: Path) -> StepResult:
         output_dir = Path(working_directory) / "result" / "03_auto_plan" / "research_agent"
@@ -947,15 +1080,18 @@ class AutoResearchIntentAgentStep(PipelineStep):
         quality_report = self.runtime.artifacts.get("auto_rawdata_quality_report")
         structured_intent = infer_research_intent_structure(intent)
         concept_matches = build_research_concept_variable_matches(structured_intent, variable_map)
+        draft_model = draft_agent_research_model_from_intent(structured_intent, variable_map, matches=concept_matches)
         packet = build_research_context_packet(intent, variable_map, quality_report=quality_report)
         packet_path = write_research_context_packet(packet, output_dir / "research_context_packet.json")
         prompt_path = write_claude_research_model_prompt(packet, output_dir / "claude_research_model_prompt.txt")
         match_path = output_dir / "concept_variable_matches.xlsx"
+        draft_path = write_agent_research_model(draft_model, output_dir / "draft_agent_research_model.yaml")
         research_concept_variable_matches_to_dataframe(concept_matches).to_excel(match_path, index=False)
-        output_files.extend([str(packet_path), str(prompt_path), str(match_path)])
+        output_files.extend([str(packet_path), str(prompt_path), str(match_path), str(draft_path)])
         self.runtime.set_artifact("auto_research_intent", intent)
         self.runtime.set_artifact("auto_research_intent_extraction", structured_intent)
         self.runtime.set_artifact("auto_research_concept_variable_matches", concept_matches)
+        self.runtime.set_artifact("auto_draft_agent_research_model", draft_model)
         self.runtime.set_artifact("auto_research_context_packet", packet)
         self.runtime.set_artifact("auto_claude_research_model_prompt", prompt_path.read_text(encoding="utf-8"))
 
@@ -965,11 +1101,16 @@ class AutoResearchIntentAgentStep(PipelineStep):
             "research_question_count": len(structured_intent.research_questions),
             "hypothesis_candidate_count": len(structured_intent.hypothesis_candidates),
             "concept_variable_match_count": len(concept_matches),
+            "draft_model_confidence": draft_model.confidence,
             "agent_model_applied": False,
         }
 
-        if self.agent_research_model_file is not None:
-            agent_model = load_agent_research_model(self.agent_research_model_file)
+        selected_agent_model_file = self.agent_research_model_file
+        if selected_agent_model_file is None and self.apply_draft_model:
+            selected_agent_model_file = draft_path
+
+        if selected_agent_model_file is not None:
+            agent_model = load_agent_research_model(selected_agent_model_file)
             validation = validate_agent_research_model(agent_model, variable_map)
             validation_path = output_dir / "agent_research_model_validation.xlsx"
             agent_research_model_validation_to_dataframe(validation).to_excel(validation_path, index=False)

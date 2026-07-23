@@ -14,12 +14,14 @@ from src.auto import (
     build_claude_research_model_prompt,
     build_research_concept_variable_matches,
     build_research_context_packet,
+    draft_agent_research_model_from_intent,
     infer_research_intent_structure,
     load_agent_research_model,
     load_research_intent,
     research_concept_variable_matches_to_dataframe,
     research_intent_extraction_to_dict,
     validate_agent_research_model,
+    write_agent_research_model,
     write_claude_research_model_prompt,
     write_research_context_packet,
     write_research_intent_template,
@@ -257,3 +259,27 @@ def test_research_context_packet_contains_concept_variable_matches() -> None:
     assert packet["concept_variable_matches"]
     assert packet["concept_variable_matches"][0]["variable_name"] == "satisfaction"
     assert packet["concept_variable_matches"][0]["role"] == "dependent"
+
+
+def test_draft_agent_research_model_from_intent_uses_best_matches(tmp_path: Path) -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "The dependent variable is job satisfaction. "
+            "The independent variable is job autonomy. "
+            "The mediator is burnout. "
+            "Control variables are gender."
+        )
+    )
+    extraction = infer_research_intent_structure(intent)
+    matches = build_research_concept_variable_matches(extraction, _variable_map())
+
+    model = draft_agent_research_model_from_intent(extraction, _variable_map(), matches=matches)
+    model_path = write_agent_research_model(model, tmp_path / "draft_agent_research_model.yaml")
+    loaded = load_agent_research_model(model_path)
+
+    assert model.dependent_variable == "satisfaction"
+    assert model.independent_variables == ["autonomy"]
+    assert model.mediators == ["burnout"]
+    assert model.controls == ["gender"]
+    assert model.hypotheses[0].hypothesis_id == "H1"
+    assert loaded.dependent_variable == "satisfaction"
