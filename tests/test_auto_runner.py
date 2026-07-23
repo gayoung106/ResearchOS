@@ -383,3 +383,59 @@ def test_run_auto_rawdata_analysis_applies_agent_research_model(tmp_path: Path) 
         "agent_analysis_plan.yaml",
         "agent_variable_map.yaml",
     }
+
+
+def test_run_auto_rawdata_analysis_auto_detects_research_intent_file(tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+    (tmp_path / "research_intent.yaml").write_text(
+        "research_topic: automatically detected intent\nresearch_goal: explain outcome_score\n",
+        encoding="utf-8",
+    )
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto detected intent",
+        run_analysis=False,
+    )
+
+    assert result.success is True
+    assert result.runtime.get_artifact("auto_research_intent").research_topic == "automatically detected intent"
+    assert {Path(path).name for path in result.output_files} >= {
+        "research_context_packet.json",
+        "claude_research_model_prompt.txt",
+    }
+
+
+def test_run_auto_rawdata_analysis_auto_detects_agent_research_model_file(tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+    (tmp_path / "agent_research_model.yaml").write_text(
+        "\n".join(
+            [
+                "dependent_variable: outcome_score",
+                "independent_variables:",
+                "  - gender",
+                "controls:",
+                "  - age",
+                "model_rationale: Auto-detected Claude output.",
+                "confidence: 0.76",
+                "requires_human_review: false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_auto_rawdata_analysis(
+        tmp_path,
+        project_name="auto detected agent model",
+        run_analysis=False,
+    )
+
+    plan = result.runtime.get_artifact("auto_analysis_plan")
+
+    assert result.success is True
+    assert plan.variables.independent == ["gender"]
+    assert plan.variables.controls == ["age"]
+    assert result.pipeline_build_result is not None
+    assert result.pipeline_build_result.registration is not None
+    assert result.pipeline_build_result.registration.independent_variables == ["gender", "age"]
+    assert "auto_agent_research_model_validation" in result.runtime.artifacts

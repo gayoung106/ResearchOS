@@ -74,6 +74,24 @@ def _apply_plan_to_context(context: ResearchContext, analysis_plan: AnalysisPlan
     context.variable_map = variable_map.model_dump(mode="json")
 
 
+def _resolve_project_file(
+    root: Path,
+    explicit_path: str | Path | None,
+    candidate_relative_paths: list[str],
+) -> Path | None:
+    if explicit_path is not None:
+        path = Path(explicit_path).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        return path.resolve()
+
+    for relative_path in candidate_relative_paths:
+        candidate = root / relative_path
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
 def _write_auto_run_summary(
     *,
     working_directory: Path,
@@ -866,6 +884,30 @@ def run_auto_rawdata_analysis(
 ) -> AutoRawDataAnalysisResult:
     """Run the rawdata-only workflow through automatic planning and analysis."""
     root = Path(working_directory).expanduser().resolve()
+    resolved_research_intent_file = _resolve_project_file(
+        root,
+        research_intent_file,
+        [
+            "research_intent.yaml",
+            "research_intent.yml",
+            "research_intent.txt",
+            "config/research_intent.yaml",
+            "config/research_intent.yml",
+            "config/research_intent.txt",
+        ],
+    )
+    resolved_agent_research_model_file = _resolve_project_file(
+        root,
+        agent_research_model_file,
+        [
+            "agent_research_model.yaml",
+            "agent_research_model.yml",
+            "claude_research_model.yaml",
+            "claude_research_model.yml",
+            "result/03_auto_plan/research_agent/agent_research_model.yaml",
+            "result/03_auto_plan/research_agent/agent_research_model.yml",
+        ],
+    )
     context = ResearchContext(project_name=project_name)
     runtime = PipelineRuntime()
     output_files: list[str] = []
@@ -893,13 +935,13 @@ def run_auto_rawdata_analysis(
         AutoVariableInferenceStep(runtime),
         AutoAnalysisPlanStep(runtime, enable_robustness=enable_robustness),
     ]
-    if research_intent_file or research_intent_text or agent_research_model_file:
+    if resolved_research_intent_file or research_intent_text or resolved_agent_research_model_file:
         setup_steps.append(
             AutoResearchIntentAgentStep(
                 runtime,
-                research_intent_file=research_intent_file,
+                research_intent_file=resolved_research_intent_file,
                 research_intent_text=research_intent_text,
-                agent_research_model_file=agent_research_model_file,
+                agent_research_model_file=resolved_agent_research_model_file,
                 apply_agent_model=apply_agent_model,
             )
         )
