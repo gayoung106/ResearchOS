@@ -12,10 +12,12 @@ from src.auto import (
     apply_agent_research_model_to_analysis_plan,
     apply_agent_research_model_to_variable_map,
     build_claude_research_model_prompt,
+    build_research_concept_variable_matches,
     build_research_context_packet,
     infer_research_intent_structure,
     load_agent_research_model,
     load_research_intent,
+    research_concept_variable_matches_to_dataframe,
     research_intent_extraction_to_dict,
     validate_agent_research_model,
     write_claude_research_model_prompt,
@@ -220,3 +222,38 @@ def test_research_context_packet_contains_structured_intent() -> None:
     assert packet["structured_research_intent"]["dependent_concepts"] == ["satisfaction"]
     assert packet["structured_research_intent"]["independent_concepts"] == ["autonomy"]
     assert packet["research_intent"]["structured_intent"]["dependent_concepts"] == ["satisfaction"]
+
+
+def test_build_research_concept_variable_matches_scores_metadata_candidates() -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "The dependent variable is job satisfaction. "
+            "The independent variable is job autonomy. "
+            "The mediator is burnout."
+        )
+    )
+    extraction = infer_research_intent_structure(intent)
+
+    matches = build_research_concept_variable_matches(extraction, _variable_map())
+    frame = research_concept_variable_matches_to_dataframe(matches)
+
+    assert matches[0].concept == "job satisfaction"
+    assert matches[0].variable_name == "satisfaction"
+    assert matches[0].score >= 0.8
+    assert frame.loc[frame["concept"] == "job autonomy", "variable_name"].iloc[0] == "autonomy"
+    assert "burnout" in set(frame["variable_name"])
+
+
+def test_research_context_packet_contains_concept_variable_matches() -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "The dependent variable is job satisfaction. "
+            "The independent variable is job autonomy."
+        )
+    )
+
+    packet = build_research_context_packet(intent, _variable_map())
+
+    assert packet["concept_variable_matches"]
+    assert packet["concept_variable_matches"][0]["variable_name"] == "satisfaction"
+    assert packet["concept_variable_matches"][0]["role"] == "dependent"

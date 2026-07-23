@@ -80,6 +80,18 @@ class ResearchIntentExtraction:
 
 
 @dataclass(slots=True)
+class ResearchConceptVariableMatch:
+    """A scored candidate linking a research concept to a dataset variable."""
+
+    concept: str
+    role: str
+    variable_name: str
+    score: float
+    match_type: str
+    evidence: str = ""
+
+
+@dataclass(slots=True)
 class AgentVariableMatch:
     """A variable-role recommendation returned by an external research agent."""
 
@@ -319,6 +331,141 @@ def infer_research_intent_structure(intent: ResearchIntent) -> ResearchIntentExt
     return extraction
 
 
+def _normalized_match_text(value: str) -> str:
+    lowered = value.lower().replace("_", " ").replace("-", " ")
+    return " ".join(re.findall(r"\w+", lowered))
+
+
+def _tokens(value: str) -> set[str]:
+    return {token for token in _normalized_match_text(value).split() if token}
+
+
+def _variable_search_parts(name: str, definition: Any) -> list[str]:
+    return [
+        name,
+        str(getattr(definition, "original_name", "") or ""),
+        str(getattr(definition, "korean_name", "") or ""),
+        str(getattr(definition, "label", "") or ""),
+        str(getattr(definition, "question_text", "") or ""),
+        str(getattr(definition, "notes", "") or ""),
+    ]
+
+
+def _score_concept_variable_match(concept: str, variable_name: str, definition: Any) -> tuple[float, str, str]:
+    concept_norm = _normalized_match_text(concept)
+    if not concept_norm:
+        return 0.0, "empty_concept", ""
+
+    parts = _variable_search_parts(variable_name, definition)
+    normalized_parts = [_normalized_match_text(part) for part in parts if str(part).strip()]
+    variable_norm = _normalized_match_text(variable_name)
+    label_norm = _normalized_match_text(str(getattr(definition, "label", "") or ""))
+    question_norm = _normalized_match_text(str(getattr(definition, "question_text", "") or ""))
+
+    if concept_norm == variable_norm:
+        return 1.0, "exact_variable_name", variable_name
+    if label_norm and concept_norm == label_norm:
+        return 0.96, "exact_label", str(getattr(definition, "label", "") or "")
+    if concept_norm in normalized_parts:
+        return 0.86, "substring", " | ".join(part for part in parts if concept.lower() in str(part).lower())[:180]
+
+    concept_tokens = _tokens(concept_norm)
+    best_score = 0.0
+    best_evidence = ""
+    for raw_part, normalized_part in zip(parts, normalized_parts, strict=False):
+        part_tokens = _tokens(normalized_part)
+        if not part_tokens:
+            continue
+        overlap = concept_tokens & part_tokens
+        if not overlap:
+            continue
+        recall = len(overlap) / max(len(concept_tokens), 1)
+        precision = len(overlap) / max(len(part_tokens), 1)
+        score = 0.35 + (0.45 * recall) + (0.15 * precision)
+        if normalized_part == question_norm:
+            score -= 0.05
+        if score > best_score:
+            best_score = score
+            best_evidence = str(raw_part)[:180]
+    if best_score > 0:
+        return min(best_score, 0.82), "token_overlap", best_evidence
+    return 0.0, "no_match", ""
+
+
+def _concepts_by_role(extraction: ResearchIntentExtraction) -> dict[str, list[str]]:
+    return {
+        "dependent": list(extraction.dependent_concepts),
+        "independent": list(extraction.independent_concepts),
+        "mediator": list(extraction.mediator_concepts),
+        "moderator": list(extraction.moderator_concepts),
+        "control": list(extraction.control_concepts),
+    }
+
+
+def build_research_concept_variable_matches(
+    extraction: ResearchIntentExtraction,
+    variable_map: VariableMap,
+    *,
+    minimum_score: float = 0.35,
+    top_n_per_concept: int = 5,
+) -> list[ResearchConceptVariableMatch]:
+    """Score candidate dataset variables for each structured research concept."""
+    matches: list[ResearchConceptVariableMatch] = []
+    for role, concepts in _concepts_by_role(extraction).items():
+        for concept in concepts:
+            candidates: list[ResearchConceptVariableMatch] = []
+            for variable_name, definition in variable_map.variables.items():
+                score, match_type, evidence = _score_concept_variable_match(concept, variable_name, definition)
+                if score >= minimum_score:
+                    candidates.append(
+                        ResearchConceptVariableMatch(
+                            concept=concept,
+                            role=role,
+                            variable_name=variable_name,
+                            score=round(score, 4),
+                            match_type=match_type,
+                            evidence=evidence,
+                        )
+                    )
+            candidates.sort(key=lambda item: (-item.score, item.variable_name))
+            matches.extend(candidates[:top_n_per_concept])
+    return matches
+
+
+def research_concept_variable_matches_to_dataframe(
+    matches: list[ResearchConceptVariableMatch],
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "concept": item.concept,
+                "role": item.role,
+                "variable_name": item.variable_name,
+                "score": item.score,
+                "match_type": item.match_type,
+                "evidence": item.evidence,
+            }
+            for item in matches
+        ]
+    )
+
+
+def research_concept_variable_matches_to_dicts(
+    matches: list[ResearchConceptVariableMatch],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "concept": item.concept,
+            "role": item.role,
+            "variable_name": item.variable_name,
+            "score": item.score,
+            "match_type": item.match_type,
+            "evidence": item.evidence,
+        }
+        for item in matches
+    ]
+
+
 def research_intent_extraction_to_dict(extraction: ResearchIntentExtraction) -> dict[str, Any]:
     return {
         "research_questions": list(extraction.research_questions),
@@ -428,6 +575,8 @@ def build_research_context_packet(
 ) -> dict[str, Any]:
     """Build the compact JSON payload to send to Claude or another research agent."""
     quality_by_variable = _variable_quality_rows(quality_report)
+    structured_intent = infer_research_intent_structure(intent)
+    concept_matches = build_research_concept_variable_matches(structured_intent, variable_map)
     variables: list[dict[str, Any]] = []
     for name, definition in variable_map.variables.items():
         variables.append(
@@ -447,7 +596,8 @@ def build_research_context_packet(
         )
     return {
         "research_intent": research_intent_to_dict(intent),
-        "structured_research_intent": research_intent_extraction_to_dict(infer_research_intent_structure(intent)),
+        "structured_research_intent": research_intent_extraction_to_dict(structured_intent),
+        "concept_variable_matches": research_concept_variable_matches_to_dicts(concept_matches),
         "available_variables": variables,
         "allowed_roles": sorted(_AGENT_ROLES),
         "required_output": "agent_research_model.yaml",
@@ -796,12 +946,16 @@ class AutoResearchIntentAgentStep(PipelineStep):
         output_files.append(str(template_path))
         quality_report = self.runtime.artifacts.get("auto_rawdata_quality_report")
         structured_intent = infer_research_intent_structure(intent)
+        concept_matches = build_research_concept_variable_matches(structured_intent, variable_map)
         packet = build_research_context_packet(intent, variable_map, quality_report=quality_report)
         packet_path = write_research_context_packet(packet, output_dir / "research_context_packet.json")
         prompt_path = write_claude_research_model_prompt(packet, output_dir / "claude_research_model_prompt.txt")
-        output_files.extend([str(packet_path), str(prompt_path)])
+        match_path = output_dir / "concept_variable_matches.xlsx"
+        research_concept_variable_matches_to_dataframe(concept_matches).to_excel(match_path, index=False)
+        output_files.extend([str(packet_path), str(prompt_path), str(match_path)])
         self.runtime.set_artifact("auto_research_intent", intent)
         self.runtime.set_artifact("auto_research_intent_extraction", structured_intent)
+        self.runtime.set_artifact("auto_research_concept_variable_matches", concept_matches)
         self.runtime.set_artifact("auto_research_context_packet", packet)
         self.runtime.set_artifact("auto_claude_research_model_prompt", prompt_path.read_text(encoding="utf-8"))
 
@@ -810,6 +964,7 @@ class AutoResearchIntentAgentStep(PipelineStep):
             "has_research_intent": bool(intent.raw_text or intent.research_topic or intent.research_goal),
             "research_question_count": len(structured_intent.research_questions),
             "hypothesis_candidate_count": len(structured_intent.hypothesis_candidates),
+            "concept_variable_match_count": len(concept_matches),
             "agent_model_applied": False,
         }
 

@@ -326,10 +326,12 @@ def test_run_auto_rawdata_analysis_writes_research_agent_context(tmp_path: Path)
     assert result.success is True
     assert result.runtime.get_artifact("auto_research_intent").research_topic == "work outcomes"
     assert "auto_research_context_packet" in result.runtime.artifacts
+    assert "auto_research_concept_variable_matches" in result.runtime.artifacts
     assert {Path(path).name for path in result.output_files} >= {
         "research_intent_template.yaml",
         "research_context_packet.json",
         "claude_research_model_prompt.txt",
+        "concept_variable_matches.xlsx",
     }
     prompt_path = next(Path(path) for path in result.output_files if Path(path).name == "claude_research_model_prompt.txt")
     assert "Return YAML only" in prompt_path.read_text(encoding="utf-8")
