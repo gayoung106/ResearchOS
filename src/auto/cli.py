@@ -1,4 +1,4 @@
-﻿"""Command-line entry point for the automatic rawdata workflow."""
+"""Command-line entry point for the automatic rawdata workflow."""
 
 from __future__ import annotations
 
@@ -8,6 +8,12 @@ from pathlib import Path
 
 from src.auto.runner import run_auto_rawdata_analysis
 
+
+def _find_output_file(output_files: list[str], filename: str) -> str | None:
+    for output_file in output_files:
+        if Path(output_file).name == filename:
+            return output_file
+    return None
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -153,6 +159,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if multi_build_result is not None:
         print(f"Multi-outcome models: {len(multi_build_result.model_results)}")
     if result.output_files:
+        final_report = _find_output_file(result.output_files, "auto_final_report.md")
+        manifest = _find_output_file(result.output_files, "output_manifest.xlsx")
+        recovery = _find_output_file(result.output_files, "auto_recovery_guide.xlsx")
+        if final_report:
+            print(f"Final report: {final_report}")
+        if manifest:
+            print(f"Output manifest: {manifest}")
+        if recovery:
+            print(f"Recovery guide: {recovery}")
         print("Output files:")
         for output_file in result.output_files:
             print(f"- {output_file}")

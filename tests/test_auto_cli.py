@@ -21,7 +21,11 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
             success=True,
             failed_stage=None,
             pipeline_build_result=SimpleNamespace(registration=registration),
-            output_files=[str(tmp_path / "result" / "auto_run_summary.xlsx")],
+            output_files=[
+                str(tmp_path / "result" / "00_auto_run" / "auto_final_report.md"),
+                str(tmp_path / "result" / "00_auto_run" / "output_manifest.xlsx"),
+                str(tmp_path / "result" / "00_auto_run" / "auto_recovery_guide.xlsx"),
+            ],
             warnings=[],
         )
 
@@ -90,6 +94,9 @@ def test_auto_cli_plan_only_passes_arguments(monkeypatch, tmp_path, capsys) -> N
     assert calls["time_variable"] == "wave"
     assert "Auto rawdata analysis completed." in captured.out
     assert "Model type: ols" in captured.out
+    assert "Final report:" in captured.out
+    assert "Output manifest:" in captured.out
+    assert "Recovery guide:" in captured.out
 
 
 def test_auto_cli_returns_nonzero_on_failure(monkeypatch, capsys) -> None:
@@ -137,5 +144,9 @@ def test_auto_cli_smoke_plan_only_creates_core_outputs(tmp_path: Path) -> None:
     assert exit_code == 0
     assert (tmp_path / "result" / "00_auto_run" / "auto_run_report.md").exists()
     assert (tmp_path / "result" / "00_auto_run" / "auto_final_report.md").exists()
+    assert (tmp_path / "result" / "00_auto_run" / "auto_validation_report.xlsx").exists()
+    assert (tmp_path / "result" / "00_auto_run" / "auto_recovery_guide.xlsx").exists()
+    assert (tmp_path / "result" / "00_auto_run" / "output_manifest.xlsx").exists()
+    assert (tmp_path / "result" / "01_auto_import" / "rawdata_quality_report.xlsx").exists()
     assert (tmp_path / "result" / "03_auto_plan" / "auto_analysis_plan.yaml").exists()
     assert (tmp_path / "result" / "03_auto_plan" / "auto_variable_map.yaml").exists()
