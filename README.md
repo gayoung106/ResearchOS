@@ -335,6 +335,6 @@ model_type을 직접 지정하지 않으면 변수 측정수준과 데이터 구
 - 자동 추론 결과는 --plan-only로 먼저 확인하는 것이 좋습니다.
 - 변수명이 불명확하면 코드북 또는 설문지를 함께 제공하세요.
 - 종속변수나 주요 독립변수가 잘못 잡히면 CLI 보정 옵션을 사용하세요.
-- auto_final_report.md는 가장 먼저 읽는 요약 파일입니다.
+- auto_final_report.md는 가장 먼저 읽는 요약 파일이며 Next steps 섹션에서 다음 확인 순서를 안내합니다.
 - auto_recovery_guide.xlsx는 실패 단계별 복구 조치와 우선순위를 담습니다.
 - output_manifest.xlsx는 생성된 산출물의 위치, 분류, 추천 여부, 설명을 담습니다.

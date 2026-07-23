@@ -666,6 +666,29 @@ def _append_recommended_outputs(
     for _, relative_path, filename, category, description in sorted(rows):
         lines.append(f"| {filename} | {category} | `{relative_path}` | {description} |")
 
+
+def _append_next_steps(lines: list[str], result: AutoRawDataAnalysisResult) -> None:
+    steps: list[str] = []
+    validation = _artifact_or_none(result.runtime, "auto_run_validation_report")
+    quality = _artifact_or_none(result.runtime, "auto_rawdata_quality_report")
+    if not result.success or result.failed_stage:
+        steps.append("Open auto_recovery_guide.xlsx and fix the highest-priority failed stage first.")
+    if validation is not None and not getattr(validation, "passed", True):
+        steps.append("Open auto_validation_report.xlsx and review failed validation items with suggestions.")
+    if quality is not None and not getattr(quality, "empty", True):
+        warning_count = int(quality["quality_warning_count"].sum())
+        if warning_count > 0:
+            steps.append("Review rawdata_quality_report.xlsx before interpreting model results.")
+    if result.orchestrator_result is None:
+        steps.append("Review auto_analysis_plan.yaml, then rerun without --plan-only to execute models.")
+    else:
+        steps.append("Read model coefficients, diagnostics, effect sizes, reporting, visualization, and research audit outputs.")
+    steps.append("Use output_manifest.xlsx as the complete index of generated files.")
+
+    lines.extend(["", "## Next steps"])
+    for index, step in enumerate(dict.fromkeys(steps), start=1):
+        lines.append(f"{index}. {step}")
+
 def _write_auto_final_report(
     *,
     working_directory: Path,
@@ -789,6 +812,7 @@ def _write_auto_final_report(
         )
 
     _append_recovery_actions(lines, result)
+    _append_next_steps(lines, result)
 
     if validation is not None:
         lines.extend(["", "## \uac80\uc99d \uc694\uc57d", f"- \uc0c1\ud0dc: {_format_bool(validation.passed)}"])

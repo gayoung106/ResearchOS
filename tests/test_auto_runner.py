@@ -72,6 +72,8 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "rawdata_quality_report.xlsx" in final_report_text
     assert "auto_validation_report.xlsx" in final_report_text
     assert "Recovery guide" in final_report_text
+    assert "Next steps" in final_report_text
+    assert "rerun without --plan-only" in final_report_text
     assert "No recovery action is required" in final_report_text
     recovery_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_recovery_guide.xlsx")
     recovery = pd.read_excel(recovery_path)
