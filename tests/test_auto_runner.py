@@ -45,6 +45,7 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert validation.passed is True
     assert {Path(path).name for path in result.output_files} >= {
         "analysis_base.parquet",
+        "rawdata_quality_report.xlsx",
         "variable_role_inference.xlsx",
         "analysis_plan_summary.xlsx",
         "auto_analysis_plan.yaml",
@@ -67,6 +68,8 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "outcome_score" in final_report_text
     assert "output_manifest.xlsx" in final_report_text
     assert "Recommended outputs" in final_report_text
+    assert "Rawdata quality" in final_report_text
+    assert "rawdata_quality_report.xlsx" in final_report_text
     assert "auto_validation_report.xlsx" in final_report_text
     assert "Recovery guide" in final_report_text
     assert "No recovery action is required" in final_report_text
@@ -80,6 +83,7 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "auto_final_report.md" in set(manifest["filename"])
     assert "auto_validation_report.xlsx" in set(manifest["filename"])
     assert "auto_recovery_guide.xlsx" in set(manifest["filename"])
+    assert "rawdata_quality_report.xlsx" in set(manifest["filename"])
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "exists"].all()
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "recommended"].all()
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "description"].str.contains("Start here").any()

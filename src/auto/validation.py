@@ -39,6 +39,8 @@ def _suggestion_for_item(item: str) -> str:
         return "\uc790\ub3d9 \uc2e4\ud589\uc774 \uc911\uac04\uc5d0 \uc911\ub2e8\ub418\uc5c8\ub294\uc9c0 \ud655\uc778\ud558\uace0 result/00_auto_run \ud3f4\ub354 \uc4f0\uae30 \uad8c\ud55c\uc744 \ud655\uc778\ud558\uc138\uc694."
     if item.startswith("file:output_manifest.xlsx"):
         return "\uc0b0\ucd9c\ubb3c \ubaa9\ub85d\uc744 \uc800\uc7a5\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. result/00_auto_run \ud3f4\ub354 \uc4f0\uae30 \uad8c\ud55c\uacfc Excel \uc800\uc7a5 \uc758\uc874\uc131\uc744 \ud655\uc778\ud558\uc138\uc694."
+    if item.startswith("file:rawdata_quality_report.xlsx"):
+        return "원자료 품질 리포트를 저장하지 못했습니다. 01_auto_import 단계의 쓰기 권한과 Excel 저장 의존성을 확인하세요."
     if item.startswith("file:analysis_base.parquet"):
         return "\uc6d0\uc790\ub8cc \ub85c\ub529 \ub2e8\uacc4\uac00 \uc644\ub8cc\ub418\uc5c8\ub294\uc9c0 \ud655\uc778\ud558\uace0 pyarrow/parquet \uc800\uc7a5 \uc758\uc874\uc131\uc744 \ud655\uc778\ud558\uc138\uc694."
     if item.startswith("file:variable_role_inference") or item.startswith("file:inferred_variable_map"):
@@ -124,6 +126,7 @@ def validate_auto_run_outputs(
         "auto_final_report.md",
         "output_manifest.xlsx",
         "analysis_base.parquet",
+        "rawdata_quality_report.xlsx",
         "variable_role_inference.xlsx",
         "inferred_variable_map.xlsx",
         "analysis_plan_summary.xlsx",

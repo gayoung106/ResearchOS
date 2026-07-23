@@ -46,6 +46,7 @@ class AutoRawDataLoadResult:
     candidates: list[RawDatasetCandidate]
     read_result: ReadResult
     variable_metadata: pd.DataFrame
+    quality_report: pd.DataFrame
     metadata_files: list[Path] = field(default_factory=list)
     merge_key: str | None = None
     merged_candidate_labels: list[str] = field(default_factory=list)
@@ -424,6 +425,85 @@ def _merge_read_candidates(
     )
     return merged_read_result, merged_candidate, merge_key, merged_labels, warnings
 
+
+def _looks_like_datetime(series: pd.Series) -> bool:
+    non_missing = series.dropna()
+    if non_missing.empty:
+        return False
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return True
+    if not pd.api.types.is_object_dtype(series) and not pd.api.types.is_string_dtype(series):
+        return False
+    sample = non_missing.astype(str).head(100)
+    parsed = pd.to_datetime(sample, errors="coerce")
+    return bool(parsed.notna().mean() >= 0.8)
+
+
+def build_rawdata_quality_report(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Build a variable-level quality report for an automatically selected raw dataset."""
+    row_count = int(len(dataframe))
+    rows: list[dict[str, object]] = []
+    for column in dataframe.columns:
+        series = dataframe[column]
+        non_missing_count = int(series.notna().sum())
+        missing_count = int(row_count - non_missing_count)
+        unique_count = int(series.nunique(dropna=True))
+        missing_rate = float(missing_count / row_count) if row_count else 0.0
+        unique_rate = float(unique_count / non_missing_count) if non_missing_count else 0.0
+        normalized = _normalize_metadata_key(column)
+        constant = unique_count <= 1
+        complete_unique = row_count > 0 and non_missing_count == row_count and unique_count == row_count
+        id_candidate = complete_unique and (normalized in _ID_NAME_KEYWORDS or normalized.endswith("_id"))
+        high_cardinality = unique_rate >= 0.9 and unique_count >= 10 and not id_candidate
+        possible_datetime = _looks_like_datetime(series)
+        duplicate_value_count = int(series.dropna().duplicated().sum())
+        warnings: list[str] = []
+        if missing_rate > 0:
+            warnings.append("missing_values")
+        if constant:
+            warnings.append("constant_or_empty")
+        if high_cardinality:
+            warnings.append("high_cardinality")
+        rows.append(
+            {
+                "variable_name": str(column),
+                "dtype": str(series.dtype),
+                "row_count": row_count,
+                "non_missing_count": non_missing_count,
+                "missing_count": missing_count,
+                "missing_rate": missing_rate,
+                "unique_count": unique_count,
+                "unique_rate": unique_rate,
+                "duplicate_value_count": duplicate_value_count,
+                "constant": constant,
+                "id_candidate": id_candidate,
+                "high_cardinality": high_cardinality,
+                "possible_datetime": possible_datetime,
+                "quality_warning_count": len(warnings),
+                "quality_warnings": " | ".join(warnings),
+            }
+        )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "variable_name",
+            "dtype",
+            "row_count",
+            "non_missing_count",
+            "missing_count",
+            "missing_rate",
+            "unique_count",
+            "unique_rate",
+            "duplicate_value_count",
+            "constant",
+            "id_candidate",
+            "high_cardinality",
+            "possible_datetime",
+            "quality_warning_count",
+            "quality_warnings",
+        ],
+    )
+
 def load_rawdata_project(
     working_directory: str | Path = ".",
     *,
@@ -480,12 +560,14 @@ def load_rawdata_project(
         questionnaire_dir=questionnaire_dir,
     )
     variable_metadata = enrich_variable_metadata_from_files(variable_metadata, metadata_files)
+    quality_report = build_rawdata_quality_report(selected_read_result.dataframe)
     return AutoRawDataLoadResult(
         dataframe=selected_read_result.dataframe,
         selected_candidate=selected_candidate,
         candidates=[candidate for _, candidate in read_candidates],
         read_result=selected_read_result,
         variable_metadata=variable_metadata,
+        quality_report=quality_report,
         metadata_files=metadata_files,
         merge_key=merge_key,
         merged_candidate_labels=merged_candidate_labels,
@@ -527,16 +609,19 @@ class AutoRawDataLoadingStep(PipelineStep):
         self.runtime.dataframe = load_result.dataframe
         self.runtime.variable_metadata = load_result.variable_metadata
         self.runtime.set_artifact("auto_rawdata_load_result", load_result)
+        self.runtime.set_artifact("auto_rawdata_quality_report", load_result.quality_report)
         self.runtime.set_artifact("read_result", load_result.read_result)
 
         output_dir = working_directory / "result" / "01_auto_import"
         output_dir.mkdir(parents=True, exist_ok=True)
         parquet_path = output_dir / "analysis_base.parquet"
         metadata_path = output_dir / "variable_metadata.xlsx"
+        quality_path = output_dir / "rawdata_quality_report.xlsx"
         candidates_path = output_dir / "rawdata_candidates.xlsx"
 
         load_result.dataframe.to_parquet(parquet_path, index=False)
         load_result.variable_metadata.to_excel(metadata_path, index=False)
+        load_result.quality_report.to_excel(quality_path, index=False)
         pd.DataFrame(
             [
                 {
@@ -558,7 +643,7 @@ class AutoRawDataLoadingStep(PipelineStep):
         return StepResult(
             stage_name=self.name,
             success=True,
-            output_files=[str(parquet_path), str(metadata_path), str(candidates_path)],
+            output_files=[str(parquet_path), str(metadata_path), str(quality_path), str(candidates_path)],
             warnings=load_result.warnings,
             metadata={
                 "source_file": str(load_result.selected_candidate.source_path),
@@ -569,5 +654,6 @@ class AutoRawDataLoadingStep(PipelineStep):
                 "metadata_file_count": len(load_result.metadata_files),
                 "merge_key": load_result.merge_key,
                 "merged_candidate_count": len(load_result.merged_candidate_labels),
+                "quality_warning_count": int(load_result.quality_report["quality_warning_count"].sum()),
             },
         )

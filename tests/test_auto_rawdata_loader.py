@@ -4,6 +4,7 @@ import pandas as pd
 
 from src.auto.rawdata_loader import (
     AutoRawDataLoadingStep,
+    build_rawdata_quality_report,
     discover_metadata_files,
     discover_rawdata_files,
     load_rawdata_project,
@@ -38,6 +39,7 @@ def test_load_rawdata_project_selects_largest_usable_dataset(tmp_path: Path) -> 
     assert result.dataframe.shape == (4, 3)
     assert result.variable_metadata.shape[0] == 3
     assert len(result.candidates) == 2
+    assert "quality_warning_count" in result.quality_report.columns
 
 
 def test_load_rawdata_project_scores_excel_sheets(tmp_path: Path) -> None:
@@ -58,6 +60,7 @@ def test_load_rawdata_project_scores_excel_sheets(tmp_path: Path) -> None:
     assert result.selected_candidate.sheet_name == "analysis"
     assert result.dataframe.shape == (3, 2)
     assert len(result.candidates) == 2
+    assert "quality_warning_count" in result.quality_report.columns
 
 
 def test_auto_rawdata_loading_step_populates_runtime_and_outputs(tmp_path: Path) -> None:
@@ -79,6 +82,7 @@ def test_auto_rawdata_loading_step_populates_runtime_and_outputs(tmp_path: Path)
     assert {Path(path).name for path in step_result.output_files} == {
         "analysis_base.parquet",
         "variable_metadata.xlsx",
+        "rawdata_quality_report.xlsx",
         "rawdata_candidates.xlsx",
     }
 
@@ -161,3 +165,21 @@ def test_load_rawdata_project_can_disable_auto_merge(tmp_path: Path) -> None:
     assert result.merge_key is None
     assert result.merged_candidate_labels == []
     assert result.dataframe.shape[1] == 2
+
+def test_build_rawdata_quality_report_flags_common_data_issues() -> None:
+    data = pd.DataFrame(
+        {
+            "person_id": [1, 2, 3, 4],
+            "outcome": [1.0, None, 3.0, 4.0],
+            "constant": [5, 5, 5, 5],
+            "event_date": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04"],
+        }
+    )
+
+    report = build_rawdata_quality_report(data).set_index("variable_name")
+
+    assert bool(report.loc["person_id", "id_candidate"]) is True
+    assert report.loc["outcome", "missing_count"] == 1
+    assert "missing_values" in report.loc["outcome", "quality_warnings"]
+    assert bool(report.loc["constant", "constant"]) is True
+    assert bool(report.loc["event_date", "possible_datetime"]) is True

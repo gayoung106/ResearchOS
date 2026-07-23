@@ -57,6 +57,7 @@ Windows PowerShell 기준입니다.
 주요 확인 파일은 다음입니다.
 
 - result/01_auto_import/analysis_base.parquet
+- result/01_auto_import/rawdata_quality_report.xlsx
 - result/02_auto_variables/variable_role_inference.xlsx
 - result/02_auto_variables/inferred_variable_map.xlsx
 - result/03_auto_plan/auto_analysis_plan.yaml
@@ -197,6 +198,7 @@ CLI 대신 Python 함수로도 실행할 수 있습니다.
         rawdata_candidates.xlsx
         variable_metadata.xlsx
         analysis_base.parquet
+        rawdata_quality_report.xlsx
       02_auto_variables/
         variable_role_inference.xlsx
         inferred_variable_map.xlsx

@@ -34,6 +34,7 @@ _EXPORTS = {
     "AutoRawDataLoadResult": "src.auto.rawdata_loader",
     "AutoRawDataLoadingStep": "src.auto.rawdata_loader",
     "RawDatasetCandidate": "src.auto.rawdata_loader",
+    "build_rawdata_quality_report": "src.auto.rawdata_loader",
     "discover_metadata_files": "src.auto.rawdata_loader",
     "discover_rawdata_files": "src.auto.rawdata_loader",
     "enrich_variable_metadata_from_files": "src.auto.rawdata_loader",

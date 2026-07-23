@@ -412,6 +412,7 @@ def _describe_output_file(path: Path, category: str) -> str:
         "output_manifest.xlsx": "Index of generated output files and recommended reading order.",
         "analysis_base.parquet": "Clean analysis dataset selected from rawdata.",
         "rawdata_candidates.xlsx": "Candidate raw datasets and sheet selection scores.",
+        "rawdata_quality_report.xlsx": "Variable-level rawdata quality checks for missingness and suspicious columns.",
         "variable_role_inference.xlsx": "Variable role and measurement-level inference details.",
         "inferred_variable_map.xlsx": "Inferred variable map in spreadsheet form.",
         "analysis_plan_summary.xlsx": "Auto-generated analysis plan summary.",
@@ -594,6 +595,36 @@ def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalys
     pd.DataFrame(rows).to_excel(manifest_path, index=False)
     return str(manifest_path)
 
+
+def _append_rawdata_quality_summary(lines: list[str], result: AutoRawDataAnalysisResult) -> None:
+    quality = _artifact_or_none(result.runtime, "auto_rawdata_quality_report")
+    if quality is None or getattr(quality, "empty", True):
+        return
+    warning_count = int(quality["quality_warning_count"].sum())
+    missing_variables = int((quality["missing_count"] > 0).sum())
+    constant_variables = int(quality["constant"].sum())
+    id_candidates = int(quality["id_candidate"].sum())
+    lines.extend(
+        [
+            "",
+            "## Rawdata quality",
+            f"- variables_checked: {len(quality)}",
+            f"- quality_warning_count: {warning_count}",
+            f"- variables_with_missing_values: {missing_variables}",
+            f"- constant_or_empty_variables: {constant_variables}",
+            f"- id_candidate_count: {id_candidates}",
+        ]
+    )
+    flagged = quality[quality["quality_warning_count"] > 0].head(8)
+    if flagged.empty:
+        return
+    lines.extend(["", "| variable | missing_rate | unique_count | warnings |", "| --- | ---: | ---: | --- |"])
+    for _, row in flagged.iterrows():
+        lines.append(
+            f"| {row['variable_name']} | {float(row['missing_rate']):.3f} | "
+            f"{int(row['unique_count'])} | {row['quality_warnings']} |"
+        )
+
 def _relative_output_path(path: Path, working_directory: Path) -> str:
     try:
         return path.resolve().relative_to(working_directory).as_posix()
@@ -673,6 +704,8 @@ def _write_auto_final_report(
         )
     else:
         lines.append("- \uc6d0\uc790\ub8cc \uc120\ud0dd \uc815\ubcf4\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.")
+
+    _append_rawdata_quality_summary(lines, result)
 
     lines.extend(["", "## Main model"])
     if registration is not None:
