@@ -65,6 +65,8 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "Main model" in final_report_text
     assert "outcome_score" in final_report_text
     assert "output_manifest.xlsx" in final_report_text
+    assert "Recommended outputs" in final_report_text
+    assert "auto_validation_report.xlsx" in final_report_text
     manifest_path = next(Path(path) for path in result.output_files if Path(path).name == "output_manifest.xlsx")
     manifest = pd.read_excel(manifest_path)
     assert {"category", "recommended", "description", "filename", "relative_path", "exists"}.issubset(manifest.columns)

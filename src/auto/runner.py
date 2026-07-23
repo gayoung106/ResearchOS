@@ -486,6 +486,48 @@ def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalys
     rows.sort(key=lambda row: (int(row["recommended_order"]), str(row["relative_path"])))
     pd.DataFrame(rows).to_excel(manifest_path, index=False)
     return str(manifest_path)
+
+def _relative_output_path(path: Path, working_directory: Path) -> str:
+    try:
+        return path.resolve().relative_to(working_directory).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _append_recommended_outputs(
+    lines: list[str],
+    *,
+    working_directory: Path,
+    result: AutoRawDataAnalysisResult,
+) -> None:
+    rows: list[tuple[int, str, str, str, str]] = []
+    for output_file in dict.fromkeys(result.output_files):
+        path = Path(output_file)
+        if not _is_recommended_output(path):
+            continue
+        category = _classify_output_file(path)
+        rows.append(
+            (
+                _output_manifest_priority(category),
+                _relative_output_path(path, working_directory),
+                path.name,
+                category,
+                _describe_output_file(path, category),
+            )
+        )
+    if not rows:
+        return
+    lines.extend(
+        [
+            "",
+            "## Recommended outputs",
+            "| file | category | path | description |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for _, relative_path, filename, category, description in sorted(rows):
+        lines.append(f"| {filename} | {category} | `{relative_path}` | {description} |")
+
 def _write_auto_final_report(
     *,
     working_directory: Path,
@@ -507,9 +549,12 @@ def _write_auto_final_report(
         f"- \uc2e4\ud328 \ub2e8\uacc4: {result.failed_stage or '-'}",
         f"- \uc0b0\ucd9c\ubb3c \uc218: {len(result.output_files)}",
         f"- \uacbd\uace0 \uc218: {len(result.warnings)}",
+    ]
+    _append_recommended_outputs(lines, working_directory=working_directory, result=result)
+    lines.extend([
         "",
         "## \uc6d0\uc790\ub8cc",
-    ]
+    ])
     if rawdata is not None:
         candidate = rawdata.selected_candidate
         lines.extend(
