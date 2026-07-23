@@ -408,6 +408,7 @@ def _describe_output_file(path: Path, category: str) -> str:
         "auto_run_report.md": "Automatic setup and pipeline registration summary.",
         "auto_run_summary.xlsx": "Stage-level execution status table.",
         "auto_validation_report.xlsx": "Validation checklist with evidence and repair suggestions.",
+        "auto_recovery_guide.xlsx": "Prioritized recovery actions when the auto run needs attention.",
         "output_manifest.xlsx": "Index of generated output files and recommended reading order.",
         "analysis_base.parquet": "Clean analysis dataset selected from rawdata.",
         "rawdata_candidates.xlsx": "Candidate raw datasets and sheet selection scores.",
@@ -442,6 +443,112 @@ def _is_recommended_output(path: Path) -> bool:
     }
 
 
+
+
+def _build_auto_recovery_actions(result: AutoRawDataAnalysisResult) -> list[dict[str, object]]:
+    actions: list[dict[str, object]] = []
+    stage_actions = {
+        "01_auto_rawdata_loading": (
+            "rawdata",
+            "Add a readable CSV or Excel file under the rawdata directory, or pass --source-file.",
+        ),
+        "02_auto_variable_inference": (
+            "variable_inference",
+            "Add a codebook/questionnaire, rename unclear columns, or pass manual variable overrides.",
+        ),
+        "02_auto_variable_role_overrides": (
+            "variable_overrides",
+            "Check that every CLI override variable name exactly matches a rawdata column.",
+        ),
+        "03_auto_analysis_plan": (
+            "analysis_plan",
+            "Ensure at least one dependent variable and one predictor can be inferred or manually specified.",
+        ),
+        "04_auto_pipeline_registration": (
+            "pipeline_registration",
+            "Inspect auto_analysis_plan.yaml and variable_map.yaml, then adjust model options or variable roles.",
+        ),
+        "05_auto_pipeline_execution": (
+            "model_execution",
+            "Open model warnings and diagnostics; try --plan-only first or simplify the model specification.",
+        ),
+        "05b_auto_multi_outcome_pipeline_execution": (
+            "multi_outcome_execution",
+            "Inspect the failed multi-outcome model folder and reduce --max-outcomes if needed.",
+        ),
+    }
+    if result.failed_stage in stage_actions:
+        area, action = stage_actions[result.failed_stage]
+        actions.append(
+            {
+                "priority": 1,
+                "area": area,
+                "stage": result.failed_stage,
+                "evidence": result.warnings[0] if result.warnings else "stage failed",
+                "action": action,
+            }
+        )
+
+    validation = _artifact_or_none(result.runtime, "auto_run_validation_report")
+    if validation is not None:
+        for item in getattr(validation, "items", []):
+            if getattr(item, "passed", False):
+                continue
+            actions.append(
+                {
+                    "priority": len(actions) + 1,
+                    "area": "validation",
+                    "stage": getattr(item, "item", "validation"),
+                    "evidence": getattr(item, "evidence", "validation failed"),
+                    "action": getattr(item, "suggestion", "Inspect the previous output and warning messages."),
+                }
+            )
+
+    if not actions:
+        actions.append(
+            {
+                "priority": 1,
+                "area": "complete",
+                "stage": "auto_run",
+                "evidence": "No failed validation items were detected.",
+                "action": "No recovery action is required. Review auto_final_report.md and output_manifest.xlsx.",
+            }
+        )
+    return actions
+
+
+def _write_auto_recovery_guide(*, working_directory: Path, result: AutoRawDataAnalysisResult) -> str:
+    import pandas as pd
+
+    output_dir = working_directory / "result" / "00_auto_run"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    guide_path = output_dir / "auto_recovery_guide.xlsx"
+    actions = _build_auto_recovery_actions(result)
+    result.runtime.set_artifact("auto_recovery_actions", actions)
+    pd.DataFrame(actions, columns=["priority", "area", "stage", "evidence", "action"]).to_excel(
+        guide_path,
+        index=False,
+    )
+    return str(guide_path)
+
+
+def _append_recovery_actions(lines: list[str], result: AutoRawDataAnalysisResult) -> None:
+    actions = _artifact_or_none(result.runtime, "auto_recovery_actions")
+    if not actions:
+        return
+    lines.extend(
+        [
+            "",
+            "## Recovery guide",
+            "| priority | area | stage | action |",
+            "| ---: | --- | --- | --- |",
+        ]
+    )
+    for action in actions[:8]:
+        lines.append(
+            f"| {action.get('priority', '-')} | {action.get('area', '-')} | "
+            f"{action.get('stage', '-')} | {action.get('action', '-')} |"
+        )
 
 def _write_auto_validation_report(
     *,
@@ -648,6 +755,8 @@ def _write_auto_final_report(
             f"{len(result.multi_outcome_pipeline_run_result.warnings)} |"
         )
 
+    _append_recovery_actions(lines, result)
+
     if validation is not None:
         lines.extend(["", "## \uac80\uc99d \uc694\uc57d", f"- \uc0c1\ud0dc: {_format_bool(validation.passed)}"])
         if validation.warnings:
@@ -798,6 +907,9 @@ def run_auto_rawdata_analysis(
             )
             result.output_files.append(validation_report_path)
             context.add_generated_file(validation_report_path)
+            recovery_guide_path = _write_auto_recovery_guide(working_directory=root, result=result)
+            result.output_files.append(recovery_guide_path)
+            context.add_generated_file(recovery_guide_path)
             result.warnings.extend(validation_report.warnings)
             _write_auto_final_report(working_directory=root, result=result)
             _write_output_manifest(working_directory=root, result=result)
@@ -894,6 +1006,9 @@ def run_auto_rawdata_analysis(
     )
     result.output_files.append(validation_report_path)
     context.add_generated_file(validation_report_path)
+    recovery_guide_path = _write_auto_recovery_guide(working_directory=root, result=result)
+    result.output_files.append(recovery_guide_path)
+    context.add_generated_file(recovery_guide_path)
     if validation_report.warnings:
         result.warnings.extend(validation_report.warnings)
         for warning in validation_report.warnings:

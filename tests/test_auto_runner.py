@@ -53,6 +53,7 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
         "auto_run_report.md",
         "auto_final_report.md",
         "auto_validation_report.xlsx",
+        "auto_recovery_guide.xlsx",
         "output_manifest.xlsx",
     }
     report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_run_report.md")
@@ -67,11 +68,18 @@ def test_run_auto_rawdata_analysis_prepares_and_registers_pipeline_without_execu
     assert "output_manifest.xlsx" in final_report_text
     assert "Recommended outputs" in final_report_text
     assert "auto_validation_report.xlsx" in final_report_text
+    assert "Recovery guide" in final_report_text
+    assert "No recovery action is required" in final_report_text
+    recovery_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_recovery_guide.xlsx")
+    recovery = pd.read_excel(recovery_path)
+    assert list(recovery.columns) == ["priority", "area", "stage", "evidence", "action"]
+    assert "complete" in set(recovery["area"])
     manifest_path = next(Path(path) for path in result.output_files if Path(path).name == "output_manifest.xlsx")
     manifest = pd.read_excel(manifest_path)
     assert {"category", "recommended", "description", "filename", "relative_path", "exists"}.issubset(manifest.columns)
     assert "auto_final_report.md" in set(manifest["filename"])
     assert "auto_validation_report.xlsx" in set(manifest["filename"])
+    assert "auto_recovery_guide.xlsx" in set(manifest["filename"])
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "exists"].all()
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "recommended"].all()
     assert manifest.loc[manifest["filename"] == "auto_final_report.md", "description"].str.contains("Start here").any()
@@ -179,8 +187,13 @@ def test_run_auto_rawdata_analysis_reports_setup_failure(tmp_path: Path) -> None
         "auto_run_report.md",
         "auto_final_report.md",
         "auto_validation_report.xlsx",
+        "auto_recovery_guide.xlsx",
         "output_manifest.xlsx",
     }
+    recovery_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_recovery_guide.xlsx")
+    recovery = pd.read_excel(recovery_path)
+    assert "rawdata" in set(recovery["area"])
+    assert recovery["action"].str.contains("rawdata").any()
 
 
 def test_run_auto_rawdata_analysis_runs_multi_outcome_pipelines_when_enabled(

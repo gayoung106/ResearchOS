@@ -65,6 +65,7 @@ Windows PowerShell 기준입니다.
 - result/00_auto_run/auto_run_report.md
 - result/00_auto_run/auto_final_report.md
 - result/00_auto_run/auto_validation_report.xlsx
+- result/00_auto_run/auto_recovery_guide.xlsx
 - result/00_auto_run/output_manifest.xlsx
 
 ## 특정 파일만 지정하기
@@ -190,6 +191,7 @@ CLI 대신 Python 함수로도 실행할 수 있습니다.
         auto_run_report.md
         auto_final_report.md
         auto_validation_report.xlsx
+        auto_recovery_guide.xlsx
         output_manifest.xlsx
       01_auto_import/
         rawdata_candidates.xlsx
@@ -213,7 +215,7 @@ CLI 대신 Python 함수로도 실행할 수 있습니다.
       15_visualizations/
       16_research_audit/
 
-가장 먼저 볼 파일은 result/00_auto_run/auto_final_report.md입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 모델 결과, 단계별 상태, 검증 결과, 경고, 산출물 목록이 정리됩니다. 검증 세부표는 result/00_auto_run/auto_validation_report.xlsx, 전체 산출물 위치와 분류는 result/00_auto_run/output_manifest.xlsx에서 확인할 수 있습니다.
+가장 먼저 볼 파일은 result/00_auto_run/auto_final_report.md입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 모델 결과, 단계별 상태, 검증 결과, 경고, 산출물 목록이 정리됩니다. 검증 세부표는 result/00_auto_run/auto_validation_report.xlsx, 실패 복구 가이드는 result/00_auto_run/auto_recovery_guide.xlsx, 전체 산출물 위치와 분류는 result/00_auto_run/output_manifest.xlsx에서 확인할 수 있습니다.
 
 ## 자동 모델 선택 기준
 
@@ -332,4 +334,5 @@ model_type을 직접 지정하지 않으면 변수 측정수준과 데이터 구
 - 변수명이 불명확하면 코드북 또는 설문지를 함께 제공하세요.
 - 종속변수나 주요 독립변수가 잘못 잡히면 CLI 보정 옵션을 사용하세요.
 - auto_final_report.md는 가장 먼저 읽는 요약 파일입니다.
+- auto_recovery_guide.xlsx는 실패 단계별 복구 조치와 우선순위를 담습니다.
 - output_manifest.xlsx는 생성된 산출물의 위치, 분류, 추천 여부, 설명을 담습니다.
