@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 import yaml
 
@@ -13,8 +13,10 @@ from src.auto import (
     apply_agent_research_model_to_variable_map,
     build_claude_research_model_prompt,
     build_research_context_packet,
+    infer_research_intent_structure,
     load_agent_research_model,
     load_research_intent,
+    research_intent_extraction_to_dict,
     validate_agent_research_model,
     write_claude_research_model_prompt,
     write_research_context_packet,
@@ -178,3 +180,43 @@ def test_load_agent_research_model_from_yaml(tmp_path: Path) -> None:
     assert model.dependent_variable == "satisfaction"
     assert model.variable_matches[0].confidence == 0.8
     assert parsed.independent_variables == ["autonomy"]
+
+
+def test_infer_research_intent_structure_from_natural_language() -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "I want to study whether job autonomy has a positive effect on job satisfaction. "
+            "The dependent variable is job satisfaction. "
+            "The independent variable is job autonomy. "
+            "The mediator is burnout. "
+            "The moderator is supervisor support. "
+            "Control variables are age and gender."
+        )
+    )
+
+    extraction = infer_research_intent_structure(intent)
+    data = research_intent_extraction_to_dict(extraction)
+
+    assert extraction.research_questions
+    assert "job satisfaction" in extraction.dependent_concepts
+    assert "job autonomy" in extraction.independent_concepts
+    assert "burnout" in extraction.mediator_concepts
+    assert "supervisor support" in extraction.moderator_concepts
+    assert any("age" in concept for concept in extraction.control_concepts)
+    assert extraction.hypothesis_candidates[0].expected_direction == "+"
+    assert data["hypothesis_candidates"][0]["hypothesis_id"] == "H1"
+
+
+def test_research_context_packet_contains_structured_intent() -> None:
+    intent = ResearchIntent(
+        raw_text=(
+            "The dependent variable is satisfaction. "
+            "The independent variable is autonomy."
+        )
+    )
+
+    packet = build_research_context_packet(intent, _variable_map())
+
+    assert packet["structured_research_intent"]["dependent_concepts"] == ["satisfaction"]
+    assert packet["structured_research_intent"]["independent_concepts"] == ["autonomy"]
+    assert packet["research_intent"]["structured_intent"]["dependent_concepts"] == ["satisfaction"]

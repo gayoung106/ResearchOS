@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,33 @@ class ResearchIntent:
     moderator_concepts: list[str] = field(default_factory=list)
     control_concepts: list[str] = field(default_factory=list)
     raw_text: str = ""
+
+
+@dataclass(slots=True)
+class ResearchIntentHypothesisCandidate:
+    """A lightweight hypothesis candidate inferred from intent text."""
+
+    hypothesis_id: str
+    statement: str
+    dependent_concept: str = ""
+    independent_concept: str = ""
+    expected_direction: str = ""
+    confidence: float = 0.0
+
+
+@dataclass(slots=True)
+class ResearchIntentExtraction:
+    """Structured concepts inferred from natural-language research intent."""
+
+    research_questions: list[str] = field(default_factory=list)
+    dependent_concepts: list[str] = field(default_factory=list)
+    independent_concepts: list[str] = field(default_factory=list)
+    mediator_concepts: list[str] = field(default_factory=list)
+    moderator_concepts: list[str] = field(default_factory=list)
+    control_concepts: list[str] = field(default_factory=list)
+    hypothesis_candidates: list[ResearchIntentHypothesisCandidate] = field(default_factory=list)
+    confidence: float = 0.0
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -130,6 +158,191 @@ def _normalize_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+_OUTCOME_HINTS = (
+    "outcome",
+    "dependent variable",
+    "result",
+    "performance",
+    "satisfaction",
+    "effectiveness",
+    "score",
+    "??",
+    "??",
+    "??",
+    "??",
+)
+_PREDICTOR_HINTS = (
+    "predictor",
+    "independent variable",
+    "determinant",
+    "factor",
+    "effect of",
+    "impact of",
+    "influence of",
+    "??",
+    "????",
+    "??",
+)
+_MEDIATOR_HINTS = ("mediator", "mediate", "mediation", "??", "????")
+_MODERATOR_HINTS = ("moderator", "moderate", "moderation", "??", "????")
+_CONTROL_HINTS = ("control", "covariate", "adjust", "??", "???")
+_POSITIVE_HINTS = ("positive", "increase", "higher", "?", "??", "+")
+_NEGATIVE_HINTS = ("negative", "decrease", "lower", "?", "??", "-")
+_SPLIT_PATTERN = re.compile(r"[\n.;?]+")
+_CONCEPT_SEPARATOR_PATTERN = re.compile(r",|/|\band\b|\bor\b")
+
+
+def _clean_concept(value: str) -> str:
+    value = re.sub(r"^[\s:?\-]+|[\s:?\-]+$", "", value.strip())
+    value = re.sub(r"\s+", " ", value)
+    return value[:80]
+
+
+def _append_unique(values: list[str], value: str) -> None:
+    cleaned = _clean_concept(value)
+    if cleaned and cleaned not in values:
+        values.append(cleaned)
+
+
+def _extract_after_markers(text: str, markers: tuple[str, ...]) -> list[str]:
+    values: list[str] = []
+    for marker in markers:
+        pattern = re.compile(
+            rf"\b{re.escape(marker)}\b\s*"
+            rf"(?:variables?|concepts?)?\s*"
+            rf"(?:is|are|as|:|=)?\s*"
+            rf"([^.;\n]+)",
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(text):
+            fragment = match.group(1)
+            for part in _CONCEPT_SEPARATOR_PATTERN.split(fragment):
+                candidate = _clean_concept(part)
+                if candidate and len(candidate.split()) <= 6:
+                    _append_unique(values, candidate)
+    return values
+
+
+def _infer_direction(text: str) -> str:
+    lowered = text.lower()
+    if any(hint in lowered for hint in _NEGATIVE_HINTS):
+        return "-"
+    if any(hint in lowered for hint in _POSITIVE_HINTS):
+        return "+"
+    return ""
+
+
+def _intent_text(intent: ResearchIntent) -> str:
+    parts = [
+        intent.research_topic,
+        intent.research_goal,
+        intent.target_population,
+        intent.unit_of_analysis,
+        " ".join(intent.dependent_concepts),
+        " ".join(intent.independent_concepts),
+        " ".join(intent.mediator_concepts),
+        " ".join(intent.moderator_concepts),
+        " ".join(intent.control_concepts),
+        intent.raw_text,
+    ]
+    return "\n".join(part for part in parts if part).strip()
+
+
+def infer_research_intent_structure(intent: ResearchIntent) -> ResearchIntentExtraction:
+    """Infer first-pass research questions, concepts, and hypothesis candidates from intent text."""
+    text = _intent_text(intent)
+    extraction = ResearchIntentExtraction(
+        dependent_concepts=list(intent.dependent_concepts),
+        independent_concepts=list(intent.independent_concepts),
+        mediator_concepts=list(intent.mediator_concepts),
+        moderator_concepts=list(intent.moderator_concepts),
+        control_concepts=list(intent.control_concepts),
+    )
+    if not text:
+        extraction.warnings.append("No research intent text was provided.")
+        return extraction
+
+    for sentence in [_clean_concept(part) for part in _SPLIT_PATTERN.split(text) if _clean_concept(part)]:
+        lowered = sentence.lower()
+        if any(token in lowered for token in ["whether", "how", "what", "relationship", "effect", "impact", "influence"]):
+            _append_unique(extraction.research_questions, sentence)
+        if any(hint in lowered for hint in _OUTCOME_HINTS):
+            for concept in _extract_after_markers(sentence, ("outcome", "dependent variable", "????", "????")):
+                _append_unique(extraction.dependent_concepts, concept)
+        if any(hint in lowered for hint in _PREDICTOR_HINTS):
+            for concept in _extract_after_markers(sentence, ("predictor", "independent variable", "factor", "????", "????")):
+                _append_unique(extraction.independent_concepts, concept)
+        if any(hint in lowered for hint in _MEDIATOR_HINTS):
+            for concept in _extract_after_markers(sentence, ("mediator", "mediating variable", "????")):
+                _append_unique(extraction.mediator_concepts, concept)
+        if any(hint in lowered for hint in _MODERATOR_HINTS):
+            for concept in _extract_after_markers(sentence, ("moderator", "moderating variable", "????")):
+                _append_unique(extraction.moderator_concepts, concept)
+        if any(hint in lowered for hint in _CONTROL_HINTS):
+            for concept in _extract_after_markers(sentence, ("control", "control variable", "covariate", "????")):
+                _append_unique(extraction.control_concepts, concept)
+
+    if not extraction.research_questions and text:
+        _append_unique(extraction.research_questions, text.splitlines()[0])
+
+    dependent = extraction.dependent_concepts[0] if extraction.dependent_concepts else ""
+    direction = _infer_direction(text)
+    for index, independent in enumerate(extraction.independent_concepts[:5], start=1):
+        statement = f"{independent} is associated with {dependent}." if dependent else f"{independent} is associated with the outcome."
+        extraction.hypothesis_candidates.append(
+            ResearchIntentHypothesisCandidate(
+                hypothesis_id=f"H{index}",
+                statement=statement,
+                dependent_concept=dependent,
+                independent_concept=independent,
+                expected_direction=direction,
+                confidence=0.55 if dependent else 0.35,
+            )
+        )
+
+    evidence_count = sum(
+        bool(values)
+        for values in [
+            extraction.research_questions,
+            extraction.dependent_concepts,
+            extraction.independent_concepts,
+            extraction.mediator_concepts,
+            extraction.moderator_concepts,
+            extraction.control_concepts,
+        ]
+    )
+    extraction.confidence = min(0.85, 0.2 + evidence_count * 0.1)
+    if not extraction.dependent_concepts:
+        extraction.warnings.append("No dependent concept was clearly inferred from the research intent.")
+    if not extraction.independent_concepts:
+        extraction.warnings.append("No independent concept was clearly inferred from the research intent.")
+    return extraction
+
+
+def research_intent_extraction_to_dict(extraction: ResearchIntentExtraction) -> dict[str, Any]:
+    return {
+        "research_questions": list(extraction.research_questions),
+        "dependent_concepts": list(extraction.dependent_concepts),
+        "independent_concepts": list(extraction.independent_concepts),
+        "mediator_concepts": list(extraction.mediator_concepts),
+        "moderator_concepts": list(extraction.moderator_concepts),
+        "control_concepts": list(extraction.control_concepts),
+        "hypothesis_candidates": [
+            {
+                "hypothesis_id": item.hypothesis_id,
+                "statement": item.statement,
+                "dependent_concept": item.dependent_concept,
+                "independent_concept": item.independent_concept,
+                "expected_direction": item.expected_direction,
+                "confidence": item.confidence,
+            }
+            for item in extraction.hypothesis_candidates
+        ],
+        "confidence": extraction.confidence,
+        "warnings": list(extraction.warnings),
+    }
+
+
 def research_intent_to_dict(intent: ResearchIntent) -> dict[str, Any]:
     return {
         "research_topic": intent.research_topic,
@@ -142,6 +355,7 @@ def research_intent_to_dict(intent: ResearchIntent) -> dict[str, Any]:
         "moderator_concepts": list(intent.moderator_concepts),
         "control_concepts": list(intent.control_concepts),
         "raw_text": intent.raw_text,
+        "structured_intent": research_intent_extraction_to_dict(infer_research_intent_structure(intent)),
     }
 
 
@@ -233,6 +447,7 @@ def build_research_context_packet(
         )
     return {
         "research_intent": research_intent_to_dict(intent),
+        "structured_research_intent": research_intent_extraction_to_dict(infer_research_intent_structure(intent)),
         "available_variables": variables,
         "allowed_roles": sorted(_AGENT_ROLES),
         "required_output": "agent_research_model.yaml",
@@ -580,17 +795,21 @@ class AutoResearchIntentAgentStep(PipelineStep):
         template_path = write_research_intent_template(output_dir / "research_intent_template.yaml")
         output_files.append(str(template_path))
         quality_report = self.runtime.artifacts.get("auto_rawdata_quality_report")
+        structured_intent = infer_research_intent_structure(intent)
         packet = build_research_context_packet(intent, variable_map, quality_report=quality_report)
         packet_path = write_research_context_packet(packet, output_dir / "research_context_packet.json")
         prompt_path = write_claude_research_model_prompt(packet, output_dir / "claude_research_model_prompt.txt")
         output_files.extend([str(packet_path), str(prompt_path)])
         self.runtime.set_artifact("auto_research_intent", intent)
+        self.runtime.set_artifact("auto_research_intent_extraction", structured_intent)
         self.runtime.set_artifact("auto_research_context_packet", packet)
         self.runtime.set_artifact("auto_claude_research_model_prompt", prompt_path.read_text(encoding="utf-8"))
 
         metadata: dict[str, Any] = {
             "available_variable_count": len(variable_map.variables),
             "has_research_intent": bool(intent.raw_text or intent.research_topic or intent.research_goal),
+            "research_question_count": len(structured_intent.research_questions),
+            "hypothesis_candidate_count": len(structured_intent.hypothesis_candidates),
             "agent_model_applied": False,
         }
 
