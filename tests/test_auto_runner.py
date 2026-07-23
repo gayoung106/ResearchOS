@@ -481,6 +481,7 @@ def test_run_auto_rawdata_analysis_can_apply_draft_agent_model(tmp_path: Path) -
     assert plan.variables.independent == ["autonomy"]
     assert plan.variables.controls == ["gender"]
     assert plan.analyses.regression.options["agent_requires_human_review"] is False
+    assert result.context.analysis_plan["agent_strategy_summary"]["agent_requires_human_review"] is False
     assert "auto_draft_agent_research_model" in result.runtime.artifacts
     assert "auto_draft_research_model_quality" in result.runtime.artifacts
     assert {"draft_agent_research_model.yaml", "draft_research_model_quality.xlsx"}.issubset(

@@ -70,7 +70,14 @@ def _apply_plan_to_context(context: ResearchContext, analysis_plan: AnalysisPlan
     context.mediator_variables = list(analysis_plan.variables.mediators)
     context.moderator_variables = list(analysis_plan.variables.moderators)
     context.control_variables = list(analysis_plan.variables.controls)
-    context.analysis_plan = analysis_plan.model_dump(mode="json")
+    plan_data = analysis_plan.model_dump(mode="json")
+    plan_data["agent_strategy_summary"] = {
+        "mediation_model_count": len(analysis_plan.analyses.mediation.models),
+        "moderation_model_count": len(analysis_plan.analyses.moderation.models),
+        "agent_requires_human_review": analysis_plan.analyses.regression.options.get("agent_requires_human_review"),
+        "agent_confidence": analysis_plan.analyses.regression.options.get("agent_confidence"),
+    }
+    context.analysis_plan = plan_data
     context.variable_map = variable_map.model_dump(mode="json")
 
 

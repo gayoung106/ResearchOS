@@ -1,4 +1,4 @@
-﻿"""?뚭?遺꾩꽍 愿???꾩껜 ?④퀎瑜?議곌굔遺 ?깅줉?섎뒗 鍮뚮뜑."""
+"""?뚭?遺꾩꽍 愿???꾩껜 ?④퀎瑜?議곌굔遺 ?깅줉?섎뒗 鍮뚮뜑."""
 
 from __future__ import annotations
 
@@ -222,6 +222,18 @@ def register_regression_pipeline(
     dependent_variable = dependent_variables[0]
     independent_variables = _collect_predictors(analysis_plan)
     fixed_effects = _collect_fixed_effects(analysis_plan)
+    if analysis_plan.analyses.mediation.models:
+        warnings.append(
+            "Agent mediation strategy models are present; regression registration includes mediator variables, "
+            "but indirect-effect execution requires a mediation-specific step."
+        )
+    if analysis_plan.analyses.moderation.models:
+        warnings.append(
+            "Agent moderation strategy models are present; regression registration includes moderator variables, "
+            "but interaction/simple-slope execution requires a moderation-specific step."
+        )
+    if analysis_plan.analyses.regression.options.get("agent_requires_human_review") is True:
+        warnings.append("Agent research model is marked as requiring human review before interpretation.")
 
     if not independent_variables:
         return not_registered(

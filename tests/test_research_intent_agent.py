@@ -147,6 +147,7 @@ def test_agent_research_model_validation_and_apply_to_plan() -> None:
     assert updated_plan.analyses.mediation.enabled is True
     assert updated_plan.analyses.mediation.models[0]["mediator_variable"] == "burnout"
     assert updated_plan.analyses.mediation.methods == ["causal_steps_bootstrap_indirect_effect"]
+    assert updated_plan.analyses.mediation.checks[0]["check"] == "temporal_order_review"
     assert updated_plan.analyses.regression.options["agent_hypotheses"][0]["hypothesis_id"] == "H1"
 
 

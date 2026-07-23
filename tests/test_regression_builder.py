@@ -388,3 +388,52 @@ def test_count_outcome_registers_auto_count_pipeline(
     )
 
     assert any("강건성 단계는 OLS 모형만 지원" in warning for warning in registration.warnings)
+
+
+def test_register_regression_pipeline_warns_for_agent_mediation_strategy(
+    tmp_path: Path,
+) -> None:
+    analysis_plan = AnalysisPlan.model_validate(
+        {
+            "variables": {
+                "dependent": ["y"],
+                "independent": ["x"],
+                "mediators": ["m"],
+            },
+            "analyses": {
+                "regression": {
+                    "enabled": True,
+                    "options": {"agent_requires_human_review": True},
+                },
+                "mediation": {
+                    "enabled": True,
+                    "models": [
+                        {
+                            "model_id": "mediation_m",
+                            "method": "causal_steps_bootstrap_indirect_effect",
+                            "mediator_variable": "m",
+                        }
+                    ],
+                },
+                "robustness": {"enabled": False},
+            },
+        }
+    )
+    variable_map = VariableMap.model_validate(
+        {
+            "variables": {
+                "y": {"role": "dependent", "measurement_level": "continuous"},
+                "x": {"role": "independent", "measurement_level": "continuous"},
+                "m": {"role": "mediator", "measurement_level": "continuous"},
+            }
+        }
+    )
+    _, _, registration = build_regression_pipeline(
+        tmp_path,
+        analysis_plan=analysis_plan,
+        variable_map=variable_map,
+    )
+
+    assert registration.registered is True
+    assert any("mediation strategy" in warning for warning in registration.warnings)
+    assert any("human review" in warning for warning in registration.warnings)
