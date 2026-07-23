@@ -1,0 +1,540 @@
+﻿"""Research-intent and external research-agent helpers."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import yaml
+
+from src.common.config_models import AnalysisPlan, VariableMap
+
+_AGENT_ROLES = {
+    "dependent",
+    "independent",
+    "mediator",
+    "moderator",
+    "control",
+    "cluster",
+    "weight",
+}
+_PLAN_ROLE_FIELDS = {
+    "dependent": "dependent",
+    "independent": "independent",
+    "mediator": "mediators",
+    "moderator": "moderators",
+    "control": "controls",
+    "cluster": "clusters",
+    "weight": "weights",
+}
+
+
+@dataclass(slots=True)
+class ResearchIntent:
+    """User-facing description of what the user wants to study."""
+
+    research_topic: str = ""
+    research_goal: str = ""
+    target_population: str = ""
+    unit_of_analysis: str = ""
+    dependent_concepts: list[str] = field(default_factory=list)
+    independent_concepts: list[str] = field(default_factory=list)
+    mediator_concepts: list[str] = field(default_factory=list)
+    moderator_concepts: list[str] = field(default_factory=list)
+    control_concepts: list[str] = field(default_factory=list)
+    raw_text: str = ""
+
+
+@dataclass(slots=True)
+class AgentVariableMatch:
+    """A variable-role recommendation returned by an external research agent."""
+
+    variable_name: str
+    role: str
+    confidence: float = 0.0
+    rationale: str = ""
+
+
+@dataclass(slots=True)
+class AgentHypothesis:
+    """A proposed hypothesis from an external research agent."""
+
+    hypothesis_id: str
+    statement: str
+    focal_variables: list[str] = field(default_factory=list)
+    expected_direction: str = ""
+
+
+@dataclass(slots=True)
+class AgentResearchModel:
+    """Validated shape for a Claude or other LLM-proposed research model."""
+
+    dependent_variable: str | None = None
+    independent_variables: list[str] = field(default_factory=list)
+    mediators: list[str] = field(default_factory=list)
+    moderators: list[str] = field(default_factory=list)
+    controls: list[str] = field(default_factory=list)
+    clusters: list[str] = field(default_factory=list)
+    weights: list[str] = field(default_factory=list)
+    variable_matches: list[AgentVariableMatch] = field(default_factory=list)
+    hypotheses: list[AgentHypothesis] = field(default_factory=list)
+    model_rationale: str = ""
+    confidence: float = 0.0
+    requires_human_review: bool = True
+
+
+@dataclass(slots=True)
+class AgentResearchModelValidationIssue:
+    """One validation issue for an agent-proposed research model."""
+
+    item: str
+    passed: bool
+    evidence: str
+    suggestion: str = ""
+
+
+@dataclass(slots=True)
+class AgentResearchModelValidationReport:
+    """Validation report for an agent-proposed research model."""
+
+    passed: bool
+    issues: list[AgentResearchModelValidationIssue] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def _normalize_string_list(values: Any) -> list[str]:
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple, set)):
+        return []
+    output: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if text and text not in output:
+            output.append(text)
+    return output
+
+
+def _normalize_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def research_intent_to_dict(intent: ResearchIntent) -> dict[str, Any]:
+    return {
+        "research_topic": intent.research_topic,
+        "research_goal": intent.research_goal,
+        "target_population": intent.target_population,
+        "unit_of_analysis": intent.unit_of_analysis,
+        "dependent_concepts": list(intent.dependent_concepts),
+        "independent_concepts": list(intent.independent_concepts),
+        "mediator_concepts": list(intent.mediator_concepts),
+        "moderator_concepts": list(intent.moderator_concepts),
+        "control_concepts": list(intent.control_concepts),
+        "raw_text": intent.raw_text,
+    }
+
+
+def load_research_intent(path: str | Path) -> ResearchIntent:
+    """Load a research-intent YAML or plain-text file."""
+    file_path = Path(path)
+    text = file_path.read_text(encoding="utf-8-sig")
+    if file_path.suffix.lower() in {".yaml", ".yml"}:
+        data = yaml.safe_load(text) or {}
+        if not isinstance(data, dict):
+            raise ValueError("Research intent YAML must contain a mapping at the top level.")
+        return ResearchIntent(
+            research_topic=str(data.get("research_topic", "") or ""),
+            research_goal=str(data.get("research_goal", "") or ""),
+            target_population=str(data.get("target_population", "") or ""),
+            unit_of_analysis=str(data.get("unit_of_analysis", "") or ""),
+            dependent_concepts=_normalize_string_list(data.get("dependent_concepts")),
+            independent_concepts=_normalize_string_list(data.get("independent_concepts")),
+            mediator_concepts=_normalize_string_list(data.get("mediator_concepts")),
+            moderator_concepts=_normalize_string_list(data.get("moderator_concepts")),
+            control_concepts=_normalize_string_list(data.get("control_concepts")),
+            raw_text=str(data.get("raw_text", "") or ""),
+        )
+    return ResearchIntent(raw_text=text.strip())
+
+
+def write_research_intent_template(path: str | Path) -> Path:
+    """Write a Korean research-intent template for users."""
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    template = {
+        "research_topic": "",
+        "research_goal": "",
+        "target_population": "",
+        "unit_of_analysis": "",
+        "dependent_concepts": [],
+        "independent_concepts": [],
+        "mediator_concepts": [],
+        "moderator_concepts": [],
+        "control_concepts": [],
+        "raw_text": "",
+    }
+    with output_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(template, file, allow_unicode=True, sort_keys=False)
+    return output_path
+
+
+def _variable_quality_rows(quality_report: Any | None) -> dict[str, dict[str, Any]]:
+    if quality_report is None:
+        return {}
+    if isinstance(quality_report, pd.DataFrame):
+        rows = quality_report.to_dict(orient="records")
+    elif isinstance(quality_report, list):
+        rows = [row for row in quality_report if isinstance(row, dict)]
+    else:
+        rows = []
+    output: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = row.get("variable") or row.get("variable_name") or row.get("column")
+        if name:
+            output[str(name)] = dict(row)
+    return output
+
+
+def build_research_context_packet(
+    intent: ResearchIntent,
+    variable_map: VariableMap,
+    *,
+    quality_report: Any | None = None,
+) -> dict[str, Any]:
+    """Build the compact JSON payload to send to Claude or another research agent."""
+    quality_by_variable = _variable_quality_rows(quality_report)
+    variables: list[dict[str, Any]] = []
+    for name, definition in variable_map.variables.items():
+        variables.append(
+            {
+                "name": name,
+                "original_name": definition.original_name,
+                "korean_name": definition.korean_name,
+                "label": definition.label,
+                "question_text": definition.question_text,
+                "inferred_role": definition.role,
+                "measurement_level": definition.measurement_level,
+                "coding": definition.coding,
+                "review_status": definition.review_status,
+                "notes": definition.notes,
+                "quality": quality_by_variable.get(name, {}),
+            }
+        )
+    return {
+        "research_intent": research_intent_to_dict(intent),
+        "available_variables": variables,
+        "allowed_roles": sorted(_AGENT_ROLES),
+        "required_output": "agent_research_model.yaml",
+        "safety_rule": "Use only variables listed in available_variables.",
+    }
+
+
+def write_research_context_packet(packet: dict[str, Any], path: str | Path) -> Path:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(packet, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return output_path
+
+
+def build_claude_research_model_prompt(packet: dict[str, Any]) -> str:
+    """Create a Claude-ready prompt for research model extraction."""
+    context_json = json.dumps(packet, ensure_ascii=False, indent=2)
+    return f"""You are a cautious quantitative research design agent.
+
+Task:
+1. Read the research intent and available variables.
+2. Select a theoretically plausible research model.
+3. Use only variables listed in available_variables.
+4. Prefer parsimonious models over exhaustive models.
+5. Mark requires_human_review: true when theory, wording, or measurement is uncertain.
+
+Return YAML only, with this exact top-level schema:
+
+dependent_variable: null
+independent_variables: []
+mediators: []
+moderators: []
+controls: []
+clusters: []
+weights: []
+variable_matches:
+  - variable_name: ""
+    role: "independent"
+    confidence: 0.0
+    rationale: ""
+hypotheses:
+  - hypothesis_id: "H1"
+    statement: ""
+    focal_variables: []
+    expected_direction: ""
+model_rationale: ""
+confidence: 0.0
+requires_human_review: true
+
+Context packet:
+{context_json}
+"""
+
+
+def write_claude_research_model_prompt(packet: dict[str, Any], path: str | Path) -> Path:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(build_claude_research_model_prompt(packet), encoding="utf-8")
+    return output_path
+
+
+def _agent_variable_match_from_dict(data: dict[str, Any]) -> AgentVariableMatch:
+    return AgentVariableMatch(
+        variable_name=str(data.get("variable_name", "") or "").strip(),
+        role=str(data.get("role", "") or "").strip(),
+        confidence=_normalize_float(data.get("confidence")),
+        rationale=str(data.get("rationale", "") or ""),
+    )
+
+
+def _agent_hypothesis_from_dict(data: dict[str, Any]) -> AgentHypothesis:
+    return AgentHypothesis(
+        hypothesis_id=str(data.get("hypothesis_id", "") or "").strip(),
+        statement=str(data.get("statement", "") or ""),
+        focal_variables=_normalize_string_list(data.get("focal_variables")),
+        expected_direction=str(data.get("expected_direction", "") or ""),
+    )
+
+
+def agent_research_model_from_dict(data: dict[str, Any]) -> AgentResearchModel:
+    if not isinstance(data, dict):
+        raise ValueError("Agent research model must be a mapping.")
+    dependent = str(data.get("dependent_variable", "") or "").strip() or None
+    return AgentResearchModel(
+        dependent_variable=dependent,
+        independent_variables=_normalize_string_list(data.get("independent_variables")),
+        mediators=_normalize_string_list(data.get("mediators")),
+        moderators=_normalize_string_list(data.get("moderators")),
+        controls=_normalize_string_list(data.get("controls")),
+        clusters=_normalize_string_list(data.get("clusters")),
+        weights=_normalize_string_list(data.get("weights")),
+        variable_matches=[
+            _agent_variable_match_from_dict(item)
+            for item in data.get("variable_matches", [])
+            if isinstance(item, dict)
+        ],
+        hypotheses=[
+            _agent_hypothesis_from_dict(item)
+            for item in data.get("hypotheses", [])
+            if isinstance(item, dict)
+        ],
+        model_rationale=str(data.get("model_rationale", "") or ""),
+        confidence=_normalize_float(data.get("confidence")),
+        requires_human_review=bool(data.get("requires_human_review", True)),
+    )
+
+
+def load_agent_research_model(path: str | Path) -> AgentResearchModel:
+    file_path = Path(path)
+    data = yaml.safe_load(file_path.read_text(encoding="utf-8-sig")) or {}
+    return agent_research_model_from_dict(data)
+
+
+def agent_research_model_to_dict(model: AgentResearchModel) -> dict[str, Any]:
+    return {
+        "dependent_variable": model.dependent_variable,
+        "independent_variables": list(model.independent_variables),
+        "mediators": list(model.mediators),
+        "moderators": list(model.moderators),
+        "controls": list(model.controls),
+        "clusters": list(model.clusters),
+        "weights": list(model.weights),
+        "variable_matches": [
+            {
+                "variable_name": item.variable_name,
+                "role": item.role,
+                "confidence": item.confidence,
+                "rationale": item.rationale,
+            }
+            for item in model.variable_matches
+        ],
+        "hypotheses": [
+            {
+                "hypothesis_id": item.hypothesis_id,
+                "statement": item.statement,
+                "focal_variables": list(item.focal_variables),
+                "expected_direction": item.expected_direction,
+            }
+            for item in model.hypotheses
+        ],
+        "model_rationale": model.model_rationale,
+        "confidence": model.confidence,
+        "requires_human_review": model.requires_human_review,
+    }
+
+
+def _all_model_variables(model: AgentResearchModel) -> dict[str, list[str]]:
+    return {
+        "dependent": [model.dependent_variable] if model.dependent_variable else [],
+        "independent": list(model.independent_variables),
+        "mediator": list(model.mediators),
+        "moderator": list(model.moderators),
+        "control": list(model.controls),
+        "cluster": list(model.clusters),
+        "weight": list(model.weights),
+    }
+
+
+def validate_agent_research_model(
+    model: AgentResearchModel,
+    variable_map: VariableMap,
+) -> AgentResearchModelValidationReport:
+    """Validate that an external-agent model can be safely applied."""
+    issues: list[AgentResearchModelValidationIssue] = []
+    warnings: list[str] = []
+    defined = set(variable_map.variables)
+    role_variables = _all_model_variables(model)
+    referenced = {name for values in role_variables.values() for name in values}
+    missing = sorted(referenced - defined)
+
+    issues.append(
+        AgentResearchModelValidationIssue(
+            item="referenced_variables",
+            passed=not missing,
+            evidence="missing: " + ", ".join(missing) if missing else f"{len(referenced)} variables referenced",
+            suggestion="Use only variables from the generated research_context_packet.json.",
+        )
+    )
+    issues.append(
+        AgentResearchModelValidationIssue(
+            item="dependent_variable",
+            passed=bool(model.dependent_variable),
+            evidence=model.dependent_variable or "not provided",
+            suggestion="Choose exactly one outcome variable.",
+        )
+    )
+    predictor_count = len(model.independent_variables) + len(model.mediators) + len(model.moderators) + len(model.controls)
+    issues.append(
+        AgentResearchModelValidationIssue(
+            item="predictors",
+            passed=predictor_count > 0,
+            evidence=f"{predictor_count} predictor-side variables",
+            suggestion="Choose at least one independent, mediator, moderator, or control variable.",
+        )
+    )
+
+    primary_roles = {role: values for role, values in role_variables.items() if role not in {"cluster", "weight"}}
+    occurrences: dict[str, list[str]] = {}
+    for role, values in primary_roles.items():
+        for value in values:
+            occurrences.setdefault(value, []).append(role)
+    duplicates = {name: roles for name, roles in occurrences.items() if len(roles) > 1}
+    issues.append(
+        AgentResearchModelValidationIssue(
+            item="role_overlap",
+            passed=not duplicates,
+            evidence="; ".join(f"{name}: {', '.join(roles)}" for name, roles in duplicates.items())
+            if duplicates
+            else "no primary role overlaps",
+            suggestion="Assign each analytic variable to one primary role.",
+        )
+    )
+
+    invalid_matches = [item.role for item in model.variable_matches if item.role not in _AGENT_ROLES]
+    if invalid_matches:
+        warnings.append("Invalid variable_match roles were ignored: " + ", ".join(sorted(set(invalid_matches))))
+    if model.requires_human_review:
+        warnings.append("Agent marked this model as requiring human review.")
+
+    return AgentResearchModelValidationReport(
+        passed=all(issue.passed for issue in issues),
+        issues=issues,
+        warnings=warnings,
+    )
+
+
+def agent_research_model_validation_to_dataframe(
+    report: AgentResearchModelValidationReport,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "item": item.item,
+                "passed": item.passed,
+                "evidence": item.evidence,
+                "suggestion": item.suggestion,
+            }
+            for item in report.issues
+        ]
+    )
+
+
+def apply_agent_research_model_to_variable_map(
+    variable_map: VariableMap,
+    model: AgentResearchModel,
+) -> VariableMap:
+    """Return a copy of the variable map with agent-recommended roles applied."""
+    validation = validate_agent_research_model(model, variable_map)
+    if not validation.passed:
+        failed = [item.item for item in validation.issues if not item.passed]
+        raise ValueError("Agent research model did not pass validation: " + ", ".join(failed))
+
+    output = variable_map.model_copy(deep=True)
+    role_targets: dict[str, str] = {}
+    for role, values in _all_model_variables(model).items():
+        for variable in values:
+            role_targets[variable] = role
+
+    for name, definition in output.variables.items():
+        if name in role_targets:
+            definition.role = role_targets[name]  # type: ignore[assignment]
+            definition.review_status = "agent_recommended"
+            definition.evidence["agent_research_model_role"] = role_targets[name]
+            definition.notes = "Role was recommended by an external research-design agent."
+        elif definition.role in {"dependent", "mediator", "moderator", "cluster", "weight"}:
+            definition.role = "other"  # type: ignore[assignment]
+            definition.evidence["agent_research_model_displaced"] = True
+    return output
+
+
+def apply_agent_research_model_to_analysis_plan(
+    analysis_plan: AnalysisPlan,
+    model: AgentResearchModel,
+    variable_map: VariableMap,
+) -> AnalysisPlan:
+    """Return a copy of the analysis plan with validated agent roles applied."""
+    validation = validate_agent_research_model(model, variable_map)
+    if not validation.passed:
+        failed = [item.item for item in validation.issues if not item.passed]
+        raise ValueError("Agent research model did not pass validation: " + ", ".join(failed))
+
+    output = analysis_plan.model_copy(deep=True)
+    output.variables.dependent = [model.dependent_variable] if model.dependent_variable else []
+    output.variables.independent = list(model.independent_variables)
+    output.variables.mediators = list(model.mediators)
+    output.variables.moderators = list(model.moderators)
+    output.variables.controls = list(model.controls)
+    output.variables.clusters = list(model.clusters)
+    output.variables.weights = list(model.weights)
+    output.analyses.regression.enabled = bool(output.variables.dependent and output.variables.independent)
+    output.analyses.mediation.enabled = bool(output.variables.mediators)
+    output.analyses.moderation.enabled = bool(output.variables.moderators)
+    if model.hypotheses:
+        output.analyses.regression.options["agent_hypotheses"] = [
+            {
+                "hypothesis_id": item.hypothesis_id,
+                "statement": item.statement,
+                "focal_variables": list(item.focal_variables),
+                "expected_direction": item.expected_direction,
+            }
+            for item in model.hypotheses
+        ]
+    output.analyses.regression.options["agent_model_rationale"] = model.model_rationale
+    output.analyses.regression.options["agent_confidence"] = model.confidence
+    return output
