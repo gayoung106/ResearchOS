@@ -21,7 +21,7 @@ from src.auto.pipeline import (
     run_auto_multi_outcome_regression_orchestrators,
 )
 from src.auto.rawdata_loader import AutoRawDataLoadingStep
-from src.auto.validation import validate_auto_run_outputs
+from src.auto.validation import auto_run_validation_report_to_dataframe, validate_auto_run_outputs
 from src.auto.variable_inference import AutoVariableInferenceStep, variable_map_to_dataframe
 from src.common.config_models import AnalysisPlan, VariableMap
 from src.pipeline.context import ResearchContext
@@ -402,6 +402,18 @@ def _output_manifest_priority(category: str) -> int:
     return order.get(category, 99)
 
 
+
+def _write_auto_validation_report(
+    *,
+    working_directory: Path,
+    validation_report: object,
+) -> str:
+    output_dir = working_directory / "result" / "00_auto_run"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "auto_validation_report.xlsx"
+    auto_run_validation_report_to_dataframe(validation_report).to_excel(report_path, index=False)
+    return str(report_path)
+
 def _write_output_manifest(*, working_directory: Path, result: AutoRawDataAnalysisResult) -> str:
     import pandas as pd
 
@@ -693,6 +705,12 @@ def run_auto_rawdata_analysis(
                 output_files=result.output_files,
             )
             runtime.set_artifact("auto_run_validation_report", validation_report)
+            validation_report_path = _write_auto_validation_report(
+                working_directory=root,
+                validation_report=validation_report,
+            )
+            result.output_files.append(validation_report_path)
+            context.add_generated_file(validation_report_path)
             result.warnings.extend(validation_report.warnings)
             _write_auto_final_report(working_directory=root, result=result)
             _write_output_manifest(working_directory=root, result=result)
@@ -783,6 +801,12 @@ def run_auto_rawdata_analysis(
         require_model_outputs=run_analysis,
     )
     runtime.set_artifact("auto_run_validation_report", validation_report)
+    validation_report_path = _write_auto_validation_report(
+        working_directory=root,
+        validation_report=validation_report,
+    )
+    result.output_files.append(validation_report_path)
+    context.add_generated_file(validation_report_path)
     if validation_report.warnings:
         result.warnings.extend(validation_report.warnings)
         for warning in validation_report.warnings:

@@ -74,6 +74,7 @@ python-layout/
 - `result/00_auto_run/auto_run_summary.xlsx`
 - `result/00_auto_run/auto_run_report.md`
 - `result/00_auto_run/auto_final_report.md`
+- `result/00_auto_run/auto_validation_report.xlsx`
 - `result/00_auto_run/output_manifest.xlsx`
 
 ## 특정 파일만 지정하기
@@ -202,6 +203,7 @@ python-layout/
 - `result/03_auto_plan/multi_outcome/<model_id>/variable_map.yaml`
 - `result/multi_outcome_runs/<model_id>/...`
 - `result/00_auto_run/auto_final_report.md`
+- `result/00_auto_run/auto_validation_report.xlsx`
 - `result/00_auto_run/output_manifest.xlsx`
 
 ## 강건성 분석 켜기
@@ -257,6 +259,7 @@ result/
     auto_run_summary.xlsx
     auto_run_report.md
     auto_final_report.md
+    auto_validation_report.xlsx
     output_manifest.xlsx
   01_auto_import/
     rawdata_candidates.xlsx
@@ -280,7 +283,7 @@ result/
   16_research_audit/
 ```
 
-가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 실패 항목별 수정 제안, 경고, 산출물 목록이 정리됩니다. 실제 모델이 실행된 경우 핵심 적합도 지표, 주요 계수, 효과크기, publication narrative, 모델 경고도 함께 요약됩니다. 전체 산출물의 위치와 분류는 `result/00_auto_run/output_manifest.xlsx`에서 확인할 수 있습니다.
+가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 실패 항목별 수정 제안, 경고, 산출물 목록이 정리됩니다. 실제 모델이 실행된 경우 핵심 적합도 지표, 주요 계수, 효과크기, publication narrative, 모델 경고도 함께 요약됩니다. 검증 세부표는 `result/00_auto_run/auto_validation_report.xlsx`, 전체 산출물의 위치와 분류는 `result/00_auto_run/output_manifest.xlsx`에서 확인할 수 있습니다.
 
 ## 자동 모델 선택 기준
 

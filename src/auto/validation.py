@@ -78,6 +78,24 @@ def _add_item(
     )
 
 
+
+def auto_run_validation_report_to_dataframe(report: AutoRunValidationReport):
+    """Return validation items as a tabular report."""
+    import pandas as pd
+
+    return pd.DataFrame(
+        [
+            {
+                "item": item.item,
+                "passed": item.passed,
+                "evidence": item.evidence,
+                "suggestion": item.suggestion,
+            }
+            for item in report.items
+        ],
+        columns=["item", "passed", "evidence", "suggestion"],
+    )
+
 def validate_auto_run_outputs(
     *,
     runtime: PipelineRuntime,

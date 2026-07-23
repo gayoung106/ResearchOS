@@ -3,7 +3,7 @@
 import pandas as pd
 
 from src.auto.runner import run_auto_rawdata_analysis
-from src.auto.validation import validate_auto_run_outputs
+from src.auto.validation import auto_run_validation_report_to_dataframe, validate_auto_run_outputs
 
 
 def _write_rawdata(root: Path) -> None:
@@ -71,3 +71,18 @@ def test_validate_auto_run_outputs_can_require_model_outputs(tmp_path: Path) -> 
     assert any("fit_statistics.xlsx" in warning for warning in report.warnings)
     coefficients_item = next(item for item in report.items if item.item == "file:coefficients.xlsx")
     assert "모델 실행 단계" in coefficients_item.suggestion
+
+def test_auto_run_validation_report_to_dataframe_includes_suggestions(tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+    result = run_auto_rawdata_analysis(tmp_path, run_analysis=False)
+    output_files = [path for path in result.output_files if Path(path).name != "auto_run_report.md"]
+
+    report = validate_auto_run_outputs(
+        runtime=result.runtime,
+        output_files=output_files,
+    )
+    frame = auto_run_validation_report_to_dataframe(report)
+
+    assert list(frame.columns) == ["item", "passed", "evidence", "suggestion"]
+    assert "file:auto_run_report.md" in set(frame["item"])
+    assert frame.loc[frame["item"] == "file:auto_run_report.md", "suggestion"].str.contains("result/00_auto_run").any()

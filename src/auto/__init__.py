@@ -1,4 +1,4 @@
-﻿"""Automatic project execution helpers."""
+"""Automatic project execution helpers."""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ _EXPORTS = {
     "run_auto_rawdata_analysis": "src.auto.runner",
     "AutoRunValidationItem": "src.auto.validation",
     "AutoRunValidationReport": "src.auto.validation",
+    "auto_run_validation_report_to_dataframe": "src.auto.validation",
     "validate_auto_run_outputs": "src.auto.validation",
     "AutoVariableInferenceResult": "src.auto.variable_inference",
     "AutoVariableInferenceStep": "src.auto.variable_inference",
