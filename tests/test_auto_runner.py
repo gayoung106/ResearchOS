@@ -1,9 +1,11 @@
 ﻿from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
 from src.auto.runner import run_auto_rawdata_analysis
 from src.pipeline.orchestrator import OrchestratorResult, ResearchOrchestrator
+from src.statistics.regression.base import ModelCoefficient, RegressionResult
 
 
 def _write_rawdata(root: Path) -> Path:
@@ -211,3 +213,61 @@ def test_run_auto_rawdata_analysis_runs_multi_outcome_pipelines_when_enabled(
     assert "Multi-outcome models" in final_report_text
     assert "satisfaction_outcome" in final_report_text
     assert "performance_outcome" in final_report_text
+
+
+def test_auto_final_report_summarizes_regression_artifacts(monkeypatch, tmp_path: Path) -> None:
+    _write_rawdata(tmp_path)
+
+    def fake_run(self: ResearchOrchestrator, **kwargs) -> OrchestratorResult:
+        result = RegressionResult(
+            model_id="main_model",
+            model_type="ols",
+            dependent_variable="outcome_score",
+            independent_variables=["age", "gender"],
+            sample_size=8,
+            coefficients=[
+                ModelCoefficient("const", 0.1, 0.1, 1.0, 0.40, -0.1, 0.3),
+                ModelCoefficient("age", 0.25, 0.05, 5.0, 0.001, 0.15, 0.35),
+                ModelCoefficient("gender", -0.2, 0.08, -2.5, 0.030, -0.4, -0.05),
+            ],
+            fit_statistics={"r_squared": 0.72, "aic": 12.5},
+            converged=True,
+            standard_error_type="HC3",
+            warnings=["diagnostic warning"],
+        )
+        self.registry.names()
+        step_runtime = next(step.runtime for step in self.registry.ordered_steps() if hasattr(step, "runtime"))
+        step_runtime.set_artifact("regression_result:main_model", result)
+        step_runtime.set_artifact(
+            "effect_size_report:main_model",
+            SimpleNamespace(
+                effects=[
+                    SimpleNamespace(
+                        term="age",
+                        effect_type="standardized_beta",
+                        estimate=0.55,
+                        p_value=0.001,
+                        magnitude="large",
+                    )
+                ]
+            ),
+        )
+        step_runtime.set_artifact(
+            "regression_publication_report:main_model",
+            SimpleNamespace(narrative="Age was positively associated with outcome_score."),
+        )
+        return OrchestratorResult(success=True, completed_stages=["09_regression_analysis"])
+
+    monkeypatch.setattr(ResearchOrchestrator, "run", fake_run)
+
+    result = run_auto_rawdata_analysis(tmp_path, project_name="auto final result summary")
+
+    final_report_path = next(Path(path) for path in result.output_files if Path(path).name == "auto_final_report.md")
+    final_report_text = final_report_path.read_text(encoding="utf-8")
+
+    assert "Main model results" in final_report_text
+    assert "| age | 0.250 | 0.001 |" in final_report_text
+    assert "| r_squared | 0.720 |" in final_report_text
+    assert "standardized_beta" in final_report_text
+    assert "Age was positively associated with outcome_score." in final_report_text
+    assert "diagnostic warning" in final_report_text

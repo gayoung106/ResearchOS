@@ -1,4 +1,4 @@
-﻿# ResearchOS
+# ResearchOS
 
 ResearchOS는 원자료(raw data)를 기준으로 연구 분석 파이프라인을 자동 구성하고 실행하는 Python 프로젝트입니다. 현재 흐름은 Rawdata Loader, Variable Inference, Analysis Plan, Builder, Selector, Diagnostics, Effect Size, Reporting, Visualization, Research Audit이 함께 연결되도록 구성되어 있습니다.
 
@@ -277,7 +277,7 @@ result/
   16_research_audit/
 ```
 
-가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 실패 항목별 수정 제안, 경고, 산출물 목록이 정리됩니다.
+가장 먼저 볼 파일은 `result/00_auto_run/auto_final_report.md`입니다. 이 파일에는 원자료 선택, main model, multi-outcome model, 단계별 상태, 검증 결과, 실패 항목별 수정 제안, 경고, 산출물 목록이 정리됩니다. 실제 모델이 실행된 경우 핵심 적합도 지표, 주요 계수, 효과크기, publication narrative, 모델 경고도 함께 요약됩니다.
 
 ## 자동 모델 선택 기준
 

@@ -1,8 +1,9 @@
-﻿"""One-call automatic rawdata analysis runner."""
+"""One-call automatic rawdata analysis runner."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from numbers import Real
 from pathlib import Path
 
 from src.auto.analysis_plan import AutoAnalysisPlanStep
@@ -257,6 +258,102 @@ def _write_auto_run_markdown(
     return str(report_path)
 
 
+
+def _format_number(value: object) -> str:
+    if isinstance(value, Real):
+        return f"{value:.3f}"
+    return str(value)
+
+def _sort_p_value(value: object) -> float:
+    if value is None:
+        return 1.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _artifact_keys(runtime: PipelineRuntime, prefix: str) -> list[str]:
+    return sorted(key for key in runtime.artifacts if key.startswith(prefix))
+
+
+def _append_model_result_summary(lines: list[str], runtime: PipelineRuntime, *, title: str) -> None:
+    result_keys = _artifact_keys(runtime, "regression_result:")
+    if not result_keys:
+        return
+    lines.extend(["", f"## {title}"])
+    for key in result_keys:
+        model_id = key.split(":", 1)[1]
+        regression = runtime.artifacts.get(key)
+        publication = runtime.artifacts.get(f"regression_publication_report:{model_id}")
+        effects = runtime.artifacts.get(f"effect_size_report:{model_id}")
+        lines.extend(
+            [
+                "",
+                f"### {model_id}",
+                f"- model_type: {getattr(regression, 'model_type', '-')}",
+                f"- dependent: {getattr(regression, 'dependent_variable', '-')}",
+                f"- sample_size: {getattr(regression, 'sample_size', '-')}",
+                f"- converged: {_format_bool(bool(getattr(regression, 'converged', False)))}",
+            ]
+        )
+        fit_statistics = getattr(regression, "fit_statistics", {}) or {}
+        important_stats = [
+            "r_squared",
+            "adjusted_r_squared",
+            "pseudo_r_squared_mcfadden",
+            "pseudo_r_squared_deviance",
+            "aic",
+            "bic",
+            "log_likelihood",
+            "dispersion_ratio",
+            "group_count",
+            "cluster_count",
+        ]
+        statistic_rows = [
+            (name, fit_statistics.get(name))
+            for name in important_stats
+            if fit_statistics.get(name) is not None
+        ]
+        if statistic_rows:
+            lines.extend(["", "| statistic | value |", "| --- | ---: |"])
+            lines.extend(f"| {name} | {_format_number(value)} |" for name, value in statistic_rows)
+
+        coefficients = [
+            coefficient
+            for coefficient in getattr(regression, "coefficients", [])
+            if str(getattr(coefficient, "term", "")).lower() not in {"const", "intercept"}
+        ]
+        if coefficients:
+            top_coefficients = sorted(coefficients, key=lambda item: _sort_p_value(getattr(item, "p_value", None)))[:5]
+            lines.extend(["", "| term | estimate | p_value |", "| --- | ---: | ---: |"])
+            lines.extend(
+                f"| {coefficient.term} | {_format_number(coefficient.estimate)} | "
+                f"{_format_number(coefficient.p_value)} |"
+                for coefficient in top_coefficients
+            )
+
+        effect_items = getattr(effects, "effects", []) if effects is not None else []
+        if effect_items:
+            top_effects = sorted(
+                effect_items,
+                key=lambda item: _sort_p_value(getattr(item, "p_value", None)),
+            )[:5]
+            lines.extend(["", "| effect term | effect_type | estimate | magnitude |", "| --- | --- | ---: | --- |"])
+            lines.extend(
+                f"| {effect.term} | {effect.effect_type} | {_format_number(effect.estimate)} | "
+                f"{effect.magnitude or '-'} |"
+                for effect in top_effects
+            )
+
+        narrative = getattr(publication, "narrative", "") if publication is not None else ""
+        if narrative:
+            lines.extend(["", "Narrative:", narrative])
+        warnings = list(getattr(regression, "warnings", []) or [])
+        if warnings:
+            lines.extend(["", "Warnings:"])
+            lines.extend(f"- {warning}" for warning in warnings[:5])
+
 def _write_auto_final_report(
     *,
     working_directory: Path,
@@ -330,6 +427,11 @@ def _write_auto_final_report(
             lines.append(f"| {model_id} | {_format_bool(status)} | {model_type} | {dependent} | {independent} |")
     else:
         lines.append("- Multi-outcome analysis was not enabled.")
+
+    _append_model_result_summary(lines, result.runtime, title="Main model results")
+    if result.multi_outcome_pipeline_build_result is not None:
+        for model_id, model_runtime in result.multi_outcome_pipeline_build_result.runtimes.items():
+            _append_model_result_summary(lines, model_runtime, title=f"Multi-outcome result: {model_id}")
 
     lines.extend(
         [
